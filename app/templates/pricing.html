@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>PolyScribe – Planes y Precios</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #e4f0ff;
+            margin: 0;
+        }
+        .nav {
+            padding: 12px 24px;
+            font-size: 14px;
+        }
+        .nav a {
+            text-decoration: none;
+            color: #0057d8;
+            font-weight: 600;
+        }
+        .nav span {
+            color: #444;
+        }
+
+        .page {
+            max-width: 1100px;
+            margin: 32px auto 40px;
+            padding: 0 16px;
+        }
+        h1 {
+            margin: 0 0 6px;
+            font-size: 26px;
+        }
+        .subtitle {
+            margin: 0 0 18px;
+            font-size: 14px;
+            color: #555;
+        }
+
+        .banner {
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 13px;
+            margin-bottom: 20px;
+        }
+        .banner-ok {
+            background: #e2f7e9;
+            color: #125325;
+            border: 1px solid #8ad19d;
+        }
+        .banner-warn {
+            background: #fff4e5;
+            color: #7b3d00;
+            border: 1px solid #f4c08a;
+        }
+
+        .plans-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 16px;
+            margin-top: 10px;
+            margin-bottom: 26px;
+        }
+        @media (max-width: 960px) {
+            .plans-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+        @media (max-width: 640px) {
+            .plans-grid {
+                grid-template-columns: minmax(0, 1fr);
+            }
+        }
+
+        .plan {
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 18px 18px 20px;
+            box-shadow: 0 10px 26px rgba(15, 35, 52, 0.14);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .plan-header {
+            margin-bottom: 12px;
+        }
+        .plan-name {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .plan-price {
+            font-size: 22px;
+            font-weight: 700;
+        }
+        .plan-price span {
+            font-size: 14px;
+            font-weight: 400;
+            color: #555;
+            margin-left: 4px;
+        }
+        .plan-body {
+            font-size: 14px;
+            color: #333;
+        }
+        .plan-body ul {
+            padding-left: 18px;
+            margin: 10px 0 8px;
+        }
+        .plan-body li {
+            margin-bottom: 4px;
+        }
+        .plan-footer {
+            margin-top: 12px;
+        }
+        .plan-footer small {
+            font-size: 11px;
+            color: #666;
+        }
+        .plan-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            font-size: 11px;
+            border-radius: 999px;
+            background: #eef2ff;
+            color: #233472;
+            margin-bottom: 6px;
+        }
+
+        .plan-btn {
+            width: 100%;
+            margin-top: 10px;
+            padding: 9px 12px;
+            border-radius: 999px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            background: #0057d8;
+            color: white;
+        }
+        .plan-btn.secondary {
+            background: #eef2ff;
+            color: #233472;
+        }
+
+        .plan-btn[disabled] {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .section-title {
+            margin-top: 18px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            font-size: 13px;
+        }
+        th, td {
+            padding: 9px 12px;
+            border-bottom: 1px solid #edf1fb;
+        }
+        th {
+            text-align: left;
+            background: #f4f6ff;
+            font-weight: 600;
+        }
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .tip {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #555;
+        }
+
+        .footer-note {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <a href="/">PolyScribe</a> ·
+        <a href="/transcribir">Transcribir</a> ·
+        <a href="/history">Historial</a> ·
+        <span><strong>Precios</strong></span> ·
+        <a href="/ayuda">Ayuda</a>
+    </div>
+
+    <div class="page">
+        <h1>Planes y Precios</h1>
+        <p class="subtitle">Empieza gratis y escala sólo si necesitas más minutos o funciones avanzadas.</p>
+
+        {% if paypal_enabled %}
+        <div class="banner banner-ok">
+            PayPal está configurado. Puedes comprar cualquier plan de pago y tu saldo de minutos se activará
+            automáticamente después del pago.
+        </div>
+        {% else %}
+        <div class="banner banner-warn">
+            PayPal no está configurado por el momento. Puedes continuar usando PolyScribe con el plan Free.
+        </div>
+        {% endif %}
+
+        <div class="plans-grid">
+            <!-- Plan Free -->
+            <div class="plan">
+                <div>
+                    <div class="plan-header">
+                        <div class="plan-name">Free</div>
+                        <div class="plan-price">$0 <span>para siempre</span></div>
+                    </div>
+                    <div class="plan-body">
+                        <ul>
+                            <li>10 minutos de transcripción al mes</li>
+                            <li>Hasta 100&nbsp;MB por archivo</li>
+                            <li>Resumen automático incluido</li>
+                            <li>Soporte para múltiples idiomas</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="plan-footer">
+                    <button class="plan-btn secondary" type="button">
+                        Incluido
+                    </button>
+                    <small>Ideal para probar PolyScribe o usarlo de forma ocasional.</small>
+                </div>
+            </div>
+
+            <!-- Plan Starter -->
+            <div class="plan">
+                <div>
+                    <div class="plan-header">
+                        <span class="plan-tag">Recomendado</span>
+                        <div class="plan-name">Starter</div>
+                        <div class="plan-price">$9 <span>prepago</span></div>
+                    </div>
+                    <div class="plan-body">
+                        <ul>
+                            <li>60 minutos de transcripción</li>
+                            <li>Hasta 100&nbsp;MB por archivo</li>
+                            <li>Exportar SRT / VTT / DOCX / PDF</li>
+                            <li>Resúmenes mejorados por IA</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="plan-footer">
+                    <button class="plan-btn btn-buy" type="button" data-plan="starter">
+                        Comprar
+                    </button>
+                    <small>Perfecto si generas contenido o tomas notas frecuentemente.</small>
+                </div>
+            </div>
+
+            <!-- Plan Pro -->
+            <div class="plan">
+                <div>
+                    <div class="plan-header">
+                        <div class="plan-name">Pro</div>
+                        <div class="plan-price">$29 <span>prepago</span></div>
+                    </div>
+                    <div class="plan-body">
+                        <ul>
+                            <li>300 minutos de transcripción</li>
+                            <li>Hasta 100&nbsp;MB por archivo</li>
+                            <li>Historial completo y descargas</li>
+                            <li>Funciones avanzadas de IA</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="plan-footer">
+                    <button class="plan-btn btn-buy" type="button" data-plan="pro">
+                        Comprar
+                    </button>
+                    <small>Para creadores, podcasters y equipos pequeños.</small>
+                </div>
+            </div>
+
+            <!-- Plan Business -->
+            <div class="plan">
+                <div>
+                    <div class="plan-header">
+                        <div class="plan-name">Business</div>
+                        <div class="plan-price">$89 <span>prepago</span></div>
+                    </div>
+                    <div class="plan-body">
+                        <ul>
+                            <li>1200 minutos de transcripción</li>
+                            <li>Hasta 100&nbsp;MB por archivo</li>
+                            <li>Soporte prioritario</li>
+                            <li>Uso compartido dentro de tu equipo</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="plan-footer">
+                    <button class="plan-btn btn-buy" type="button" data-plan="business">
+                        Comprar
+                    </button>
+                    <small>Ideal para academias, empresas o agencias de contenido.</small>
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <div class="section-title">¿Cuánto rinden 100&nbsp;MB?</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Formato / Bitrate</th>
+                        <th>Duración aprox. por 100&nbsp;MB</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>MP3 / AAC 128 kbps</td>
+                        <td>≈ 1 h 49 min</td>
+                    </tr>
+                    <tr>
+                        <td>MP3 / AAC 192 kbps</td>
+                        <td>≈ 1 h 13 min</td>
+                    </tr>
+                    <tr>
+                        <td>WAV 16-bit 44.1 kHz estéreo</td>
+                        <td>≈ 9 min 54 s</td>
+                    </tr>
+                    <tr>
+                        <td>Opus voz 24–32 kbps</td>
+                        <td>≈ entre 7–10 horas</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p class="tip">
+                Tip: convierte tus archivos WAV/estéreo a MP3 128&nbsp;kbps u Opus 24–32&nbsp;kbps para
+                obtener más minutos con el mismo límite de tamaño.
+            </p>
+        </div>
+
+        <p class="footer-note">
+            Los planes son de tipo <strong>prepago</strong>: compras minutos y los usas cuando quieras.
+            El plan Free se mantiene siempre activo como respaldo.
+        </p>
+    </div>
+
+    <script>
+        // Flag generado desde Flask
+        const PAYPAL_ENABLED = {{ 'true' if paypal_enabled else 'false' }};
+
+        // Verifica que haya un usuario en localStorage;
+        // si no, redirige a /dev-login para crearlo.
+        function ensureUser() {
+            const userId = localStorage.getItem('ps_user_id');
+            if (!userId) {
+                window.location.href = '/dev-login?signup=1&next=/pricing';
+                return null;
+            }
+            return userId;
+        }
+
+        (function () {
+            const buttons = document.querySelectorAll('.btn-buy');
+
+            buttons.forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const plan = btn.dataset.plan;
+
+                    if (!PAYPAL_ENABLED) {
+                        alert('PayPal no está configurado por el momento. Puedes seguir usando el plan Free.');
+                        return;
+                    }
+
+                    const userId = ensureUser();
+                    if (!userId) return;
+
+                    const originalText = btn.textContent;
+                    btn.disabled = true;
+                    btn.textContent = 'Conectando con PayPal…';
+
+                    try {
+                        const res = await fetch('/api/paypal/subscribe', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-User-Id': userId
+                            },
+                            body: JSON.stringify({ plan })
+                        });
+
+                        if (!res.ok) {
+                            throw new Error('Error en la solicitud');
+                        }
+
+                        const data = await res.json();
+
+                        if (data.approval_url) {
+                            window.location.href = data.approval_url;
+                        } else {
+                            alert(data.error || 'No se pudo iniciar el pago en PayPal.');
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        alert('Hubo un problema al conectar con PayPal. Intenta de nuevo.');
+                    } finally {
+                        btn.disabled = false;
+                        btn.textContent = originalText;
+                    }
+                });
+            });
+        })();
+    </script>
+</body>
+</html>

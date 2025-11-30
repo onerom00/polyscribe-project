@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PolyScribe · Transcriptor Global</title>
+
+  <!-- Fuentes -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <!-- Estilos (si usas Flask/Jinja, deja url_for; si no, pon rutas estáticas) -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/nav.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme_light.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/badge.css') }}">
+
+  <style>
+    :root{
+      --bg:#0f172a; --panel:#111827; --muted:#94a3b8; --text:#0b1424;
+      --accent:#22c55e; --accent-2:#60a5fa; --danger:#ef4444;
+      --card:#ffffff; --border:#d9e4f7; --fs:1;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;
+      background:linear-gradient(180deg,#a6d6fb 0%, #9acef8 100%) fixed;
+      color:var(--text); font-size:calc(16px * var(--fs));
+    }
+    .container{max-width:1080px;margin:32px auto;padding:0 16px}
+    h1{margin:0;font-size:26px;font-weight:700;color:#0b1424}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
+    .grid{display:grid;gap:16px}
+    .grid-2{grid-template-columns:1fr 1fr}
+    label{font-size:15px;font-weight:700;margin-bottom:8px;display:block}
+    select,button,input,textarea{font-family:inherit}
+    .row{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+    select{background:#fff;border:1px solid #c6d3ec;color:#0b1424;padding:8px 10px;border-radius:10px;min-width:220px}
+    .btn{background:#0b62e0;border:1px solid #0a59c9;color:#fff;padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:700}
+    .btn:hover{filter:brightness(1.02)}
+    .btn-primary{background:var(--accent);border-color:#16a34a;color:#0b111d;font-weight:800;box-shadow:0 0 0 3px rgba(34,197,94,.18) inset}
+    .dropzone{border:2px dashed #97bff7;border-radius:14px;padding:22px;text-align:center;color:#24508f;background:#f1f7ff}
+    .dropzone:hover{border-color:#60a5fa}
+    .help{font-size:15px;color:#113160;margin-bottom:6px}
+    .formats{font-size:13px;color:#0b62e0;font-weight:700}
+    textarea{
+      width:100%;min-height:220px;background:#fff;border:1px solid #c6d3ec;color:#0b1424;border-radius:12px;padding:12px;resize:vertical;line-height:1.7;
+      text-align:justify;text-justify:inter-word;hyphens:auto;
+    }
+    .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+    .details{font-size:14px;color:#13406f}
+    .pill{display:inline-flex;align-items:center;gap:6px;border:1px solid #c6d3ec;background:#fff;border-radius:999px;padding:4px 10px;margin-right:8px;color:#0b1424}
+    .alert{background:#fde2e2;border:1px solid #f3abab;color:#8a1c1c;padding:10px;border-radius:12px;margin-bottom:12px;display:none}
+    .alert.success{color:#0f5132;background:#d1f7e7;border-color:#94e2c1}
+    .hidden{display:none}
+    @media (max-width:900px){.grid-2{grid-template-columns:1fr}}
+
+    /* Nav compacto */
+    header.ps-nav{background:#fff;border-bottom:1px solid var(--border)}
+    .ps-nav .inner{max-width:1080px;margin:0 auto;padding:10px 16px;display:flex;gap:12px;align-items:center;justify-content:space-between}
+    .ps-nav .brand{font-weight:800;color:#0b1424;text-decoration:none}
+    .ps-nav .links a{margin-right:14px;text-decoration:none;color:#13406f;font-weight:700}
+    .ps-nav .links a.active{color:#0b62e0}
+    .badge-usage{display:inline-flex;align-items:center;gap:8px;background:#e8f3ff;color:#0b1424;border:1px solid #b9d9ff;border-radius:999px;padding:5px 10px;font-size:13px;font-weight:700}
+    .a11y-btn{background:#f2f6ff;border:1px solid #cddaf5;color:#0b1424;padding:6px 10px;border-radius:10px;cursor:pointer;font-weight:600;font-size:.95rem}
+  </style>
+</head>
+
+<body data-user-id="{{ user_id|default('') }}">
+
+  <!-- HEADER -->
+  <header class="ps-nav">
+    <div class="inner">
+      <a class="brand" href="/">PolyScribe</a>
+      <nav class="links ps-nav-links">
+        <a href="/" data-path="/">Transcribir</a>
+        <a href="/history" data-path="/history">Historial</a>
+        <a href="/pricing" data-path="/pricing">Precios</a>
+        <a href="/ayuda" data-path="/ayuda">Ayuda</a>
+      </nav>
+      <div class="right">
+        <span id="usage-badge-nav" class="badge-usage">
+          <span id="usage-text-nav">—/— min · libre —</span>
+        </span>
+        <a href="#login" class="a11y-btn" id="nav-login-link">Entrar</a>
+        <a href="#signup" class="a11y-btn" style="background:#22c55e;border-color:#16a34a;color:#0b111d">Registro</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:18px 0">
+      <h1>PolyScribe · Transcriptor Global</h1>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <div class="badge-usage" id="usage-badge">
+          <span id="usage-text">—/— min · libre —</span>
+        </div>
+        <button class="a11y-btn" id="btn-refresh">Refrescar</button>
+        <button class="a11y-btn" id="btn-a11y" title="A+ (clic = aumentar; clic derecho = reset)">A+</button>
+        <button class="a11y-btn" id="btn-contrast" title="Alto contraste">HC</button>
+        <button class="a11y-btn" id="btn-history">Historial</button>
+      </div>
+    </div>
+
+    <p class="details">Sube tu audio y recibe transcripción + resumen.</p>
+    <div class="alert" id="alert-box"></div>
+
+    <div class="card grid" style="gap:20px">
+      <div class="row">
+        <label for="idioma-select">Idioma</label>
+        <select id="idioma-select" title="Idioma">
+          <option value="auto" selected>Auto (recomendado)</option>
+          <option value="es">ES Español</option>
+          <option value="en">EN English</option>
+          <option value="pt">PT Português</option>
+          <option value="fr">FR Français</option>
+          <option value="it">IT Italiano</option>
+          <option value="de">DE Deutsch</option>
+          <option value="ca">CA Català</option>
+          <option value="zh">ZH 中文</option>
+          <option value="ja">JP 日本語</option>
+          <option value="ko">KR 한국어</option>
+          <option value="ar">AR عربي</option>
+        </select>
+        <button class="btn" id="btn-reset" type="button">Restablecer</button>
+      </div>
+
+      <small class="details" style="margin-top:-6px">
+        Sugerencia: “Auto” soporta 30+ idiomas (ru, pl, uk, tr, he, fa, hi, bn, ta, te, vi, id, ms…).
+      </small>
+
+      <div class="dropzone" id="dropzone">
+        <div class="help">Arrastra tu archivo aquí o haz clic para seleccionar</div>
+        <div class="formats">Formatos: mp3, wav, m4a, ogg, webm… <b>Máx. 100 MB</b></div>
+        <input type="file" id="audio-file" accept=".mp3,.wav,.m4a,.ogg,.oga,.webm,.mp4,.mpeg,.mpga,.flac" class="hidden">
+      </div>
+
+      <div>
+        <button class="btn btn-primary" id="btn-transcribir" type="button">Transcribir</button>
+      </div>
+
+      <div class="grid grid-2">
+        <div>
+          <div class="row" style="justify-content:space-between">
+            <label>Transcripción</label>
+          </div>
+          <textarea id="transcript" dir="auto" placeholder="Aquí aparecerá la transcripción…"></textarea>
+          <div class="toolbar">
+            <button class="btn" id="copy-trans" type="button">Copiar</button>
+            <button class="btn" id="download-txt" type="button">TXT</button>
+            <button class="btn" id="download-srt" type="button">SRT</button>
+            <button class="btn" id="download-vtt" type="button">VTT</button>
+            <button class="btn" id="download-docx" type="button">DOCX</button>
+            <button class="btn" id="download-pdf" type="button">PDF</button>
+          </div>
+        </div>
+
+        <div>
+          <div class="row" style="justify-content:space-between">
+            <label>Resumen</label>
+          </div>
+          <textarea id="summary" dir="auto" placeholder="Aquí aparecerá el resumen…"></textarea>
+          <div class="toolbar">
+            <button class="btn" id="copy-sum" type="button">Copiar</button>
+            <button class="btn" id="download-sum" type="button">Descargar Resumen</button>
+            <button class="btn" id="download-json" type="button">Descargar JSON</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="details" id="details">
+        <span class="pill"><strong>Archivo:</strong> <span id="d-file">—</span></span>
+        <span class="pill"><strong>Idioma elegido:</strong> <span id="d-lang">auto</span></span>
+        <span class="pill"><strong>Idioma detectado:</strong> <span id="d-det">—</span></span>
+        <span class="pill"><strong>Job ID:</strong> <span id="d-job">—</span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- JS auxiliares (export/nav) -->
+  <!-- OJO: usage_badge.js ya no es necesario; el badge se maneja abajo -->
+  <script src="{{ url_for('static', filename='js/exports_buttons.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/nav_auth.js') }}"></script>
+
+  <!-- LÓGICA principal con fix de polling y user_id -->
+  <script>
+  (function(){
+    const $  = s => document.querySelector(s);
+
+    // ==== USER ID (clave para minutos / PayPal) ==========================
+    let USER_ID = (document.body.dataset.userId || "").trim();
+    if (!USER_ID) {
+      USER_ID = (localStorage.getItem("user_id") || "").trim();
+    } else {
+      localStorage.setItem("user_id", USER_ID);
+    }
+    if (!USER_ID) {
+      USER_ID = "guest";
+    }
+
+    const MAX_MB = 100;
+
+    async function api(url, opts = {}) {
+      try {
+        const headers = opts.headers ? {...opts.headers} : {};
+        if (USER_ID && USER_ID !== "guest" && !headers["X-User-Id"]) {
+          headers["X-User-Id"] = USER_ID;
+        }
+        const res = await fetch(url, {...opts, headers});
+        const text = await res.text();
+        let body; try{ body = JSON.parse(text); }catch{ body = text; }
+        return { ok: res.ok, status: res.status, body };
+      } catch(e) {
+        return { ok:false, status:0, body:{ error:String(e) } };
+      }
+    }
+
+    // Refs
+    const idiomaSel=$("#idioma-select");
+    const fileInput=$("#audio-file");
+    const drop=$("#dropzone");
+    const btnTrans=$("#btn-transcribir");
+    const btnReset=$("#btn-reset");
+    const taT=$("#transcript");
+    const taS=$("#summary");
+    const alertBox=$("#alert-box");
+    const dFile=$("#d-file"), dLang=$("#d-lang"), dDet=$("#d-det"), dJob=$("#d-job");
+
+    // Accesibilidad
+    const KEY_FS="ui_fs", KEY_HC="ui_hc";
+    let fs=Number(localStorage.getItem(KEY_FS)||"1");
+    function applyScale(){ if (fs<1) fs=1; if (fs>1.4) fs=1.4; document.documentElement.style.setProperty("--fs", String(fs)); }
+    function restoreA11y(){ applyScale(); const hc=localStorage.getItem(KEY_HC)==="1"; document.body.classList.toggle("hc", hc); }
+    document.getElementById("btn-a11y")?.addEventListener("click", ()=>{ fs=Math.round((fs+0.1)*10)/10; if (fs>1.4) fs=1.0; localStorage.setItem(KEY_FS, fs); applyScale(); });
+    document.getElementById("btn-a11y")?.addEventListener("contextmenu", e=>{ e.preventDefault(); fs=1.0; localStorage.setItem(KEY_FS, fs); applyScale(); });
+    document.getElementById("btn-contrast")?.addEventListener("click", ()=>{ const now=!document.body.classList.contains("hc"); document.body.classList.toggle("hc", now); localStorage.setItem(KEY_HC, now?"1":"0"); });
+
+    restoreA11y();
+
+    // Helpers UI
+    function showError(msg){ alertBox.textContent=msg; alertBox.classList.remove("success"); alertBox.style.display="block"; }
+    function showOk(msg){ alertBox.textContent=msg; alertBox.classList.add("success"); alertBox.style.display="block"; }
+    function clearAlert(){ alertBox.style.display="none"; alertBox.classList.remove("success"); }
+
+    function applyTextDirection(langCode){
+      const rtlLangs=["ar","fa","he","ur","ps"];
+      const code=(langCode||"").slice(0,2).toLowerCase();
+      const rtl = rtlLangs.includes(code);
+      [taT,taS].forEach(el=>{ if (!el) return; el.setAttribute("dir", rtl ? "rtl" : "ltr"); });
+    }
+
+    // Drag & Drop
+    drop.addEventListener("click", ()=> fileInput.click());
+    drop.addEventListener("dragover", e=>{ e.preventDefault(); drop.style.borderColor="#60a5fa";});
+    drop.addEventListener("dragleave", ()=> drop.style.borderColor="#97bff7");
+    drop.addEventListener("drop", e=>{
+      e.preventDefault(); drop.style.borderColor="#97bff7";
+      if (e.dataTransfer.files?.[0]){
+        fileInput.files = e.dataTransfer.files;
+        dFile.textContent = e.dataTransfer.files[0].name;
+      }
+    });
+    fileInput.addEventListener("change", ()=>{ dFile.textContent = fileInput.files?.[0]?.name || "—"; });
+
+    // Selector idioma
+    idiomaSel.addEventListener("change", ()=>{
+      let code=(idiomaSel.value||"auto").toLowerCase();
+      dLang.textContent = code || "auto";
+      applyTextDirection(code);
+    });
+
+    // Badge uso — SIEMPRE CON user_id
+    async function refreshBadge(){
+      const url = `/api/usage/balance?user_id=${encodeURIComponent(USER_ID)}`;
+      const r = await api(url);
+      if (!r.ok){
+        const b1=document.getElementById("usage-badge");
+        const b2=document.getElementById("usage-badge-nav");
+        if (b1) b1.style.display="none";
+        if (b2) b2.style.display="none";
+        return;
+      }
+      const data = r.body || {};
+      const used = Math.round((data.used_seconds||0)/60);
+      const allow = Math.round((data.allowance_seconds||0)/60);
+      const remain = Math.max(0, allow - used);
+      const el = document.getElementById("usage-text");
+      if (el) el.textContent = `${used}/${allow} min · libre ${remain} min`;
+      const elNav = document.getElementById("usage-text-nav");
+      if (elNav) elNav.textContent = `${used}/${allow} min · libre ${remain} min`;
+    }
+    document.getElementById("btn-refresh")?.addEventListener("click", refreshBadge);
+    refreshBadge();
+
+    // Historial btn
+    document.getElementById("btn-history")?.addEventListener("click", ()=>{ location.href = "/history"; });
+
+    // Copiar / descargar
+    async function copyText(el){ try{ await navigator.clipboard.writeText(el.value||""); }catch{} }
+    document.getElementById("copy-trans").addEventListener("click", ()=>copyText(taT));
+    document.getElementById("copy-sum").addEventListener("click", ()=>copyText(taS));
+
+    function download(name, content, type="text/plain"){
+      const blob = new Blob([content], {type});
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 800);
+    }
+    document.getElementById("download-txt").addEventListener("click", ()=> download("transcripcion.txt", taT.value||""));
+    document.getElementById("download-sum").addEventListener("click", ()=> download("resumen.txt", taS.value||""));
+    document.getElementById("download-json").addEventListener("click", ()=>{
+      const data = {
+        transcript: taT.value||"",
+        summary: taS.value||"",
+        filename: dFile.textContent,
+        language_selected:(idiomaSel.value||"auto")||"auto",
+        language_detected:dDet.textContent,
+        job_id:dJob.textContent
+      };
+      download("resultado.json", JSON.stringify(data,null,2), "application/json");
+    });
+
+    async function exportServer(fmt){
+      const transcript = taT.value||"";
+      if (!transcript){ showError("No hay transcripción para exportar."); return; }
+      const summary = taS.value||"";
+      const filename = (dFile.textContent||"resultado").trim() || "resultado";
+      try{
+        const headers = {
+          "Content-Type":"application/json",
+        };
+        if (USER_ID && USER_ID !== "guest"){
+          headers["X-User-Id"] = USER_ID;
+        }
+        const r = await fetch(`/api/exports/${fmt}`, {
+          method:"POST",
+          headers,
+          body: JSON.stringify({ transcript, summary, filename })
+        });
+        if(!r.ok){ showError("No se pudo generar el archivo."); return; }
+        const blob = await r.blob();
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `${filename}.${fmt==="docx"?"docx":fmt==="pdf"?"pdf":fmt}`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(()=>URL.revokeObjectURL(a.href), 800);
+      }catch{ showError("No se pudo generar el archivo."); }
+    }
+    document.getElementById("download-srt").addEventListener("click", ()=> exportServer("srt"));
+    document.getElementById("download-vtt").addEventListener("click", ()=> exportServer("vtt"));
+    document.getElementById("download-docx").addEventListener("click", ()=> exportServer("docx"));
+    document.getElementById("download-pdf").addEventListener("click", ()=> exportServer("pdf"));
+
+    // ====== PROCESO con fix de polling ======
+    let pollingTimer = null;
+    function stopPolling(){ if (pollingTimer) { clearTimeout(pollingTimer); pollingTimer = null; } }
+
+    async function crearJob(){
+      clearAlert();
+      stopPolling();
+
+      const file = fileInput.files?.[0];
+      if (!file){ showError("Selecciona un archivo de audio."); return; }
+      if (file.size > MAX_MB * 1024 * 1024){ showError(`El archivo supera ${MAX_MB} MB.`); return; }
+
+      const language=(idiomaSel.value||"auto").trim().toLowerCase();
+      dLang.textContent = language; applyTextDirection(language);
+      dFile.textContent = file.name;
+
+      btnTrans.disabled = true;
+
+      try{
+        const fd = new FormData();
+        fd.append("file", file, file.name);
+        fd.append("language", language);
+
+        const r = await api("/jobs", { method:"POST", body: fd });
+        if (!r.ok){
+          const msg = (r.body && (r.body.error || r.body.message)) || "No se pudo iniciar el proceso.";
+          showError(msg);
+          return;
+        }
+
+        const jobResp = r.body || {};
+        const id = jobResp.id || jobResp.job_id;
+        if (!id){ showError("No se recibió job id."); return; }
+        dJob.textContent=id;
+
+        if (typeof jobResp.transcript === "string") taT.value = jobResp.transcript || "";
+        if (typeof jobResp.summary === "string")    taS.value = jobResp.summary || "";
+        if (jobResp.language_detected) { dDet.textContent = jobResp.language_detected; applyTextDirection(jobResp.language_detected); }
+
+        const st = (jobResp.status || "").toLowerCase();
+        if (st && st !== "queued" && st !== "processing"){
+          showOk("Completado");
+          return;
+        }
+        poll(id);
+      }catch(e){
+        showError(String(e)||"No se pudo iniciar el proceso.");
+      }finally{
+        btnTrans.disabled=false;
+      }
+    }
+
+    async function poll(id){
+      const r = await api(`/jobs/${id}`);
+      if (!r.ok){ stopPolling(); return; }
+      const j = r.body || {};
+
+      if (j.filename) dFile.textContent = j.filename;
+      const detected = j.language_detected || j.detected_language || j.language || "";
+      if (detected){ dDet.textContent = detected; applyTextDirection(detected); }
+
+      if (typeof j.transcript === "string" && j.transcript.length){ taT.value = j.transcript; }
+      if (typeof j.summary === "string" && j.summary.length){ taS.value = j.summary; }
+
+      const st = (j.status || "").toLowerCase();
+      if (st === "queued" || st === "processing") {
+        pollingTimer = setTimeout(()=>poll(id), 1200);
+      } else if (st === "unknown") {
+        stopPolling();
+      } else {
+        if (j.error) showError(j.error_message || "Error en el proceso");
+        else showOk("Completado");
+        stopPolling();
+      }
+    }
+
+    btnTrans.addEventListener("click", ()=>{ if (!btnTrans.disabled) crearJob(); });
+    btnReset.addEventListener("click", ()=>{
+      stopPolling();
+      taT.value=""; taS.value="";
+      dFile.textContent="—"; dDet.textContent="—"; dJob.textContent="—";
+      fileInput.value="";
+      idiomaSel.value="auto"; dLang.textContent="auto"; applyTextDirection("auto");
+      clearAlert();
+    });
+
+    // Nav activo + mantener ?user_id si aplicara
+    (function(){
+      var path = location.pathname.replace(/\/+$/,''); if (!path) path = '/';
+      document.querySelectorAll('.ps-nav-links a').forEach(function(a){
+        var ap = a.getAttribute('data-path') || a.getAttribute('href');
+        if (ap === path) a.classList.add('active');
+      });
+      var uid = USER_ID && USER_ID !== "guest"
+        ? USER_ID
+        : new URLSearchParams(location.search).get('user_id');
+      if (uid){
+        document.querySelectorAll('.ps-nav a[href^="/"]').forEach(function(a){
+          try{
+            var url = new URL(a.href, location.origin);
+            if (!url.searchParams.get('user_id')){
+              url.searchParams.set('user_id', uid);
+              a.href = url.pathname + '?' + url.searchParams.toString();
+            }
+          }catch(e){}
+        });
+      }
+    })();
+
+  })();
+  </script>
+</body>
+</html>

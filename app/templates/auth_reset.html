@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Restablecer contraseña • PolyScribe</title>
+  <link rel="stylesheet" href="/static/css/theme_light.css">
+  <link rel="stylesheet" href="/static/css/nav.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>body{max-width:600px;margin:40px auto;padding:0 16px}.card{border:1px solid #ddd;border-radius:12px;padding:20px}input,button{width:100%;padding:12px;margin-top:10px}</style>
+</head>
+<body>
+  <h1>Restablecer contraseña</h1>
+  <div class="card">
+    <form method="post" action="/auth/reset">
+      <input type="hidden" name="token" value="{{ token|default('') }}">
+      <label>Nueva contraseña</label>
+      <input type="password" name="password" minlength="6" required>
+      <button type="submit">Actualizar</button>
+    </form>
+  </div>
+</body>
+</html>

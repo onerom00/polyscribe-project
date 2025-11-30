@@ -1,0 +1,72 @@
+# Entornos locales
+venv/
+env/
+.venv/
+.env/
+*.pyc
+__pycache__/
+*.log
+
+# Archivos temporales
+*.tmp
+*.temp
+*.bak
+*.swp
+
+# Datos locales
+instance/
+uploads/
+cache/
+*.db
+*.sqlite
+*.sqlite3
+
+# Archivos de OS
+.DS_Store
+Thumbs.db
+
+# Archivos de editor
+.vscode/
+.idea/
+*.code-workspace
+
+# Archivos de build
+dist/
+build/
+*.egg-info/
+*.egg
+*.pyd
+
+# Node (por si usaste algo de frontend)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-store/
+
+# Archivos grandes o inútiles
+*.mp3
+*.wav
+*.mp4
+*.mkv
+*.ogg
+*.webm
+
+# Entornos de prueba
+tests/
+coverage/
+.tox/
+pytest.ini
+.coverage
+.coverage.*
+
+# Docker local (solo si no lo necesitas)
+Dockerfile
+docker-compose.yml
+
+# Configuración local que no debe subir
+local_settings.py
+secrets.json
+.env.local
+*.pem
+*.key

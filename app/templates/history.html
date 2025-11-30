@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Historial · PolyScribe</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root{--bg:#e6f0ff;--card:#fff;--text:#0b1424;--muted:#4b5563;--border:#d9e4f7;--accent:#0b62e0;}
+    *{box-sizing:border-box}
+    body{margin:0;background:#cfe5ff;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--text)}
+    .container{max-width:980px;margin:24px auto;padding:0 16px}
+    header{display:flex;align-items:center;justify-content:space-between;margin:8px 0 16px}
+    a{color:var(--accent);text-decoration:none}
+    .cards{display:grid;grid-template-columns:1fr;gap:12px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;align-items:center;justify-content:space-between}
+    .left{display:flex;flex-direction:column;gap:6px}
+    .meta{display:flex;gap:8px;flex-wrap:wrap}
+    .pill{border:1px solid var(--border);border-radius:999px;padding:2px 8px;color:#1f2937;background:#f7fbff;font-size:12px}
+    .actions{display:flex;gap:8px}
+    .btn{background:#0b62e0;border:1px solid #0a59c9;color:#fff;font-weight:700;padding:8px 12px;border-radius:10px;cursor:pointer}
+    .btn-secondary{background:#f2f6ff;color:#0b1424;border:1px solid #cddaf5}
+    h1{font-size:20px;margin:8px 0 16px}
+    nav{display:flex;gap:12px;font-weight:700}
+    .topbar{display:flex;gap:8px;justify-content:flex-end;margin-bottom:8px}
+    .badge{background:#e8f3ff;border:1px solid #b9d9ff;border-radius:999px;padding:6px 10px;color:#0b1424;font-size:12px;font-weight:700}
+    @media (max-width:700px){.card{flex-direction:column;align-items:flex-start;gap:10px}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <nav>
+        <a href="/">PolyScribe</a>
+        <a href="/">Transcribir</a>
+        <a href="/history">Historial</a>
+        <a href="/pricing">Precios</a>
+        <a href="/ayuda">Ayuda</a>
+      </nav>
+      <div class="topbar">
+        <span class="badge" id="usage-text">—/— min · libre —</span>
+        <a class="btn btn-secondary" href="/">Volver</a>
+      </div>
+    </header>
+
+    <h1>Historial</h1>
+
+    {% if items and items|length > 0 %}
+      <div class="cards">
+        {% for it in items %}
+          <div class="card">
+            <div class="left">
+              <div><strong>{{ it.filename or ('job ' ~ it.id) }}</strong></div>
+              <div class="meta">
+                <span class="pill">id: {{ it.id }}</span>
+                <span class="pill">sel: {{ it.language or 'auto' }}</span>
+                <span class="pill">det: {{ it.language_detected or '—' }}</span>
+                <span class="pill">{{ it.status or 'done' }}</span>
+                {% if it.created_at %}<span class="pill">{{ it.created_at }}</span>{% endif %}
+              </div>
+            </div>
+            <div class="actions">
+              {# Construye /?job_id=... y preserva user_id si viene #}
+              {% set q = {'job_id': it.id} %}
+              {% for k,v in base_query.items() %}{% set _ = q.update({k:v}) %}{% endfor %}
+              <a class="btn" href="{{ url_for('index') }}?{{ q|tojson|safe | replace('{','') | replace('}','') | replace('\"','') | replace(':', '=') | replace(',', '&') }}">
+                Ver
+              </a>
+              <a class="btn btn-secondary" href="{{ url_for('history.history_job_json', job_id=it.id) }}">JSON</a>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p>No hay registros.</p>
+    {% endif %}
+  </div>
+
+  <script>
+    // Pequeño badge reutilizando tu endpoint existente
+    (async function(){
+      try{
+        const r = await fetch('/api/usage/balance');
+        if(!r.ok) return;
+        const j = await r.json();
+        const used = Math.round((j.used_seconds||0)/60);
+        const allow = Math.round((j.allowance_seconds||0)/60);
+        const remain = Math.max(0, allow-used);
+        const el = document.getElementById('usage-text');
+        if(el) el.textContent = `${used}/${allow} min · libre ${remain} min`;
+      }catch{}
+    })();
+  </script>
+</body>
+</html>

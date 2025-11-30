@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Ayuda · PolyScribe</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/nav.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme_light.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/badge.css') }}">
+
+  <style>
+    :root{ --border:#d9e4f7; --text:#0b1424; --muted:#334155 }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;
+      background:#cfe4ff linear-gradient(180deg,#bfe0ff 0%, #cfe4ff 100%) fixed; color:var(--text);
+    }
+    .container{max-width:980px;margin:32px auto;padding:0 16px}
+    header.page{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    h1{margin:0}
+    .card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px}
+    .faq{display:grid;gap:12px}
+    details{border:1px solid var(--border);border-radius:12px;padding:12px;background:#fff}
+    summary{font-weight:700;cursor:pointer}
+    p{color:#21324a;line-height:1.6}
+  </style>
+</head>
+
+<header class="ps-nav">
+  <div class="inner">
+    <a class="brand" href="/">PolyScribe</a>
+    <input id="ps-nav-toggle" type="checkbox" hidden>
+    <label class="ps-burger" for="ps-nav-toggle"><span></span></label>
+    <nav class="links ps-nav-links">
+      <a href="/" data-path="/">Transcribir</a>
+      <a href="/history" data-path="/history">Historial</a>
+      <a href="/pricing" data-path="/pricing">Precios</a>
+      <a href="/ayuda" data-path="/ayuda">Ayuda</a>
+    </nav>
+    <div class="right">
+      <span id="usage-badge-nav" class="badge-usage"><span id="usage-text-nav">—/— min · libre —</span></span>
+      <a href="#login" class="auth-link" id="nav-login-link">Entrar</a>
+      <a href="#signup" class="auth-link signup" id="nav-signup-link">Registro</a>
+    </div>
+  </div>
+</header>
+
+<body data-user-id="{{ user_id|default('') }}">
+  <div class="container">
+    <header class="page">
+      <h1>Ayuda</h1>
+      <span class="badge-usage" id="usage-badge"><span id="usage-text">—/— min · libre —</span></span>
+    </header>
+
+    <div class="card">
+      <div class="faq">
+        <details open>
+          <summary>¿Qué formatos de audio admite?</summary>
+          <p>MP3, WAV, M4A, OGG, WEBM, MP4/MPEG… hasta 100&nbsp;MB por archivo.</p>
+        </details>
+        <details>
+          <summary>¿Cómo funciona el selector de idioma?</summary>
+          <p>
+            <b>Auto</b> detecta el idioma del audio y resume en ese mismo idioma.<br/>
+            Si eliges un idioma específico (ej. EN English), transcribimos y resumimos en ese idioma (actúa como traductor).<br/>
+            Si el idioma elegido no está soportado, se usa <b>inglés</b> por defecto.
+          </p>
+        </details>
+        <details>
+          <summary>¿Puedo descargar SRT/VTT/DOCX/PDF?</summary>
+          <p>Sí, una vez aparezca la transcripción, usa los botones de exportación debajo del cuadro de texto.</p>
+        </details>
+        <details>
+          <summary>¿Cuántos minutos gratis tengo?</summary>
+          <p>El plan Free incluye 10 minutos. Puedes comprar más en la página de <a href="/pricing">Precios</a>.</p>
+        </details>
+        <details>
+          <summary>¿Cómo contacto soporte?</summary>
+          <p>Escríbenos a <a href="mailto:soporte@polyscribe.app">soporte@polyscribe.app</a> e incluye el <i>Job ID</i> si tu consulta es por un trabajo.</p>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/nav_auth.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/usage_badge.js') }}"></script>
+  <script>
+  (function(){
+    const UID = new URLSearchParams(location.search).get("user_id") || document.body.getAttribute("data-user-id") || "";
+    (function(){
+      var path = location.pathname.replace(/\/+$/,'') || '/';
+      document.querySelectorAll('.ps-nav-links a').forEach(a=>{
+        var p = a.getAttribute('data-path') || a.getAttribute('href');
+        if (p === path) a.classList.add('active');
+        if (UID && a.getAttribute('href')?.startsWith('/')){
+          const u = new URL(a.href, location.origin); u.searchParams.set('user_id', UID);
+          a.href = u.pathname + '?' + u.searchParams.toString();
+        }
+      });
+    })();
+  })();
+  </script>
+</body>
+</html>
