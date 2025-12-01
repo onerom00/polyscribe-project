@@ -13,6 +13,7 @@ migrate = Migrate()
 def create_app() -> Flask:
     app = Flask(
         __name__,
+        # Como el paquete es "app", estos paths apuntan a app/static y app/templates
         static_folder=os.getenv("FLASK_STATIC_FOLDER", "static"),
         template_folder=os.getenv("FLASK_TEMPLATES_FOLDER", "templates"),
     )
@@ -21,17 +22,23 @@ def create_app() -> Flask:
     # CONFIG BÁSICA
     # ──────────────────────────────────────────────────────────
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "sqlite:///polyscribe.db")
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
+        "DATABASE_URL", "sqlite:///polyscribe.db"
+    )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
     # URL base de la app (para return_url / cancel_url de PayPal)
-    app.config["APP_BASE_URL"] = os.getenv("APP_BASE_URL", "http://127.0.0.1:8000")
+    app.config["APP_BASE_URL"] = os.getenv(
+        "APP_BASE_URL", "http://127.0.0.1:8000"
+    )
 
     # ──────────────────────────────────────────────────────────
     # CONFIG PAYPAL
     # ──────────────────────────────────────────────────────────
     app.config["PAYPAL_ENV"] = os.getenv("PAYPAL_ENV", "sandbox")
-    app.config["PAYPAL_BASE_URL"] = os.getenv("PAYPAL_BASE_URL", "https://api-m.sandbox.paypal.com")
+    app.config["PAYPAL_BASE_URL"] = os.getenv(
+        "PAYPAL_BASE_URL", "https://api-m.sandbox.paypal.com"
+    )
     app.config["PAYPAL_CLIENT_ID"] = os.getenv("PAYPAL_CLIENT_ID")
     app.config["PAYPAL_CLIENT_SECRET"] = os.getenv("PAYPAL_CLIENT_SECRET")
     app.config["PAYPAL_CURRENCY"] = os.getenv("PAYPAL_CURRENCY", "USD")
