@@ -2,9 +2,8 @@
 from __future__ import annotations
 
 import datetime as dt
-from flask_sqlalchemy import SQLAlchemy
 
-from app import db  # asegura que app/__init__.py crea 'db = SQLAlchemy(app)' o hace init_app(app)
+from app import db  # instancia global de SQLAlchemy creada en app/__init__.py
 
 
 def utcnow():
@@ -14,15 +13,15 @@ def utcnow():
 class AudioJob(db.Model):
     __tablename__ = "audio_jobs"
 
-    # CLAVE PRIMARIA CON AUTOINCREMENT
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    # ID de job: usamos UUID en texto (como '8fc3ef0c-....')
+    id = db.Column(db.String(64), primary_key=True)
 
-    # quién
-    user_id = db.Column(db.Integer, nullable=True, index=True)
+    # quién (guest, email, id externo, etc.)
+    user_id = db.Column(db.String(128), nullable=True, index=True)
 
     # archivo
-    filename = db.Column(db.String(255), nullable=True)             # nombre lógico (lo que muestras)
-    original_filename = db.Column(db.String(255), nullable=True)    # evita NOT NULL
+    filename = db.Column(db.String(255), nullable=True)          # nombre lógico (lo que muestras)
+    original_filename = db.Column(db.String(255), nullable=True) # nombre original
     audio_s3_key = db.Column(db.String(512), nullable=True, default="")
     local_path = db.Column(db.String(1024), nullable=True)
     mime_type = db.Column(db.String(120), nullable=True)
@@ -40,8 +39,8 @@ class AudioJob(db.Model):
     transcript = db.Column(db.Text, nullable=True)
     summary = db.Column(db.Text, nullable=True)
 
-    # métricas / costos (opcionales)
-    duration_seconds = db.Column(db.Integer, nullable=True)
+    # métricas / costos
+    duration_seconds = db.Column(db.Float, nullable=True)  # ahora FLOAT
     model_used = db.Column(db.String(64), nullable=True)
     cost_cents = db.Column(db.Integer, nullable=True)
 
