@@ -6,6 +6,7 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 
+# Extensiones globales
 db = SQLAlchemy()
 migrate = Migrate()
 
@@ -24,12 +25,13 @@ def create_app() -> Flask:
 
     # Base de datos
     app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
-        "DATABASE_URL", "sqlite:///polyscribe3.db"
+        "DATABASE_URL",  # en Render: sqlite:///polyscribe3.db
+        "sqlite:///polyscribe3.db",
     )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
     # -----------------------------------------------------------
-    # CONFIG APP
+    # CONFIG APP (URL base)
     # -----------------------------------------------------------
     app.config["APP_BASE_URL"] = os.getenv(
         "APP_BASE_URL",
@@ -39,29 +41,37 @@ def create_app() -> Flask:
     # -----------------------------------------------------------
     # CONFIG PAYPAL
     # -----------------------------------------------------------
+    # Entorno (sandbox / live)
     app.config["PAYPAL_ENV"] = os.getenv("PAYPAL_ENV", "sandbox")
+
+    # URL base de la API REST de PayPal
     app.config["PAYPAL_BASE_URL"] = os.getenv(
-        "PAYPAL_BASE_URL", "https://api-m.sandbox.paypal.com"
+        "PAYPAL_BASE_URL",
+        "https://api-m.sandbox.paypal.com",
     )
+
+    # Credenciales (variables que ya pusiste en Render)
     app.config["PAYPAL_CLIENT_ID"] = os.getenv("PAYPAL_CLIENT_ID")
     app.config["PAYPAL_CLIENT_SECRET"] = os.getenv("PAYPAL_CLIENT_SECRET")
-    app.config["PAYPAL_CURRENCY"] = "USD"
 
-    # ID del plan principal Starter (entorno)
-    app.config["PAYPAL_PLAN_STARTER"] = os.getenv(
-        "PAYPAL_PLAN_STARTER_ID",
+    # Moneda
+    app.config["PAYPAL_CURRENCY"] = os.getenv("PAYPAL_CURRENCY", "USD")
+
+    # Si en algún momento usas planes de suscripción, puedes guardar aquí el ID:
+    app.config["PAYPAL_PLAN_STARTER_ID"] = os.getenv(
+        "PAYPAL_PLAN_STARTER_ID",  # en Render ya lo tienes así
         "P-9W9394623R721322BNEW7GUY",
     )
 
-    # Webhook ID (si verificas firma, opcional)
+    # Webhook ID (si verificas la firma de PayPal)
     app.config["PAYPAL_WEBHOOK_ID"] = os.getenv("PAYPAL_WEBHOOK_ID")
 
-    # Habilitar PayPal solo si hay credenciales
+    # Habilitar PayPal sólo si hay credenciales
     app.config["PAYPAL_ENABLED"] = bool(
         app.config["PAYPAL_CLIENT_ID"] and app.config["PAYPAL_CLIENT_SECRET"]
     )
 
-    # Free tier (minutos gratis)
+    # Minutos gratis
     app.config["FREE_TIER_MINUTES"] = int(os.getenv("FREE_TIER_MINUTES", "10"))
 
     # -----------------------------------------------------------
@@ -70,7 +80,7 @@ def create_app() -> Flask:
     db.init_app(app)
     migrate.init_app(app, db)
 
-    # Importar modelos (para create_all)
+    # Importar modelos para que SQLAlchemy conozca todas las tablas
     from app import models  # noqa: F401
     from app import models_payment  # noqa: F401
 
@@ -78,15 +88,21 @@ def create_app() -> Flask:
     # BLUEPRINTS
     # -----------------------------------------------------------
     from app.routes.pages import bp as pages_bp
-    from app.routes.jobs import bp as jobs_bp
-    from app.routes.exports import bp as exports_bp
-    from app.routes.usage import bp as usage_bp
-    from app.routes.paypal import bp as paypal_bp, api_bp as paypal_api_bp
-
     app.register_blueprint(pages_bp)
+
+    from app.routes.jobs import bp as jobs_bp
     app.register_blueprint(jobs_bp)
+
+    from app.routes.exports import bp as exports_bp
     app.register_blueprint(exports_bp)
+
+    from app.routes.usage import bp as usage_bp
     app.register_blueprint(usage_bp)
+
+    # 👉 IMPORTANTE: aquí importamos LOS DOS blueprints de paypal.py
+    # bp -> rutas /paypal/...  (thanks, cancel, webhook)
+    # api_bp -> rutas /api/paypal/... (config, capture, subscribe legacy)
+    from app.routes.paypal import bp as paypal_bp, api_bp as paypal_api_bp
     app.register_blueprint(paypal_bp)
     app.register_blueprint(paypal_api_bp)
 
@@ -97,7 +113,7 @@ def create_app() -> Flask:
     def healthz():
         return {"ok": True}
 
-    # Crear tablas en SQLite (solo si no existen)
+    # Crear tablas en SQLite (si no existen)
     with app.app_context():
         db.create_all()
 
