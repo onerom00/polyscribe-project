@@ -1,79 +1,78 @@
 # app/models_payment.py
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any, Optional
+import datetime as dt
 
 from app import db
-from app.models import UsageLedger  # asegúrate de que el import coincide con tu models.py
+
+
+def utcnow() -> dt.datetime:
+    return dt.datetime.utcnow()
 
 
 class Payment(db.Model):
+    """
+    Registro de compras / suscripciones PayPal ligadas a un usuario de PolyScribe.
+    """
+
     __tablename__ = "payments"
 
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    id = db.Column(db.Integer, primary_key=True)
 
-    # en tu caso user_id es el correo tipo sb-xxx@personal.example.com
-    user_id = db.Column(db.String(255), nullable=True)
+    # normalmente el email con el que se identifica en PolyScribe
+    user_id = db.Column(db.String(255), index=True, nullable=False)
 
-    provider = db.Column(db.String(32), nullable=False, default="paypal")
-    provider_id = db.Column(db.String(128), nullable=True)  # capture_id / order_id
-    status = db.Column(db.String(32), nullable=False, default="CREATED")
+    # código interno de tu plan (starter, pro, business...)
+    plan_code = db.Column(db.String(50), nullable=False)
 
-    amount = db.Column(db.Float, nullable=True)
-    currency = db.Column(db.String(8), nullable=True, default="USD")
-    minutes = db.Column(db.Integer, nullable=True, default=0)
+    # id de suscripción de PayPal (p.ej. I-XXXXXX), único
+    paypal_subscription_id = db.Column(db.String(64), unique=True, nullable=False)
 
-    raw_payload = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(32), nullable=False, default="created")
+    amount = db.Column(db.Numeric(10, 2), nullable=True)
+    currency = db.Column(db.String(10), nullable=False, default="USD")
 
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    # JSON crudo útil para debugging
+    raw_payload = db.Column(db.JSON, nullable=True)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
     updated_at = db.Column(
-        db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+        db.DateTime, nullable=False, default=utcnow, onupdate=utcnow
     )
 
-
-def _get_or_create_usage(user_id: str) -> UsageLedger:
-    usage = UsageLedger.query.filter_by(user_id=user_id).first()
-    if not usage:
-        usage = UsageLedger(
-            user_id=user_id,
-            allowance_seconds=0,
-            used_seconds=0,
+    def __repr__(self) -> str:  # pragma: no cover - solo para logs
+        return (
+            f"<Payment id={self.id} user={self.user_id} "
+            f"plan={self.plan_code} status={self.status}>"
         )
-        db.session.add(usage)
-        db.session.flush()
-    return usage
 
 
-def credit_minutes(
-    user_id: str,
-    minutes: int,
-    source: str = "paypal",
-    plan_key: Optional[str] = None,
-    raw_event: Optional[dict[str, Any]] = None,
-    provider_id: Optional[str] = None,
-    amount: Optional[float] = None,
-    currency: str = "USD",
-) -> None:
+class PaymentEvent(db.Model):
     """
-    Acredita `minutes` minutos al usuario en UsageLedger y registra el pago.
-    Se invoca desde el webhook de PayPal.
+    Histórico de webhooks/eventos de PayPal.
     """
-    seconds = int(minutes) * 60
 
-    usage = _get_or_create_usage(user_id)
-    usage.allowance_seconds = (usage.allowance_seconds or 0) + seconds
+    __tablename__ = "payment_events"
 
-    payment = Payment(
-        user_id=user_id,
-        provider="paypal",
-        provider_id=provider_id,
-        status="COMPLETED",
-        amount=amount,
-        currency=currency,
-        minutes=minutes,
-        raw_payload=str(raw_event)[:65535] if raw_event is not None else None,
+    id = db.Column(db.Integer, primary_key=True)
+
+    payment_id = db.Column(
+        db.Integer,
+        db.ForeignKey("payments.id"),
+        nullable=True,
+        index=True,
     )
-    db.session.add(payment)
 
-    db.session.commit()
+    event_type = db.Column(db.String(80), nullable=False)
+    resource_id = db.Column(db.String(64), nullable=True)  # subscription_id etc
+    raw_json = db.Column(db.JSON, nullable=False)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+
+    payment = db.relationship("Payment", backref="events")
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return (
+            f"<PaymentEvent id={self.id} type={self.event_type} "
+            f"resource={self.resource_id}>"
+        )

@@ -13,112 +13,95 @@ migrate = Migrate()
 def create_app() -> Flask:
     app = Flask(
         __name__,
-        # Como el paquete es "app", estos paths apuntan a app/static y app/templates
         static_folder=os.getenv("FLASK_STATIC_FOLDER", "static"),
         template_folder=os.getenv("FLASK_TEMPLATES_FOLDER", "templates"),
     )
 
-    # ──────────────────────────────────────────────────────────
-    # CONFIG BÁSICA
-    # ──────────────────────────────────────────────────────────
+    # -----------------------------------------------------------
+    # CONFIG GENERAL
+    # -----------------------------------------------------------
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
+
+    # Base de datos
     app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
         "DATABASE_URL", "sqlite:///polyscribe.db"
     )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-    # URL base de la app (para return_url / cancel_url de PayPal)
+    # -----------------------------------------------------------
+    # CONFIG APP
+    # -----------------------------------------------------------
     app.config["APP_BASE_URL"] = os.getenv(
-        "APP_BASE_URL", "http://127.0.0.1:8000"
+        "APP_BASE_URL",
+        "https://polyscribe-project.onrender.com"
     )
 
-    # ──────────────────────────────────────────────────────────
+    # -----------------------------------------------------------
     # CONFIG PAYPAL
-    # ──────────────────────────────────────────────────────────
+    # -----------------------------------------------------------
     app.config["PAYPAL_ENV"] = os.getenv("PAYPAL_ENV", "sandbox")
     app.config["PAYPAL_BASE_URL"] = os.getenv(
         "PAYPAL_BASE_URL", "https://api-m.sandbox.paypal.com"
     )
     app.config["PAYPAL_CLIENT_ID"] = os.getenv("PAYPAL_CLIENT_ID")
     app.config["PAYPAL_CLIENT_SECRET"] = os.getenv("PAYPAL_CLIENT_SECRET")
-    app.config["PAYPAL_CURRENCY"] = os.getenv("PAYPAL_CURRENCY", "USD")
-    app.config["PAYPAL_SKIP_VERIFY"] = os.getenv("PAYPAL_SKIP_VERIFY", "0") == "1"
+    app.config["PAYPAL_CURRENCY"] = "USD"
 
-    # PayPal se activa sólo si existen credenciales
+    # ID del plan principal Starter
+    app.config["PAYPAL_PLAN_STARTER"] = os.getenv(
+        "PAYPAL_PLAN_STARTER",
+        "P-9W9394623R721322BNEW7GUY"
+    )
+
+    # Webhook secret (opcional si verificas con firma)
+    app.config["PAYPAL_WEBHOOK_ID"] = os.getenv("PAYPAL_WEBHOOK_ID")
+
+    # Habilitar PayPal solo si hay credenciales
     app.config["PAYPAL_ENABLED"] = bool(
         app.config["PAYPAL_CLIENT_ID"] and app.config["PAYPAL_CLIENT_SECRET"]
     )
 
-    # Minutos nivel Free (por defecto 10, configurable por .env)
-    app.config["FREE_TIER_MINUTES"] = int(
-        os.getenv("FREE_TIER_MINUTES", "10")
-    )
+    # Free tier
+    app.config["FREE_TIER_MINUTES"] = int(os.getenv("FREE_TIER_MINUTES", "10"))
 
-    # ──────────────────────────────────────────────────────────
-    # INICIALIZAR EXTENSIONES
-    # ──────────────────────────────────────────────────────────
+    # -----------------------------------------------------------
+    # INICIALIZACIÓN DE EXTENSIONES
+    # -----------------------------------------------------------
     db.init_app(app)
     migrate.init_app(app, db)
 
-    # Importa modelos usando la misma instancia db
-    from app import models  # noqa: F401
-    try:
-        from app import models_payment  # noqa: F401
-    except Exception:
-        pass
+    # Importar modelos
+    from app import models
+    from app import models_payment
 
-    # ──────────────────────────────────────────────────────────
-    # REGISTRO DE BLUEPRINTS
-    # ──────────────────────────────────────────────────────────
-
-    # Páginas
+    # -----------------------------------------------------------
+    # BLUEPRINTS
+    # -----------------------------------------------------------
     from app.routes.pages import bp as pages_bp
-    if "pages" not in app.blueprints:
-        app.register_blueprint(pages_bp)
+    app.register_blueprint(pages_bp)
 
-    # Jobs
-    try:
-        from app.routes.jobs import bp as jobs_bp
-        if "jobs" not in app.blueprints:
-            app.register_blueprint(jobs_bp)
-    except Exception:
-        pass
+    from app.routes.jobs import bp as jobs_bp
+    app.register_blueprint(jobs_bp)
 
-    # Exports
-    try:
-        from app.routes.exports import bp as exports_bp
-        if "exports" not in app.blueprints:
-            app.register_blueprint(exports_bp)
-    except Exception:
-        pass
+    from app.routes.exports import bp as exports_bp
+    app.register_blueprint(exports_bp)
 
-    # Usage (saldo de minutos)
-    try:
-        from app.routes.usage import bp as usage_bp
-        if "usage" not in app.blueprints:
-            app.register_blueprint(usage_bp)
-    except Exception:
-        pass
+    from app.routes.usage import bp as usage_bp
+    app.register_blueprint(usage_bp)
 
-    # PayPal
-    try:
-        from app.routes.paypal import bp as paypal_bp
-        if "paypal" not in app.blueprints:
-            app.register_blueprint(paypal_bp)
-    except Exception:
-        pass
+    from app.routes.paypal import bp as paypal_bp
+    app.register_blueprint(paypal_bp)
 
-    # ──────────────────────────────────────────────────────────
-    # HEALTH CHECK
-    # ──────────────────────────────────────────────────────────
+    # -----------------------------------------------------------
+    # HEALTHCHECK
+    # -----------------------------------------------------------
     @app.get("/healthz")
     def healthz():
         return {"ok": True}
 
-    # ──────────────────────────────────────────────────────────
-    # CREAR TABLAS SI NO EXISTEN (SQLite / local)
-    # ──────────────────────────────────────────────────────────
+    # Crear tablas en SQLite
     with app.app_context():
         db.create_all()
 
     return app
+
