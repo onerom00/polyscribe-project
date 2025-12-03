@@ -24,7 +24,7 @@ def create_app() -> Flask:
 
     # Base de datos
     app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
-        "DATABASE_URL", "sqlite:///polyscribe.db"
+        "DATABASE_URL", "sqlite:///polyscribe3.db"
     )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
@@ -47,13 +47,13 @@ def create_app() -> Flask:
     app.config["PAYPAL_CLIENT_SECRET"] = os.getenv("PAYPAL_CLIENT_SECRET")
     app.config["PAYPAL_CURRENCY"] = "USD"
 
-    # ID del plan principal Starter (ya casi no lo usamos, pero lo dejamos)
+    # ID del plan principal Starter (entorno)
     app.config["PAYPAL_PLAN_STARTER"] = os.getenv(
-        "PAYPAL_PLAN_STARTER",
+        "PAYPAL_PLAN_STARTER_ID",
         "P-9W9394623R721322BNEW7GUY",
     )
 
-    # Webhook ID (si quisieras validar la firma)
+    # Webhook ID (si verificas firma, opcional)
     app.config["PAYPAL_WEBHOOK_ID"] = os.getenv("PAYPAL_WEBHOOK_ID")
 
     # Habilitar PayPal solo si hay credenciales
@@ -70,7 +70,7 @@ def create_app() -> Flask:
     db.init_app(app)
     migrate.init_app(app, db)
 
-    # Importar modelos (para que SQLAlchemy conozca las tablas)
+    # Importar modelos (para create_all)
     from app import models  # noqa: F401
     from app import models_payment  # noqa: F401
 
@@ -78,22 +78,16 @@ def create_app() -> Flask:
     # BLUEPRINTS
     # -----------------------------------------------------------
     from app.routes.pages import bp as pages_bp
-    app.register_blueprint(pages_bp)
-
     from app.routes.jobs import bp as jobs_bp
-    app.register_blueprint(jobs_bp)
-
     from app.routes.exports import bp as exports_bp
-    app.register_blueprint(exports_bp)
-
     from app.routes.usage import bp as usage_bp
-    app.register_blueprint(usage_bp)
-
-    # PayPal: rutas públicas (/paypal/...)
     from app.routes.paypal import bp as paypal_bp, api_bp as paypal_api_bp
-    app.register_blueprint(paypal_bp)
 
-    # PayPal: API para el frontend (/api/paypal/...)
+    app.register_blueprint(pages_bp)
+    app.register_blueprint(jobs_bp)
+    app.register_blueprint(exports_bp)
+    app.register_blueprint(usage_bp)
+    app.register_blueprint(paypal_bp)
     app.register_blueprint(paypal_api_bp)
 
     # -----------------------------------------------------------
