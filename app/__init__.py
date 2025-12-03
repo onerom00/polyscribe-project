@@ -29,7 +29,7 @@ def create_app() -> Flask:
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
     # -----------------------------------------------------------
-    # CONFIG APP
+    # APP BASE URL
     # -----------------------------------------------------------
     app.config["APP_BASE_URL"] = os.getenv(
         "APP_BASE_URL",
@@ -40,36 +40,42 @@ def create_app() -> Flask:
     # CONFIG PAYPAL
     # -----------------------------------------------------------
     app.config["PAYPAL_ENV"] = os.getenv("PAYPAL_ENV", "sandbox")
+
     app.config["PAYPAL_BASE_URL"] = os.getenv(
-        "PAYPAL_BASE_URL", "https://api-m.sandbox.paypal.com"
+        "PAYPAL_BASE_URL",
+        "https://api-m.sandbox.paypal.com"
     )
-    app.config["PAYPAL_CLIENT_ID"] = os.getenv("PAYPAL_CLIENT_ID")
-    app.config["PAYPAL_CLIENT_SECRET"] = os.getenv("PAYPAL_CLIENT_SECRET")
+
+    app.config["PAYPAL_CLIENT_ID"] = os.getenv("PAYPAL_CLIENT_ID", "")
+    app.config["PAYPAL_CLIENT_SECRET"] = os.getenv("PAYPAL_CLIENT_SECRET", "")
     app.config["PAYPAL_CURRENCY"] = "USD"
 
-    # PLANES
-    app.config["PAYPAL_PLAN_STARTER_ID"] = os.getenv("PAYPAL_PLAN_STARTER_ID")
+    # ID del plan Starter
+    app.config["PAYPAL_PLAN_STARTER_ID"] = os.getenv(
+        "PAYPAL_PLAN_STARTER_ID",
+        "P-9W9394623R721322BNEW7GUY"
+    )
 
-    # WEBHOOK ID (sandbox)
-    app.config["PAYPAL_WEBHOOK_ID"] = os.getenv("PAYPAL_WEBHOOK_ID")
+    # Webhook ID (si está configurado)
+    app.config["PAYPAL_WEBHOOK_ID"] = os.getenv("PAYPAL_WEBHOOK_ID", "")
 
-    # PayPal habilitado si existen credenciales
-    app.config["PAYPAL_ENABLED"] = (
-        bool(app.config["PAYPAL_CLIENT_ID"])
-        and bool(app.config["PAYPAL_CLIENT_SECRET"])
+    # Habilitar PayPal solo si hay credenciales válidas
+    app.config["PAYPAL_ENABLED"] = bool(
+        app.config["PAYPAL_CLIENT_ID"]
+        and app.config["PAYPAL_CLIENT_SECRET"]
     )
 
     # Free tier
     app.config["FREE_TIER_MINUTES"] = int(os.getenv("FREE_TIER_MINUTES", "10"))
 
     # -----------------------------------------------------------
-    # INICIALIZACIÓN DE EXTENSIONES
+    # INITIALIZAR EXTENSIONES
     # -----------------------------------------------------------
     db.init_app(app)
     migrate.init_app(app, db)
 
     # -----------------------------------------------------------
-    # MODELOS (IMPORTANTE QUE SE IMPORTEN ANTES DE CREAR TABLAS)
+    # IMPORTAR MODELOS
     # -----------------------------------------------------------
     from app import models
     from app import models_payment
@@ -78,18 +84,15 @@ def create_app() -> Flask:
     # BLUEPRINTS
     # -----------------------------------------------------------
     from app.routes.pages import bp as pages_bp
-    app.register_blueprint(pages_bp)
-
     from app.routes.jobs import bp as jobs_bp
-    app.register_blueprint(jobs_bp)
-
     from app.routes.exports import bp as exports_bp
-    app.register_blueprint(exports_bp)
-
     from app.routes.usage import bp as usage_bp
-    app.register_blueprint(usage_bp)
-
     from app.routes.paypal import bp as paypal_bp
+
+    app.register_blueprint(pages_bp)
+    app.register_blueprint(jobs_bp)
+    app.register_blueprint(exports_bp)
+    app.register_blueprint(usage_bp)
     app.register_blueprint(paypal_bp)
 
     # -----------------------------------------------------------
@@ -100,7 +103,7 @@ def create_app() -> Flask:
         return {"ok": True}
 
     # -----------------------------------------------------------
-    # CREAR TABLAS (Solo SQLite local — Ok también para Render)
+    # CREAR TABLAS SI NO EXISTEN
     # -----------------------------------------------------------
     with app.app_context():
         db.create_all()
