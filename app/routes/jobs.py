@@ -13,21 +13,18 @@ from typing import Optional, Dict, Any, List
 from flask import Blueprint, request, jsonify, current_app, session
 from app import db
 
-# Modelos (tolerantes)
+# Modelos tolerantes
 try:
-    from app.models import AudioJob
-except Exception:
+    # AudioJob y UsageLedger están definidos en app/models.py
+    from app.models import AudioJob, UsageLedger
+except Exception:  # pragma: no cover
     AudioJob = None  # type: ignore
-
-try:
-    from app.models_payment import Payment
-except Exception:
-    Payment = None  # type: ignore
+    UsageLedger = None  # type: ignore
 
 # OpenAI
 try:
     from openai import OpenAI
-except Exception:
+except Exception:  # pragma: no cover
     OpenAI = None  # type: ignore
 
 from sqlalchemy import inspect
@@ -100,26 +97,20 @@ _LANG_ALIASES: Dict[str, str] = {
 
 
 def _normalize_lang(code_or_name: Optional[str], default: str = "es") -> str:
-    """Normaliza a ISO-639-1; si no se reconoce, devuelve `default`."""
     if not code_or_name:
         return default
     s = str(code_or_name).strip().lower()
     s = s.replace("_", "-")
-
     if len(s) == 2 and s in _LANG_ALIASES:
         return s
-
     if "-" in s:
         pref = s.split("-", 1)[0]
         if pref in _LANG_ALIASES:
             return _LANG_ALIASES[pref]
-
     if s in _LANG_ALIASES:
         return _LANG_ALIASES[s]
-
     if len(s) >= 3 and s[:3] in _LANG_ALIASES:
         return _LANG_ALIASES[s[:3]]
-
     two = s[:2]
     return _LANG_ALIASES.get(two, default)
 
@@ -138,10 +129,6 @@ def _lang_human(code: str) -> str:
 
 
 def _get_user_id() -> Optional[str]:
-    """
-    Devuelve el user_id lógico de la app (string).
-    Puede venir de sesión, header X-User-Id, query ?user_id o variable DEV_USER_ID.
-    """
     raw = (
         session.get("user_id")
         or session.get("uid")
@@ -298,6 +285,7 @@ def _compress_to_opus(src: str, dst: str, bitrate: str = "64k") -> bool:
             _ffmpeg(), "-y", "-i", src,
             "-ac", "1", "-ar", "16000",
             "-c:a", "libopus", "-b:a", bitrate,
+            dst,
         ]
         subprocess.run(cmd, capture_output=True, check=False)
         return os.path.exists(dst) and _file_size_mb(dst) > 0
@@ -374,7 +362,6 @@ def _transcribe_audio(path: str, language_code: Optional[str]) -> Dict[str, Any]
 
     with open(path, "rb") as f:
         try:
-            # Intento verbose_json (devuelve idioma detectado)
             res = _client.audio.transcriptions.create(
                 model=model,
                 file=f,
@@ -410,7 +397,11 @@ bp = Blueprint("jobs", __name__)
 
 @bp.route("/jobs", methods=["POST"])
 def create_job():
-    # user_id lógico (string); si no hay, usamos "guest"
+    """
+    Crea un job de transcripción + resumen.
+    Importante: NO forzamos un id manual para evitar el
+    error de 'datatype mismatch' cuando la PK es INTEGER.
+    """
     uid = _get_user_id() or "guest"
 
     file = request.files.get("file")
@@ -424,7 +415,7 @@ def create_job():
     if MAX_UPLOAD_MB > 0 and size > MAX_UPLOAD_MB * MB:
         return jsonify({"error": f"El archivo supera {MAX_UPLOAD_MB} MB."}), 400
 
-    # Idioma elegido en UI (auto o código). Normalizamos.
+    # Idioma elegido
     language_raw = (request.form.get("language") or "auto").strip().lower()
     language_forced = False
     if language_raw and language_raw != "auto":
@@ -438,10 +429,10 @@ def create_job():
     tmp_path = os.path.join(tmpdir, file.filename)
     file.save(tmp_path)
 
-    # Duración original (para uso de minutos)
+    # Duración original
     orig_duration = _duration_seconds(tmp_path)
 
-    # Preparar para OpenAI (comprimir/trocear si hace falta)
+    # Preparar para OpenAI
     parts = _prepare_for_openai(tmp_path, OPENAI_FILE_HARD_LIMIT_MB)
     if not parts:
         msg = (
@@ -450,7 +441,6 @@ def create_job():
         )
         return jsonify({"error": msg}), 400
 
-    # Transcribir todas las partes y unir
     transcripts: List[str] = []
     detected_first: str = ""
     for idx, part in enumerate(parts, 1):
@@ -462,16 +452,15 @@ def create_job():
     transcript = "\n".join(t for t in transcripts if t).strip()
     detected_lang = detected_first if language == "auto" else _normalize_lang(language, "en")
 
-    # Resumen robusto
     summary = _summarize_robust(transcript, language_code=detected_lang)
 
-    # Persistir en DB (si el modelo existe)
     job_id: Optional[str] = None
     if AudioJob is not None:
         try:
             now = dt.datetime.utcnow()
+
+            # OJO: no pasamos id, dejamos que la BD lo genere
             job = AudioJob(
-                # IMPORTANTE: NO forzar id; dejamos que la DB use su PK (INTEGER autoincrement)
                 user_id=uid,
                 filename=file.filename,
                 original_filename=getattr(file, "filename", None) or file.filename,
@@ -495,8 +484,7 @@ def create_job():
             )
             db.session.add(job)
             db.session.commit()
-            # Convertimos a str para devolverlo cómodo al front
-            job_id = str(getattr(job, "id", None))
+            job_id = getattr(job, "id", None)
         except Exception as e:
             current_app.logger.error("DB save failed: %s", e)
             db.session.rollback()
@@ -531,8 +519,8 @@ def get_job(job_id: str):
         return jsonify({"error": "No existe"}), 404
 
     out = {
-        "id": str(getattr(job, "id", job_id)),
-        "job_id": str(getattr(job, "id", job_id)),
+        "id": getattr(job, "id", job_id),
+        "job_id": getattr(job, "id", job_id),
         "filename": getattr(job, "filename", ""),
         "language": getattr(job, "language", ""),
         "language_detected": getattr(job, "language_detected", ""),
@@ -563,8 +551,8 @@ def history_api():
             for r in rows:
                 items.append(
                     {
-                        "id": str(getattr(r, "id", None)),
-                        "job_id": str(getattr(r, "id", None)),
+                        "id": getattr(r, "id", None),
+                        "job_id": getattr(r, "id", None),
                         "filename": getattr(r, "filename", ""),
                         "language": getattr(r, "language", ""),
                         "language_detected": getattr(r, "language_detected", ""),
@@ -579,39 +567,34 @@ def history_api():
     return jsonify({"items": items}), 200
 
 # =================================================================
-#                     Balance por pagos (robusto)
+#                     Balance por minutos (ledger)
 # =================================================================
 
 
-def _minutes_from_payments(uid: Optional[str]) -> int:
+def _paid_minutes_from_ledger(uid: Optional[str]) -> int:
     """
-    Suma los minutos de la tabla payments.
-
-    Modo desarrollo: NO filtramos por status, solo por user_id (si existe).
-    Así es más fácil comprobar que el webhook / captura está acreditando minutos.
+    Suma los minutos de UsageLedger (delta_minutes).
+    Aquí no filtramos por tipo de reason; asumimos que
+    lo que se escriba en la tabla es válido.
     """
-    if Payment is None:
+    if UsageLedger is None:
         return 0
 
     try:
-        cols = {c["name"] for c in inspect(db.engine).get_columns("payments")}
+        cols = {c["name"] for c in inspect(db.engine).get_columns("usage_ledger")}
         has_user_id = "user_id" in cols
-        has_minutes = "minutes" in cols
 
-        if not has_minutes:
-            return 0
-
-        q = db.session.query(Payment)
+        q = db.session.query(UsageLedger)
         if has_user_id and uid and uid != "guest":
-            q = q.filter(getattr(Payment, "user_id") == uid)
+            q = q.filter(getattr(UsageLedger, "user_id") == uid)
 
         total = 0
-        for p in q.all():
-            total += int(getattr(p, "minutes", 0) or 0)
+        for row in q.all():
+            total += int(getattr(row, "delta_minutes", 0) or 0)
 
         return total
     except Exception as e:
-        current_app.logger.error("minutes_from_payments failed: %s", e)
+        current_app.logger.error("minutes_from_ledger failed: %s", e)
         return 0
 
 
@@ -619,8 +602,9 @@ def _minutes_from_payments(uid: Optional[str]) -> int:
 def usage_balance():
     uid = _get_user_id() or "guest"
 
-    free_min = int(os.getenv("FREE_TIER_MINUTES", "10") or 10)  # 10 min free por defecto
-    paid_min = _minutes_from_payments(uid)
+    # minutos free desde config/env
+    free_min = int(os.getenv("FREE_TIER_MINUTES", "10") or 10)
+    paid_min = _paid_minutes_from_ledger(uid)
     allowance_min = free_min + paid_min
 
     used_seconds = 0
