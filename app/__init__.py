@@ -47,18 +47,16 @@ def create_app() -> Flask:
     app.config["PAYPAL_CLIENT_SECRET"] = os.getenv("PAYPAL_CLIENT_SECRET")
     app.config["PAYPAL_CURRENCY"] = "USD"
 
-    # ID del plan principal Starter
-    app.config["PAYPAL_PLAN_STARTER"] = os.getenv(
-        "PAYPAL_PLAN_STARTER",
-        "P-9W9394623R721322BNEW7GUY"
-    )
+    # PLANES
+    app.config["PAYPAL_PLAN_STARTER_ID"] = os.getenv("PAYPAL_PLAN_STARTER_ID")
 
-    # Webhook secret (opcional si verificas con firma)
+    # WEBHOOK ID (sandbox)
     app.config["PAYPAL_WEBHOOK_ID"] = os.getenv("PAYPAL_WEBHOOK_ID")
 
-    # Habilitar PayPal solo si hay credenciales
-    app.config["PAYPAL_ENABLED"] = bool(
-        app.config["PAYPAL_CLIENT_ID"] and app.config["PAYPAL_CLIENT_SECRET"]
+    # PayPal habilitado si existen credenciales
+    app.config["PAYPAL_ENABLED"] = (
+        bool(app.config["PAYPAL_CLIENT_ID"])
+        and bool(app.config["PAYPAL_CLIENT_SECRET"])
     )
 
     # Free tier
@@ -70,7 +68,9 @@ def create_app() -> Flask:
     db.init_app(app)
     migrate.init_app(app, db)
 
-    # Importar modelos
+    # -----------------------------------------------------------
+    # MODELOS (IMPORTANTE QUE SE IMPORTEN ANTES DE CREAR TABLAS)
+    # -----------------------------------------------------------
     from app import models
     from app import models_payment
 
@@ -99,9 +99,10 @@ def create_app() -> Flask:
     def healthz():
         return {"ok": True}
 
-    # Crear tablas en SQLite
+    # -----------------------------------------------------------
+    # CREAR TABLAS (Solo SQLite local — Ok también para Render)
+    # -----------------------------------------------------------
     with app.app_context():
         db.create_all()
 
     return app
-
