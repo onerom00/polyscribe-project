@@ -30,7 +30,7 @@ try:
 except Exception:
     OpenAI = None  # type: ignore
 
-from sqlalchemy import text as sql_text, inspect
+from sqlalchemy import inspect
 
 _client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", "")) if OpenAI else None
 CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
@@ -46,7 +46,6 @@ MAX_CHUNK_SECONDS = int(os.getenv("MAX_CHUNK_SECONDS", "600"))            # 10 m
 #               Utilidades de idioma / usuario / texto
 # =================================================================
 
-# Mapa de normalización a ISO-639-1
 _LANG_ALIASES: Dict[str, str] = {
     # español
     "es": "es", "spa": "es", "spanish": "es", "es-es": "es", "castellano": "es",
@@ -101,29 +100,26 @@ _LANG_ALIASES: Dict[str, str] = {
 
 
 def _normalize_lang(code_or_name: Optional[str], default: str = "es") -> str:
-    """
-    Normaliza cualquier variante/nombre a ISO-639-1 (dos letras).
-    Si no se reconoce, devuelve `default`.
-    """
+    """Normaliza a ISO-639-1; si no se reconoce, devuelve `default`."""
     if not code_or_name:
         return default
     s = str(code_or_name).strip().lower()
     s = s.replace("_", "-")
-    # Atajo: si ya es código de 2 letras conocido
+
     if len(s) == 2 and s in _LANG_ALIASES:
         return s
-    # Locale tipo "de-DE"
+
     if "-" in s:
         pref = s.split("-", 1)[0]
         if pref in _LANG_ALIASES:
             return _LANG_ALIASES[pref]
-    # Alias exacto
+
     if s in _LANG_ALIASES:
         return _LANG_ALIASES[s]
-    # 3 letras tipo "spa", "deu"
+
     if len(s) >= 3 and s[:3] in _LANG_ALIASES:
         return _LANG_ALIASES[s[:3]]
-    # Último intento: primeras 2 letras
+
     two = s[:2]
     return _LANG_ALIASES.get(two, default)
 
@@ -396,7 +392,7 @@ def _transcribe_audio(path: str, language_code: Optional[str]) -> Dict[str, Any]
                 res2 = _client.audio.transcriptions.create(
                     model=model,
                     file=f,
-                    language=lang,  # texto plano por defecto
+                    language=lang,
                 )
                 text = (getattr(res2, "text", "") or "").strip()
                 det = _normalize_lang(lang or "es", "es")
@@ -414,7 +410,7 @@ bp = Blueprint("jobs", __name__)
 
 @bp.route("/jobs", methods=["POST"])
 def create_job():
-    # user_id lógico (string); si no hay, usamos "guest" para no romper NOT NULL
+    # user_id lógico (string); si no hay, usamos "guest"
     uid = _get_user_id() or "guest"
 
     file = request.files.get("file")
@@ -432,7 +428,6 @@ def create_job():
     language_raw = (request.form.get("language") or "auto").strip().lower()
     language_forced = False
     if language_raw and language_raw != "auto":
-        # si forzado y desconocido => inglés por criterio #2
         language = _normalize_lang(language_raw, "en")
         language_forced = True
     else:
@@ -459,7 +454,6 @@ def create_job():
     transcripts: List[str] = []
     detected_first: str = ""
     for idx, part in enumerate(parts, 1):
-        # si language == "auto" no forzamos; si está forzado, pasamos el código
         asr = _transcribe_audio(part, None if language == "auto" else language)
         if idx == 1:
             detected_first = _normalize_lang(asr.get("language_detected") or language or "es", "es")
@@ -468,7 +462,7 @@ def create_job():
     transcript = "\n".join(t for t in transcripts if t).strip()
     detected_lang = detected_first if language == "auto" else _normalize_lang(language, "en")
 
-    # Resumen robusto en el idioma correcto
+    # Resumen robusto
     summary = _summarize_robust(transcript, language_code=detected_lang)
 
     # Persistir en DB (si el modelo existe)
@@ -477,7 +471,7 @@ def create_job():
         try:
             now = dt.datetime.utcnow()
             job = AudioJob(
-                id=str(uuid.uuid4()),  # tolerante a PK texto
+                # IMPORTANTE: NO forzar id; dejamos que la DB use su PK (INTEGER autoincrement)
                 user_id=uid,
                 filename=file.filename,
                 original_filename=getattr(file, "filename", None) or file.filename,
@@ -501,7 +495,8 @@ def create_job():
             )
             db.session.add(job)
             db.session.commit()
-            job_id = getattr(job, "id", None)
+            # Convertimos a str para devolverlo cómodo al front
+            job_id = str(getattr(job, "id", None))
         except Exception as e:
             current_app.logger.error("DB save failed: %s", e)
             db.session.rollback()
@@ -525,7 +520,6 @@ def get_job(job_id: str):
     if AudioJob is None:
         return jsonify({"id": job_id, "status": "done"}), 200
 
-    # aceptar uuid (texto) o entero si tu modelo es distinto
     job = db.session.get(AudioJob, job_id)
     if not job:
         try:
@@ -537,8 +531,8 @@ def get_job(job_id: str):
         return jsonify({"error": "No existe"}), 404
 
     out = {
-        "id": getattr(job, "id", job_id),
-        "job_id": getattr(job, "id", job_id),
+        "id": str(getattr(job, "id", job_id)),
+        "job_id": str(getattr(job, "id", job_id)),
         "filename": getattr(job, "filename", ""),
         "language": getattr(job, "language", ""),
         "language_detected": getattr(job, "language_detected", ""),
@@ -569,8 +563,8 @@ def history_api():
             for r in rows:
                 items.append(
                     {
-                        "id": getattr(r, "id", None),
-                        "job_id": getattr(r, "id", None),
+                        "id": str(getattr(r, "id", None)),
+                        "job_id": str(getattr(r, "id", None)),
                         "filename": getattr(r, "filename", ""),
                         "language": getattr(r, "language", ""),
                         "language_detected": getattr(r, "language_detected", ""),
@@ -594,7 +588,7 @@ def _minutes_from_payments(uid: Optional[str]) -> int:
     Suma los minutos de la tabla payments.
 
     Modo desarrollo: NO filtramos por status, solo por user_id (si existe).
-    Así es más fácil comprobar que el webhook está acreditando minutos.
+    Así es más fácil comprobar que el webhook / captura está acreditando minutos.
     """
     if Payment is None:
         return 0
@@ -602,6 +596,10 @@ def _minutes_from_payments(uid: Optional[str]) -> int:
     try:
         cols = {c["name"] for c in inspect(db.engine).get_columns("payments")}
         has_user_id = "user_id" in cols
+        has_minutes = "minutes" in cols
+
+        if not has_minutes:
+            return 0
 
         q = db.session.query(Payment)
         if has_user_id and uid and uid != "guest":
