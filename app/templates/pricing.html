@@ -43,7 +43,7 @@
             padding: 10px 14px;
             border-radius: 12px;
             font-size: 13px;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
         }
         .banner-ok {
             background: #e2f7e9;
@@ -54,6 +54,17 @@
             background: #fff4e5;
             color: #7b3d00;
             border: 1px solid #f4c08a;
+        }
+
+        /* Caja para mensajes del JS de pagos */
+        #pay-alert {
+            display: none;
+            margin-bottom: 16px;
+            padding: 8px 12px;
+            border-radius: 10px;
+            background: #fff4e5;
+            color: #7b3d00;
+            font-size: 13px;
         }
 
         .plans-grid {
@@ -205,6 +216,7 @@
         <h1>Planes y Precios</h1>
         <p class="subtitle">Empieza gratis y escala sólo si necesitas más minutos o funciones avanzadas.</p>
 
+        <!-- Mensaje de PayPal configurado o no -->
         {% if paypal_enabled %}
         <div class="banner banner-ok">
             PayPal está configurado. Puedes comprar cualquier plan de pago y tu saldo de minutos se activará
@@ -215,6 +227,9 @@
             PayPal no está configurado por el momento. Puedes continuar usando PolyScribe con el plan Free.
         </div>
         {% endif %}
+
+        <!-- Mensajes dinámicos del JS de pagos -->
+        <div id="pay-alert"></div>
 
         <div class="plans-grid">
             <!-- Plan Free -->
@@ -259,9 +274,8 @@
                     </div>
                 </div>
                 <div class="plan-footer">
-                    <button class="plan-btn btn-buy" type="button" data-plan="starter">
-                        Comprar
-                    </button>
+                    <!-- Aquí se renderizará el botón oficial de PayPal para 60 minutos -->
+                    <div id="pp-60"></div>
                     <small>Perfecto si generas contenido o tomas notas frecuentemente.</small>
                 </div>
             </div>
@@ -283,9 +297,8 @@
                     </div>
                 </div>
                 <div class="plan-footer">
-                    <button class="plan-btn btn-buy" type="button" data-plan="pro">
-                        Comprar
-                    </button>
+                    <!-- Botón PayPal para 300 minutos -->
+                    <div id="pp-300"></div>
                     <small>Para creadores, podcasters y equipos pequeños.</small>
                 </div>
             </div>
@@ -307,9 +320,8 @@
                     </div>
                 </div>
                 <div class="plan-footer">
-                    <button class="plan-btn btn-buy" type="button" data-plan="business">
-                        Comprar
-                    </button>
+                    <!-- Botón PayPal para 1200 minutos -->
+                    <div id="pp-1200"></div>
                     <small>Ideal para academias, empresas o agencias de contenido.</small>
                 </div>
             </div>
@@ -355,71 +367,7 @@
         </p>
     </div>
 
-    <script>
-        // Flag generado desde Flask
-        const PAYPAL_ENABLED = {{ 'true' if paypal_enabled else 'false' }};
-
-        // Verifica que haya un usuario en localStorage;
-        // si no, redirige a /dev-login para crearlo.
-        function ensureUser() {
-            const userId = localStorage.getItem('ps_user_id');
-            if (!userId) {
-                window.location.href = '/dev-login?signup=1&next=/pricing';
-                return null;
-            }
-            return userId;
-        }
-
-        (function () {
-            const buttons = document.querySelectorAll('.btn-buy');
-
-            buttons.forEach(btn => {
-                btn.addEventListener('click', async () => {
-                    const plan = btn.dataset.plan;
-
-                    if (!PAYPAL_ENABLED) {
-                        alert('PayPal no está configurado por el momento. Puedes seguir usando el plan Free.');
-                        return;
-                    }
-
-                    const userId = ensureUser();
-                    if (!userId) return;
-
-                    const originalText = btn.textContent;
-                    btn.disabled = true;
-                    btn.textContent = 'Conectando con PayPal…';
-
-                    try {
-                        const res = await fetch('/api/paypal/subscribe', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-User-Id': userId
-                            },
-                            body: JSON.stringify({ plan })
-                        });
-
-                        if (!res.ok) {
-                            throw new Error('Error en la solicitud');
-                        }
-
-                        const data = await res.json();
-
-                        if (data.approval_url) {
-                            window.location.href = data.approval_url;
-                        } else {
-                            alert(data.error || 'No se pudo iniciar el pago en PayPal.');
-                        }
-                    } catch (err) {
-                        console.error(err);
-                        alert('Hubo un problema al conectar con PayPal. Intenta de nuevo.');
-                    } finally {
-                        btn.disabled = false;
-                        btn.textContent = originalText;
-                    }
-                });
-            });
-        })();
-    </script>
+    <!-- JS de pagos con PayPal: usa /api/paypal/config y /api/paypal/capture -->
+    <script src="/static/js/payments.js"></script>
 </body>
 </html>

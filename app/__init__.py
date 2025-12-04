@@ -25,7 +25,7 @@ def create_app() -> Flask:
 
     # Base de datos
     app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
-        "DATABASE_URL",           # en Render: sqlite:///polyscribe4.db (o la que uses)
+        "DATABASE_URL",          # en Render: sqlite:///polyscribe4.db (por ejemplo)
         "sqlite:///polyscribe4.db",
     )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -41,32 +41,32 @@ def create_app() -> Flask:
     # -----------------------------------------------------------
     # CONFIG PAYPAL
     # -----------------------------------------------------------
-    # Entorno (sandbox / live)
+    # sandbox / live
     app.config["PAYPAL_ENV"] = os.getenv("PAYPAL_ENV", "sandbox")
 
-    # URL base de la API REST de PayPal
+    # URL base API REST de PayPal
     app.config["PAYPAL_BASE_URL"] = os.getenv(
         "PAYPAL_BASE_URL",
         "https://api-m.sandbox.paypal.com",
     )
 
-    # Credenciales
+    # Credenciales (Render → Environment)
     app.config["PAYPAL_CLIENT_ID"] = os.getenv("PAYPAL_CLIENT_ID")
     app.config["PAYPAL_CLIENT_SECRET"] = os.getenv("PAYPAL_CLIENT_SECRET")
 
     # Moneda
     app.config["PAYPAL_CURRENCY"] = os.getenv("PAYPAL_CURRENCY", "USD")
 
-    # Plan (por ahora no lo usamos en el flujo de botones)
+    # ID del plan starter (por si lo necesitas más adelante)
     app.config["PAYPAL_PLAN_STARTER_ID"] = os.getenv(
         "PAYPAL_PLAN_STARTER_ID",
         "P-9W9394623R721322BNEW7GUY",
     )
 
-    # Webhook ID (si algún día verificas la firma)
+    # Webhook ID (solo si verificas la firma)
     app.config["PAYPAL_WEBHOOK_ID"] = os.getenv("PAYPAL_WEBHOOK_ID")
 
-    # Habilitar PayPal sólo si hay credenciales
+    # Habilitar PayPal solo si hay credenciales
     app.config["PAYPAL_ENABLED"] = bool(
         app.config["PAYPAL_CLIENT_ID"] and app.config["PAYPAL_CLIENT_SECRET"]
     )
@@ -80,8 +80,8 @@ def create_app() -> Flask:
     db.init_app(app)
     migrate.init_app(app, db)
 
-    # Importar modelos para que SQLAlchemy conozca todas las tablas
-    from app import models        # noqa: F401
+    # Importar modelos
+    from app import models          # noqa: F401
     from app import models_payment  # noqa: F401
 
     # -----------------------------------------------------------
@@ -99,10 +99,12 @@ def create_app() -> Flask:
     from app.routes.usage import bp as usage_bp
     app.register_blueprint(usage_bp)
 
-    # PayPal: Rutas públicas y API
+    # PayPal: dos blueprints en el MISMO archivo
+    #  - bp      → /paypal/...
+    #  - api_bp  → /api/paypal/...
     from app.routes.paypal import bp as paypal_bp, api_bp as paypal_api_bp
-    app.register_blueprint(paypal_bp)       # /paypal/...
-    app.register_blueprint(paypal_api_bp)   # /api/paypal/...
+    app.register_blueprint(paypal_bp)
+    app.register_blueprint(paypal_api_bp)
 
     # -----------------------------------------------------------
     # HEALTHCHECK
@@ -111,7 +113,7 @@ def create_app() -> Flask:
     def healthz():
         return {"ok": True}
 
-    # Crear tablas en SQLite (si no existen)
+    # Crear tablas si no existen
     with app.app_context():
         db.create_all()
 
