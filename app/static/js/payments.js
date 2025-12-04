@@ -16,9 +16,9 @@
 
   async function getConfig(){
     try{
-      const r = await fetch("/api/paypal/config", { credentials: "same-origin" });
+      const r = await fetch("/api/paypal/config");
       if (!r.ok) return null;
-      return await r.json(); // { client_id, currency?, mode? }
+      return await r.json();
     }catch(_){ return null; }
   }
 
@@ -26,55 +26,61 @@
     return new Promise((resolve, reject)=>{
       if (window.paypal) return resolve();
       const s = document.createElement("script");
-      const cur = (currency || "USD").toUpperCase();
-      s.src = "https://www.paypal.com/sdk/js?client-id=" + encodeURIComponent(clientId)
-            + "&currency=" + cur + "&intent=capture&enable-funding=card";
-      s.onload = () => resolve();
-      s.onerror = () => reject(new Error("No se pudo cargar el SDK de PayPal"));
+      s.src =
+        "https://www.paypal.com/sdk/js?client-id=" +
+        encodeURIComponent(clientId) +
+        "&currency=" + (currency || "USD") +
+        "&intent=capture";
+      s.onload = resolve;
+      s.onerror = () => reject(new Error("NO se pudo cargar el SDK de PayPal"));
       document.head.appendChild(s);
     });
   }
 
   function renderButtons(){
-    if (!window.paypal) { showAlert("SDK de PayPal no cargado."); return; }
+    if (!window.paypal){
+      showAlert("SDK de PayPal no disponible.");
+      return;
+    }
 
     plans.forEach(plan=>{
       const el = document.getElementById(plan.id);
       if (!el) return;
-      // Limpia contenedor
       el.innerHTML = "";
 
       window.paypal.Buttons({
-        style: { layout:"vertical", color:"gold", shape:"rect", label:"paypal" },
-        createOrder: function(data, actions){
+        style: { layout: "vertical", color: "gold", shape: "rect", label: "paypal" },
+
+        createOrder: (data, actions) => {
           return actions.order.create({
             purchase_units: [{
               reference_id: plan.sku,
-              description: plan.minutes + " minutos PolyScribe (prepago)",
+              description: `${plan.minutes} minutos PolyScribe`,
               amount: { currency_code:"USD", value: plan.price }
             }]
           });
         },
-        onApprove: function(data, actions){
-          return actions.order.capture().then(function(details){
-            // Notificar a backend para abonar minutos
+
+        onApprove: (data, actions) => {
+          return actions.order.capture().then(details => {
             fetch("/api/paypal/capture", {
               method: "POST",
-              headers: { "Content-Type":"application/json" },
-              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 order_id: details.id,
                 sku: plan.sku,
                 minutes: plan.minutes,
                 amount: plan.price
               })
-            }).catch(()=>{});
-            alert("Pago aprobado. ¡Gracias! Los minutos se abonarán en tu cuenta.");
+            });
+
+            alert("Pago aprobado. Los minutos serán acreditados.");
           });
         },
-        onError: function(err){
+
+        onError: err => {
           console.error("PayPal error:", err);
-          showAlert("Hubo un problema con PayPal. Intenta de nuevo.");
+          showAlert("Hubo un problema al conectar con PayPal. Intenta de nuevo.");
         }
       }).render("#" + plan.id);
     });
@@ -83,14 +89,11 @@
   (async function init(){
     const cfg = await getConfig();
     if (!cfg || !cfg.client_id){
-      showAlert("PayPal no está configurado por el momento. Puedes continuar usando el plan Free.");
+      showAlert("PayPal no está configurado.");
       return;
     }
-    try{
-      await injectSdk(cfg.client_id, cfg.currency || "USD");
-      renderButtons();
-    }catch(e){
-      showAlert(e.message || "No se pudo inicializar los pagos.");
-    }
+
+    await injectSdk(cfg.client_id, cfg.currency);
+    renderButtons();
   })();
 })();

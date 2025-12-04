@@ -25,8 +25,8 @@ def create_app() -> Flask:
 
     # Base de datos
     app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
-        "DATABASE_URL",  # en Render: sqlite:///polyscribe3.db
-        "sqlite:///polyscribe3.db",
+        "DATABASE_URL",           # en Render: sqlite:///polyscribe4.db (o la que uses)
+        "sqlite:///polyscribe4.db",
     )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
@@ -50,20 +50,20 @@ def create_app() -> Flask:
         "https://api-m.sandbox.paypal.com",
     )
 
-    # Credenciales (variables que ya pusiste en Render)
+    # Credenciales
     app.config["PAYPAL_CLIENT_ID"] = os.getenv("PAYPAL_CLIENT_ID")
     app.config["PAYPAL_CLIENT_SECRET"] = os.getenv("PAYPAL_CLIENT_SECRET")
 
     # Moneda
     app.config["PAYPAL_CURRENCY"] = os.getenv("PAYPAL_CURRENCY", "USD")
 
-    # Si en algún momento usas planes de suscripción, puedes guardar aquí el ID:
+    # Plan (por ahora no lo usamos en el flujo de botones)
     app.config["PAYPAL_PLAN_STARTER_ID"] = os.getenv(
-        "PAYPAL_PLAN_STARTER_ID",  # en Render ya lo tienes así
+        "PAYPAL_PLAN_STARTER_ID",
         "P-9W9394623R721322BNEW7GUY",
     )
 
-    # Webhook ID (si verificas la firma de PayPal)
+    # Webhook ID (si algún día verificas la firma)
     app.config["PAYPAL_WEBHOOK_ID"] = os.getenv("PAYPAL_WEBHOOK_ID")
 
     # Habilitar PayPal sólo si hay credenciales
@@ -81,7 +81,7 @@ def create_app() -> Flask:
     migrate.init_app(app, db)
 
     # Importar modelos para que SQLAlchemy conozca todas las tablas
-    from app import models  # noqa: F401
+    from app import models        # noqa: F401
     from app import models_payment  # noqa: F401
 
     # -----------------------------------------------------------
@@ -99,12 +99,10 @@ def create_app() -> Flask:
     from app.routes.usage import bp as usage_bp
     app.register_blueprint(usage_bp)
 
-    # 👉 IMPORTANTE: aquí importamos LOS DOS blueprints de paypal.py
-    # bp -> rutas /paypal/...  (thanks, cancel, webhook)
-    # api_bp -> rutas /api/paypal/... (config, capture, subscribe legacy)
+    # PayPal: Rutas públicas y API
     from app.routes.paypal import bp as paypal_bp, api_bp as paypal_api_bp
-    app.register_blueprint(paypal_bp)
-    app.register_blueprint(paypal_api_bp)
+    app.register_blueprint(paypal_bp)       # /paypal/...
+    app.register_blueprint(paypal_api_bp)   # /api/paypal/...
 
     # -----------------------------------------------------------
     # HEALTHCHECK
