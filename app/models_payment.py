@@ -1,49 +1,59 @@
 # app/models_payment.py
 from __future__ import annotations
 
-import datetime as dt
-from typing import Any, Dict
+from datetime import datetime
 
-from sqlalchemy.dialects.sqlite import JSON
 from app import db
 
 
 class Payment(db.Model):
+    """
+    Registro de pagos realizados (actualmente sólo PayPal).
+
+    NOTA: No usar 'plan_id' aquí para evitar conflictos con la tabla existente.
+    Usamos:
+      - provider_order_id  -> ID de orden en PayPal
+      - sku                -> código interno del plan (starter_60, pro_300, etc.)
+      - minutes            -> minutos que se acreditan con el pago
+    """
     __tablename__ = "payments"
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.String(255), nullable=True, index=True)
 
-    # No usamos plan_id para evitar el error; guardamos el SKU en plan_code
-    plan_code = db.Column(db.String(64), nullable=True)  # ej: "starter_60"
-    order_id = db.Column(db.String(128), nullable=True, unique=True)
+    # Usuario dueño del saldo
+    user_id = db.Column(db.String(255), nullable=False, index=True)
 
-    amount = db.Column(db.Float, nullable=False, default=0.0)
-    currency = db.Column(db.String(8), nullable=False, default="USD")
-    status = db.Column(db.String(32), nullable=False, default="captured")
+    # Proveedor de pago (paypal, stripe, etc.)
+    provider = db.Column(db.String(50), nullable=False, default="paypal")
 
+    # ID de la orden en el proveedor (en PayPal: order.id)
+    provider_order_id = db.Column(db.String(255), nullable=False, unique=True)
+
+    # SKU de nuestro plan (starter_60, pro_300, business_1200, etc.)
+    sku = db.Column(db.String(64), nullable=True)
+
+    # Minutos que se compran con este pago
     minutes = db.Column(db.Integer, nullable=False, default=0)
 
-    raw_payload = db.Column(JSON, nullable=True)
+    # Monto pagado
+    amount = db.Column(db.Float, nullable=False, default=0.0)
 
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    # Moneda (USD, EUR, etc.)
+    currency = db.Column(db.String(3), nullable=False, default="USD")
+
+    # Estado: created, captured, failed, refunded...
+    status = db.Column(db.String(32), nullable=False, default="created")
+
+    # JSON crudo de PayPal o de la petición de captura
+    raw_payload = db.Column(db.Text, nullable=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(
         db.DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
         nullable=False,
-        default=dt.datetime.utcnow,
-        onupdate=dt.datetime.utcnow,
     )
 
-
-class PaymentEvent(db.Model):
-    """
-    Para guardar los webhooks de PayPal tal como llegan (opcional pero útil).
-    """
-
-    __tablename__ = "payment_events"
-
-    id = db.Column(db.Integer, primary_key=True)
-    event_type = db.Column(db.String(128), nullable=False)
-    raw_json = db.Column(JSON, nullable=False)
-
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    def mark_captured(self) -> None:
+        self.status = "captured"
