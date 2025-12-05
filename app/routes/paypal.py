@@ -13,9 +13,11 @@ from sqlalchemy.exc import SQLAlchemyError
 from app import db
 from app.models import UsageLedger
 from app.models_payment import Payment, PaymentEvent
+from app.paypal_sdk import PayPalSDK  # si en algún momento quieres verificar órdenes
+
 
 # -------------------------------------------------------------------
-# BLUEPRINT 1: /paypal/... (thanks, cancel, webhook)
+# BLUEPRINT 1: Rutas "públicas" de PayPal (/paypal/...)
 # -------------------------------------------------------------------
 bp = Blueprint("paypal", __name__, url_prefix="/paypal")
 
@@ -38,9 +40,8 @@ def paypal_thanks():
             <p>Has adquirido tu plan PolyScribe ({plan}).</p>
             <p>El saldo se asociará al usuario: <strong>{user_id}</strong>.</p>
             <p style="max-width:600px;margin:1rem auto;font-size:0.9rem">
-              Nota: la acreditación de minutos se realiza mediante el webhook
-              y el registro interno de pagos. Si el pago se canceló o no se
-              completó, es posible que no se acrediten minutos.
+              Nota: la acreditación de minutos se realiza inmediatamente
+              después de confirmar el pago.
             </p>
             <p>
               <a href="/?user_id={user_id}">Ir a transcribir</a> |
@@ -61,11 +62,19 @@ def paypal_cancel():
 
 @bp.post("/webhook")
 def paypal_webhook():
+    """
+    Guarda el evento crudo de PayPal (sin lógica compleja).
+    """
     event = request.get_json(silent=True) or {}
     event_type = event.get("event_type", "unknown")
 
     try:
-        db.session.add(PaymentEvent(event_type=event_type, raw_json=event))
+        db.session.add(
+            PaymentEvent(
+                event_type=event_type,
+                raw_json=event,
+            )
+        )
         db.session.commit()
     except SQLAlchemyError:
         db.session.rollback()
@@ -74,7 +83,7 @@ def paypal_webhook():
 
 
 # -------------------------------------------------------------------
-# BLUEPRINT 2: /api/paypal/... (para el frontend)
+# BLUEPRINT 2: API usada por el frontend (/api/paypal/...)
 # -------------------------------------------------------------------
 api_bp = Blueprint("paypal_api", __name__, url_prefix="/api/paypal")
 
@@ -83,7 +92,7 @@ api_bp = Blueprint("paypal_api", __name__, url_prefix="/api/paypal")
 def paypal_config():
     cfg = current_app.config
     if not cfg.get("PAYPAL_ENABLED"):
-        return jsonify({"enabled": False}), 200
+        return jsonify({"enabled": False})
 
     return jsonify(
         {
@@ -98,14 +107,16 @@ def paypal_config():
 @api_bp.post("/capture")
 def paypal_capture():
     """
-    El JS en el navegador hace actions.order.capture(),
-    y luego nos envía:
+    Recibe del frontend:
       { order_id, sku, minutes, amount, user_id? }
+
+    - Registra el pago en la tabla payments.
+    - Abona minutos en UsageLedger.
     """
     data = request.get_json(silent=True) or {}
 
     order_id = data.get("order_id")
-    sku = data.get("sku")  # starter_60 / pro_300 / biz_1200
+    sku = data.get("sku")  # ej: starter_60 / pro_300 / biz_1200
     minutes = int(data.get("minutes", 0) or 0)
     amount = float(data.get("amount", 0) or 0.0)
     user_id = data.get("user_id") or request.args.get("user_id") or "guest"
@@ -117,10 +128,12 @@ def paypal_capture():
         # 1) Registrar pago
         payment = Payment(
             user_id=user_id,
-            plan_id=sku,
+            plan_code=sku,  # columna existente en el modelo
             order_id=order_id,
             amount=amount,
+            currency=current_app.config.get("PAYPAL_CURRENCY", "USD"),
             status="captured",
+            minutes=minutes,
         )
         db.session.add(payment)
 
@@ -140,25 +153,22 @@ def paypal_capture():
         db.session.commit()
     except SQLAlchemyError as exc:
         db.session.rollback()
-        return jsonify({"error": f"DB error: {exc}"}), 500
+        current_app.logger.exception("paypal_capture DB error: %s", exc)
+        return jsonify({"error": "DB error"}), 500
 
-    return jsonify({"ok": True}), 200
+    return jsonify({"ok": True})
 
 
 @api_bp.post("/subscribe")
 def paypal_subscribe_legacy():
     """
-    Este endpoint solo existe para que el código VIEJO que
-    siga llamando /api/paypal/subscribe reciba un 410 y un
-    mensaje claro.
-
-    Lo ideal es que ya ningún JS lo llame.
+    Endpoint de compatibilidad. Si algún JS viejo lo llama,
+    respondemos con 410 para indicar que use /capture.
     """
     return (
         jsonify(
             {
-                "error": "Este endpoint ha sido reemplazado por /api/paypal/capture. "
-                "Actualiza tu JavaScript de pagos."
+                "error": "Este endpoint ha sido reemplazado por /api/paypal/capture."
             }
         ),
         410,

@@ -23,10 +23,10 @@ def create_app() -> Flask:
     # -----------------------------------------------------------
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
 
-    # Base de datos
+    # Base de datos (si cambias el nombre creas un archivo nuevo limpio)
     app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
-        "DATABASE_URL",          # en Render: sqlite:///polyscribe4.db (por ejemplo)
-        "sqlite:///polyscribe4.db",
+        "DATABASE_URL",
+        "sqlite:///polyscribe3.db",
     )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
@@ -41,37 +41,29 @@ def create_app() -> Flask:
     # -----------------------------------------------------------
     # CONFIG PAYPAL
     # -----------------------------------------------------------
-    # sandbox / live
     app.config["PAYPAL_ENV"] = os.getenv("PAYPAL_ENV", "sandbox")
-
-    # URL base API REST de PayPal
     app.config["PAYPAL_BASE_URL"] = os.getenv(
         "PAYPAL_BASE_URL",
         "https://api-m.sandbox.paypal.com",
     )
 
-    # Credenciales (Render → Environment)
     app.config["PAYPAL_CLIENT_ID"] = os.getenv("PAYPAL_CLIENT_ID")
     app.config["PAYPAL_CLIENT_SECRET"] = os.getenv("PAYPAL_CLIENT_SECRET")
-
-    # Moneda
     app.config["PAYPAL_CURRENCY"] = os.getenv("PAYPAL_CURRENCY", "USD")
 
-    # ID del plan starter (por si lo necesitas más adelante)
+    # ID de plan (si alguna vez vuelves a usar suscripciones)
     app.config["PAYPAL_PLAN_STARTER_ID"] = os.getenv(
         "PAYPAL_PLAN_STARTER_ID",
         "P-9W9394623R721322BNEW7GUY",
     )
 
-    # Webhook ID (solo si verificas la firma)
     app.config["PAYPAL_WEBHOOK_ID"] = os.getenv("PAYPAL_WEBHOOK_ID")
 
-    # Habilitar PayPal solo si hay credenciales
     app.config["PAYPAL_ENABLED"] = bool(
         app.config["PAYPAL_CLIENT_ID"] and app.config["PAYPAL_CLIENT_SECRET"]
     )
 
-    # Minutos gratis
+    # Minutos gratis por usuario
     app.config["FREE_TIER_MINUTES"] = int(os.getenv("FREE_TIER_MINUTES", "10"))
 
     # -----------------------------------------------------------
@@ -81,7 +73,7 @@ def create_app() -> Flask:
     migrate.init_app(app, db)
 
     # Importar modelos
-    from app import models          # noqa: F401
+    from app import models  # noqa: F401
     from app import models_payment  # noqa: F401
 
     # -----------------------------------------------------------
@@ -99,9 +91,6 @@ def create_app() -> Flask:
     from app.routes.usage import bp as usage_bp
     app.register_blueprint(usage_bp)
 
-    # PayPal: dos blueprints en el MISMO archivo
-    #  - bp      → /paypal/...
-    #  - api_bp  → /api/paypal/...
     from app.routes.paypal import bp as paypal_bp, api_bp as paypal_api_bp
     app.register_blueprint(paypal_bp)
     app.register_blueprint(paypal_api_bp)
@@ -113,7 +102,7 @@ def create_app() -> Flask:
     def healthz():
         return {"ok": True}
 
-    # Crear tablas si no existen
+    # Crear tablas en SQLite (si no existen)
     with app.app_context():
         db.create_all()
 
