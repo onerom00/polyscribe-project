@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from typing import Optional
+from typing import Dict, Any
 
 from flask import (
     Blueprint,
@@ -10,32 +10,33 @@ from flask import (
     jsonify,
     request,
 )
+
 from app import db
-from app.models import UsageLedger
 from app.models_payment import Payment
 
-
-# Blueprint de páginas (si quieres pantallas personalizadas /paypal/thanks, etc.)
-bp = Blueprint("paypal_pages", __name__)
-
-# Blueprint de API
+bp = Blueprint("paypal_pages", __name__, url_prefix="/paypal")
 api_bp = Blueprint("paypal_api", __name__, url_prefix="/api/paypal")
 
 
-# ---------------------------------------------------------
-# Helpers internos
-# ---------------------------------------------------------
+# -----------------------------------------------------
+# Helper para obtener el user_id de forma consistente
+# -----------------------------------------------------
 def _get_user_id() -> str:
     """
-    Obtiene el user_id de manera consistente:
-
-    1. Header 'X-User-Id' (si lo envía el frontend)
-    2. Query string ?user_id=...
-    3. Fallback: 'guest'
+    Intenta resolver el user_id desde:
+      1) Cabecera X-User-Id
+      2) Query string ?user_id=...
+      3) JSON body {"user_id": "..."}
+      4) Fallback "guest"
     """
-    uid = request.headers.get("X-User-Id")
+    uid = request.headers.get("X-User-Id") or request.args.get("user_id")
+
     if not uid:
-        uid = request.args.get("user_id")
+        try:
+            data = request.get_json(silent=True) or {}
+        except Exception:
+            data = {}
+        uid = data.get("user_id")
 
     if not uid:
         uid = "guest"
@@ -43,50 +44,14 @@ def _get_user_id() -> str:
     return uid
 
 
-def _get_or_create_ledger(user_id: str) -> UsageLedger:
-    """
-    Devuelve el registro de UsageLedger para el usuario,
-    creándolo si no existe.
-    """
-    ledger: Optional[UsageLedger] = UsageLedger.query.filter_by(
-        user_id=user_id
-    ).first()
-
-    if not ledger:
-        ledger = UsageLedger(
-            user_id=user_id,
-            free_minutes_used=0,
-            paid_minutes=0,
-        )
-        db.session.add(ledger)
-
-    return ledger
-
-
-# ---------------------------------------------------------
-# Rutas de páginas (opcionales, pero útiles)
-# ---------------------------------------------------------
-@bp.route("/paypal/thanks")
-def paypal_thanks():
-    return "Pago completado. Puedes cerrar esta ventana."
-
-
-@bp.route("/paypal/cancel")
-def paypal_cancel():
-    return "El pago fue cancelado. Puedes cerrar esta ventana."
-
-
-# ---------------------------------------------------------
-# API: configuración PayPal
-# ---------------------------------------------------------
+# -----------------------------------------------------
+# API: CONFIG
+#  GET /api/paypal/config
+# Usado por static/js/payments.js para cargar el SDK
+# -----------------------------------------------------
 @api_bp.get("/config")
 def paypal_config():
-    """
-    Devuelve la configuración necesaria para inicializar el SDK de PayPal
-    en el frontend (client_id, currency, etc.)
-    """
-    enabled = bool(current_app.config.get("PAYPAL_ENABLED", False))
-    if not enabled:
+    if not current_app.config.get("PAYPAL_ENABLED", False):
         return jsonify({"enabled": False}), 200
 
     return jsonify(
@@ -99,118 +64,86 @@ def paypal_config():
     )
 
 
-# ---------------------------------------------------------
-# API: captura de pago (desde payments.js con Buttons)
-# ---------------------------------------------------------
+# -----------------------------------------------------
+# API: CAPTURE (notificación desde payments.js)
+#  POST /api/paypal/capture
+#  Body JSON: { order_id, sku, minutes, amount }
+#
+# Ojo: el capture real lo hace el JS del navegador.
+# Aquí SOLO registramos el pago y abonamos minutos.
+# -----------------------------------------------------
 @api_bp.post("/capture")
 def paypal_capture():
-    """
-    Endpoint llamado por app/static/js/payments.js después de que
-    el SDK de PayPal hace order.capture().
-
-    Espera un JSON como:
-      {
-        "order_id": "...",
-        "sku": "starter_60",
-        "minutes": 60,
-        "amount": "9.00"
-      }
-
-    Este endpoint:
-      1) Registra el Payment (si no existía)
-      2) Marca el pago como 'captured'
-      3) Acredita los minutos en UsageLedger.paid_minutes
-      4) Es idempotente: si el order_id ya existe, no duplica el saldo
-    """
     if not current_app.config.get("PAYPAL_ENABLED", False):
-        return (
-            jsonify({"error": "PayPal no está configurado en el servidor."}),
-            400,
-        )
+        return jsonify({"error": "PayPal no está habilitado en el servidor."}), 400
 
-    data = request.get_json(silent=True) or {}
+    data: Dict[str, Any] = request.get_json(force=True, silent=True) or {}
 
     order_id = data.get("order_id")
     sku = data.get("sku")
-    minutes_raw = data.get("minutes")
-    amount_raw = data.get("amount")
+    minutes = int(data.get("minutes") or 0)
+    amount_str = str(data.get("amount") or "0")
+
+    if not order_id or minutes <= 0:
+        return jsonify({"error": "Datos de pago incompletos."}), 400
 
     try:
-        minutes = int(minutes_raw or 0)
-    except (TypeError, ValueError):
-        minutes = 0
-
-    try:
-        amount = float(amount_raw or 0)
-    except (TypeError, ValueError):
-        amount = 0.0
-
-    if not order_id or minutes <= 0 or amount <= 0:
-        return (
-            jsonify(
-                {
-                    "error": "Datos de pago incompletos. "
-                    "Se requiere order_id, minutes > 0 y amount > 0."
-                }
-            ),
-            400,
-        )
+        amount_usd = float(amount_str)
+    except ValueError:
+        amount_usd = 0.0
 
     user_id = _get_user_id()
-    currency = current_app.config.get("PAYPAL_CURRENCY", "USD")
+    app = current_app
 
-    # -----------------------------------------------------
-    # Idempotencia: si ya existe el pago con ese order_id,
-    # NO volvemos a acreditar minutos.
-    # -----------------------------------------------------
-    existing: Optional[Payment] = Payment.query.filter_by(
-        provider_order_id=order_id
-    ).first()
+    app.logger.info(
+        "PayPal capture notify: user=%s order_id=%s sku=%s minutes=%s amount=%s",
+        user_id,
+        order_id,
+        sku,
+        minutes,
+        amount_usd,
+    )
 
+    # ¿Ya registramos este order_id? Evitamos duplicados.
+    existing = Payment.query.filter_by(order_id=order_id).first()
     if existing:
-        # Aseguramos que quede 'captured' pero no duplicamos minutos
-        if existing.status != "captured":
-            existing.status = "captured"
-            db.session.commit()
+        app.logger.warning("PayPal capture duplicado para order_id=%s", order_id)
+        return jsonify({"ok": True, "already_recorded": True})
 
-        return jsonify(
-            {
-                "ok": True,
-                "user_id": existing.user_id,
-                "minutes_added": 0,  # ya estaban acreditados
-                "message": "Orden ya registrada previamente.",
-            }
-        )
-
-    # -----------------------------------------------------
-    # Crear Payment nuevo + acreditar minutos
-    # -----------------------------------------------------
+    # Guardar el pago con los minutos
     payment = Payment(
         user_id=user_id,
-        provider="paypal",
-        provider_order_id=order_id,
+        order_id=order_id,
         sku=sku,
         minutes=minutes,
-        amount=amount,
-        currency=currency,
+        amount_usd=amount_usd,
         status="captured",
-        raw_payload=json.dumps(data, ensure_ascii=False),
+        raw_payload=data,
     )
     db.session.add(payment)
-
-    # Actualizar UsageLedger
-    ledger = _get_or_create_ledger(user_id)
-    if ledger.paid_minutes is None:
-        ledger.paid_minutes = 0
-    ledger.paid_minutes += minutes
-
     db.session.commit()
+
+    app.logger.info(
+        "PayPal payment registrado: user=%s, +%s minutos (payment_id=%s)",
+        user_id,
+        minutes,
+        payment.id,
+    )
 
     return jsonify(
         {
             "ok": True,
             "user_id": user_id,
-            "minutes_added": minutes,
-            "total_paid_minutes": ledger.paid_minutes,
+            "payment_id": payment.id,
+            "credited_minutes": minutes,
         }
     )
+
+
+# -----------------------------------------------------
+# (Opcional) Ruta sencilla para probar que el BP está vivo
+#  GET /paypal/ping
+# -----------------------------------------------------
+@bp.get("/ping")
+def paypal_ping():
+    return {"ok": True, "message": "paypal blueprint up"}

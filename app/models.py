@@ -2,12 +2,18 @@
 from __future__ import annotations
 
 import datetime as dt
+import uuid
 
-from app import db  # usa la instancia global creada en app/__init__.py
+from app import db  # instancia global de SQLAlchemy creada en app/__init__.py
 
 
 def utcnow():
     return dt.datetime.utcnow()
+
+
+def gen_job_id() -> str:
+    """Genera un ID único de 32 caracteres hex para los jobs."""
+    return uuid.uuid4().hex
 
 
 # ---------------------------------------------------------
@@ -42,8 +48,13 @@ class User(db.Model):
 class AudioJob(db.Model):
     __tablename__ = "audio_jobs"
 
-    # CLAVE PRIMARIA AUTOINCREMENT
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    # IMPORTANTE: String PK con default => no más errores de NOT NULL
+    id = db.Column(
+        db.String(64),
+        primary_key=True,
+        nullable=False,
+        default=gen_job_id,
+    )
 
     # quién (puede ser id interno o email hash; lo usamos como string flexible)
     user_id = db.Column(db.String(255), nullable=True, index=True)
@@ -61,7 +72,7 @@ class AudioJob(db.Model):
     language_forced = db.Column(db.Boolean, nullable=False, default=False)
     language_detected = db.Column(db.String(10), nullable=True)
 
-    status = db.Column(db.String(32), nullable=True, default="done")
+    status = db.Column(db.String(32), nullable=True, default="queued")
     error = db.Column(db.Integer, nullable=False, default=0)
     error_message = db.Column(db.Text, nullable=True)
 
@@ -85,94 +96,3 @@ class AudioJob(db.Model):
 
     def __repr__(self) -> str:
         return f"<AudioJob id={self.id} user={self.user_id} status={self.status}>"
-
-
-# ---------------------------------------------------------
-# USO DE MINUTOS (FREE + PLANES DE PAGO)
-# ---------------------------------------------------------
-class UsageLedger(db.Model):
-    """
-    Tabla agregada por usuario:
-    - minutes_total: minutos totales asignados (free + pagos)
-    - minutes_used:  minutos ya consumidos
-    """
-
-    __tablename__ = "usage_ledger"
-
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    user_id = db.Column(db.String(255), nullable=False, index=True)
-
-    minutes_total = db.Column(db.Integer, nullable=False, default=0)
-    minutes_used = db.Column(db.Integer, nullable=False, default=0)
-
-    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
-    updated_at = db.Column(
-        db.DateTime,
-        nullable=False,
-        default=utcnow,
-        onupdate=utcnow,
-    )
-
-    @property
-    def minutes_left(self) -> int:
-        return max(self.minutes_total - self.minutes_used, 0)
-
-    def add_minutes(self, amount: int, reason: str = "", source: str = "", meta=None):
-        """Crédito de minutos (p.ej. plan Starter, bonus, etc.)."""
-        if amount <= 0:
-            return
-        self.minutes_total += amount
-        event = UsageLedgerEvent(
-            user_id=self.user_id,
-            delta_minutes=amount,
-            reason=reason or "credit",
-            source=source or "system",
-            meta=meta or {},
-        )
-        db.session.add(event)
-
-    def consume_minutes(self, amount: int, reason: str = "", source: str = "", meta=None):
-        """Descuento de minutos (p.ej. nueva transcripción)."""
-        if amount <= 0:
-            return
-        self.minutes_used += amount
-        event = UsageLedgerEvent(
-            user_id=self.user_id,
-            delta_minutes=-amount,
-            reason=reason or "debit",
-            source=source or "usage",
-            meta=meta or {},
-        )
-        db.session.add(event)
-
-    def __repr__(self) -> str:
-        return (
-            f"<UsageLedger user_id={self.user_id} "
-            f"total={self.minutes_total} used={self.minutes_used}>"
-        )
-
-
-# ---------------------------------------------------------
-# HISTORIAL DE MOVIMIENTOS DE MINUTOS
-# ---------------------------------------------------------
-class UsageLedgerEvent(db.Model):
-    __tablename__ = "usage_ledger_events"
-
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    user_id = db.Column(db.String(255), nullable=False, index=True)
-
-    # positivo = crédito, negativo = consumo
-    delta_minutes = db.Column(db.Integer, nullable=False)
-
-    reason = db.Column(db.String(64), nullable=True)   # "free_tier", "starter_plan", etc.
-    source = db.Column(db.String(64), nullable=True)   # "system", "webhook", "usage", ...
-
-    meta = db.Column(db.JSON, nullable=True)
-
-    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
-
-    def __repr__(self) -> str:
-        return (
-            f"<UsageLedgerEvent user_id={self.user_id} "
-            f"delta={self.delta_minutes} reason={self.reason}>"
-        )

@@ -14,23 +14,11 @@
     alertBox.style.display = "block";
   }
 
-  function getUserId() {
-    // Igual que en el resto de la app: usamos localStorage o query ?user_id
-    const fromStorage = window.localStorage.getItem("ps_user_id");
-    if (fromStorage && fromStorage.trim()) return fromStorage.trim();
-
-    const params = new URLSearchParams(window.location.search);
-    const fromQuery = params.get("user_id");
-    if (fromQuery && fromQuery.trim()) return fromQuery.trim();
-
-    return "guest";
-  }
-
   async function getConfig() {
     try {
       const r = await fetch("/api/paypal/config", { credentials: "same-origin" });
       if (!r.ok) return null;
-      return await r.json();
+      return await r.json(); // { enabled, client_id, currency, env }
     } catch (_) {
       return null;
     }
@@ -53,11 +41,23 @@
     });
   }
 
+  function ensureUser() {
+    let userId = localStorage.getItem("ps_user_id");
+    if (!userId) {
+      // En tu app real puedes tener /dev-login; aquí solo generamos uno random si falta
+      userId = "guest-" + Math.random().toString(36).slice(2);
+      localStorage.setItem("ps_user_id", userId);
+    }
+    return userId;
+  }
+
   function renderButtons() {
     if (!window.paypal) {
       showAlert("SDK de PayPal no cargado.");
       return;
     }
+
+    const userId = ensureUser();
 
     plans.forEach((plan) => {
       const el = document.getElementById(plan.id);
@@ -66,12 +66,7 @@
 
       window.paypal
         .Buttons({
-          style: {
-            layout: "vertical",
-            color: "gold",
-            shape: "rect",
-            label: "paypal",
-          },
+          style: { layout: "vertical", color: "gold", shape: "rect", label: "paypal" },
           createOrder: function (data, actions) {
             return actions.order.create({
               purchase_units: [
@@ -85,8 +80,6 @@
           },
           onApprove: function (data, actions) {
             return actions.order.capture().then(function (details) {
-              const userId = getUserId();
-
               fetch("/api/paypal/capture", {
                 method: "POST",
                 headers: {
@@ -117,17 +110,16 @@
 
   (async function init() {
     const cfg = await getConfig();
-    if (!cfg || !cfg.client_id) {
-      showAlert(
-        "PayPal no está configurado por el momento. Puedes continuar usando el plan Free."
-      );
+    if (!cfg || !cfg.enabled || !cfg.client_id) {
+      showAlert("PayPal no está configurado por el momento. Puedes continuar usando el plan Free.");
       return;
     }
     try {
-      await injectSdk(cfg.client_id, cfg.currency || "USD");
+      await injectSdk(cfg.client_id, cfg.currency);
       renderButtons();
-    } catch (e) {
-      showAlert(e.message || "No se pudo inicializar los pagos.");
+    } catch (err) {
+      console.error(err);
+      showAlert("No se pudo cargar el SDK de PayPal. Intenta más tarde.");
     }
   })();
 })();

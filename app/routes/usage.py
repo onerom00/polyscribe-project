@@ -1,83 +1,99 @@
 # app/routes/usage.py
 from __future__ import annotations
 
+import os
 from typing import Optional
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, current_app, jsonify, request, session
 
-from app import db  # por si más adelante quieres rutas de consumo
-from app.models import UsageLedger
-
+from app import db
+from app.models import AudioJob
+from app.models_payment import Payment
 
 bp = Blueprint("usage", __name__, url_prefix="/api/usage")
 
+MB = 1024 * 1024
+MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "100") or 100)
+
 
 # ---------------------------------------------------------
-# Helper: user_id coherente en toda la app
+# Helper: user_id COHERENTE en toda la app
+#   Igual que en app/routes/jobs.py
 # ---------------------------------------------------------
 def _get_user_id() -> str:
     """
-    Obtiene el user_id desde:
-      1) Header 'X-User-Id'
-      2) Query string ?user_id=...
-      3) Fallback: 'guest'
+    Obtiene el user_id desde, en este orden:
+      1) session["user_id"] o session["uid"]
+      2) Header 'X-User-Id'
+      3) Query string ?user_id=...
+      4) Fallback: DEV_USER_ID (modo dev)
+      5) Último fallback: 'guest'
     """
-    uid = request.headers.get("X-User-Id")
-    if not uid:
-        uid = request.args.get("user_id")
-
-    if not uid:
-        uid = "guest"
-
-    return uid
+    raw = (
+        session.get("user_id")
+        or session.get("uid")
+        or request.headers.get("X-User-Id")
+        or request.args.get("user_id")
+        or os.getenv("DEV_USER_ID", "")
+    )
+    s = str(raw).strip() if raw else ""
+    return s or "guest"
 
 
 # ---------------------------------------------------------
 # GET /api/usage/balance
+#   Respuesta:
+#   {
+#     "ok": true,
+#     "used_seconds": ...,
+#     "allowance_seconds": ...,
+#     "file_limit_bytes": ...
+#   }
 # ---------------------------------------------------------
 @bp.get("/balance")
 def usage_balance():
-    """
-    Devuelve el saldo de minutos del usuario:
-
-      {
-        "user_id": "guest",
-        "free_quota": 10,
-        "free_used": 3,
-        "free_remaining": 7,
-        "paid_minutes": 120,
-        "total_remaining": 127
-      }
-
-    Asume que el modelo UsageLedger tiene, al menos:
-      - user_id
-      - free_minutes_used (int, minutos gratuitos consumidos)
-      - paid_minutes      (int, minutos de pago disponibles)
-    """
     user_id = _get_user_id()
-    free_quota = int(current_app.config.get("FREE_TIER_MINUTES", 10))
+    free_min = int(current_app.config.get("FREE_TIER_MINUTES", 10))
 
-    ledger: Optional[UsageLedger] = UsageLedger.query.filter_by(
-        user_id=user_id
-    ).first()
+    # Minutos pagados
+    paid_min = 0
+    try:
+        q = db.session.query(Payment).filter(
+            Payment.user_id == user_id,
+            Payment.status == "captured",
+        )
+        paid_min = sum(int(p.minutes or 0) for p in q.all())
+    except Exception as e:
+        current_app.logger.error("usage_balance: error leyendo pagos: %s", e)
+        paid_min = 0
 
-    if not ledger:
-        free_used = 0
-        paid_minutes = 0
-    else:
-        free_used = getattr(ledger, "free_minutes_used", 0) or 0
-        paid_minutes = getattr(ledger, "paid_minutes", 0) or 0
+    # Segundos usados (de todos los jobs de este user)
+    used_seconds = 0
+    try:
+        qj = db.session.query(AudioJob).filter(AudioJob.user_id == user_id)
+        used_seconds = sum(int(j.duration_seconds or 0) for j in qj.all())
+    except Exception as e:
+        current_app.logger.error("usage_balance: error leyendo jobs: %s", e)
+        used_seconds = 0
 
-    free_remaining = max(free_quota - free_used, 0)
-    total_remaining = free_remaining + paid_minutes
+    allowance_min = free_min + paid_min
+    allowance_seconds = int(allowance_min * 60)
+
+    # Log de depuración para ver exactamente qué está pasando
+    current_app.logger.info(
+        "USAGE_BALANCE uid=%s used_seconds=%.2f allowance_seconds=%.2f free_min=%s paid_min=%s",
+        user_id,
+        used_seconds,
+        allowance_seconds,
+        free_min,
+        paid_min,
+    )
 
     return jsonify(
         {
-            "user_id": user_id,
-            "free_quota": free_quota,
-            "free_used": free_used,
-            "free_remaining": free_remaining,
-            "paid_minutes": paid_minutes,
-            "total_remaining": total_remaining,
+            "ok": True,
+            "used_seconds": int(used_seconds),
+            "allowance_seconds": allowance_seconds,
+            "file_limit_bytes": int(MAX_UPLOAD_MB * MB),
         }
     )
