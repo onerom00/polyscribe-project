@@ -1,4 +1,6 @@
-        # ==========================
+    class Config:
+    ...
+    # ==========================
     #  PAYPAL
     # ==========================
     # Modo: sandbox / live
@@ -20,10 +22,8 @@
     #   - live:    https://api-m.paypal.com
     PAYPAL_BASE_URL = os.getenv("PAYPAL_BASE_URL", "https://api-m.sandbox.paypal.com")
 
-    # >>>> NUEVO: bandera que usa /api/paypal/config <<<<
-    PAYPAL_ENABLED = (
-        os.getenv("PAYPAL_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
-    )
+    # >>>> PRUEBA: forzar habilitado <<<<
+    PAYPAL_ENABLED = True   # <- PON ESTO ASÍ, SIN LEER ENV
 
     # Moneda por defecto para los botones JS
     PAYPAL_CURRENCY = os.getenv("PAYPAL_CURRENCY", "USD")
