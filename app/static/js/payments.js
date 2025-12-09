@@ -1,9 +1,11 @@
 // app/static/js/payments.js
 (function () {
+  // Definición de planes de prepago
+  // Estos valores SON los que se cobran en PayPal
   const plans = [
-    { id: "pp-60",   minutes: 60,   price: "9.00",  sku: "starter_60"  },
-    { id: "pp-300",  minutes: 300,  price: "29.00", sku: "pro_300"     },
-    { id: "pp-1200", minutes: 1200, price: "89.00", sku: "biz_1200"    },
+    { id: "pp-60",   minutes: 60,   price: "9.99",  sku: "starter_60"  },  // Starter
+    { id: "pp-300",  minutes: 300,  price: "19.99", sku: "pro_300"     },  // Pro
+    { id: "pp-1200", minutes: 1200, price: "49.99", sku: "biz_1200"    },  // Business
   ];
 
   const alertBox = document.getElementById("pay-alert");
@@ -44,7 +46,6 @@
   function ensureUser() {
     let userId = localStorage.getItem("ps_user_id");
     if (!userId) {
-      // En tu app real puedes tener /dev-login; aquí solo generamos uno random si falta
       userId = "guest-" + Math.random().toString(36).slice(2);
       localStorage.setItem("ps_user_id", userId);
     }
@@ -67,6 +68,7 @@
       window.paypal
         .Buttons({
           style: { layout: "vertical", color: "gold", shape: "rect", label: "paypal" },
+
           createOrder: function (data, actions) {
             return actions.order.create({
               purchase_units: [
@@ -78,6 +80,7 @@
               ],
             });
           },
+
           onApprove: function (data, actions) {
             return actions.order.capture().then(function (details) {
               fetch("/api/paypal/capture", {
@@ -99,6 +102,7 @@
               alert("Pago aprobado. ¡Gracias! Los minutos se abonarán en tu cuenta.");
             });
           },
+
           onError: function (err) {
             console.error("PayPal error:", err);
             showAlert("Hubo un problema con PayPal. Intenta de nuevo.");
@@ -111,7 +115,10 @@
   (async function init() {
     const cfg = await getConfig();
     if (!cfg || !cfg.enabled || !cfg.client_id) {
-      showAlert("PayPal no está configurado por el momento. Puedes continuar usando el plan Free.");
+      showAlert(
+        "PayPal no está configurado por el momento. " +
+        "Puedes continuar usando el plan Free."
+      );
       return;
     }
     try {
