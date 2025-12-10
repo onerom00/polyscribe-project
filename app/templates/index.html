@@ -82,8 +82,17 @@
         <span id="usage-badge-nav" class="badge-usage">
           <span id="usage-text-nav">—/— min · libre —</span>
         </span>
-        <a href="#login" class="a11y-btn" id="nav-login-link">Entrar</a>
-        <a href="#signup" class="a11y-btn" style="background:#22c55e;border-color:#16a34a;color:#0b111d">Registro</a>
+        <!-- Login directo -->
+        <a href="/dev-login" class="a11y-btn" id="nav-login-link">Entrar</a>
+        <!-- Registro directo -->
+        <a
+          href="/dev-login?signup=1"
+          class="a11y-btn"
+          id="nav-signup-link"
+          style="background:#22c55e;border-color:#16a34a;color:#0b111d"
+        >
+          Registro
+        </a>
       </div>
     </div>
   </header>
@@ -213,7 +222,7 @@
     }
 
     // ============================
-    // BADGE USO (CORREGIDO)
+    // BADGE USO
     // ============================
     async function refreshBadge(){
       const url = `/api/usage/balance?user_id=${encodeURIComponent(USER_ID)}`;
@@ -234,8 +243,8 @@
       const allowMin     = allowanceSec / 60;
       const remainMin    = allowMin - usedMin;
 
-      const usedLabel  = usedMin.toFixed(1);
-      const allowLabel = allowMin.toFixed(0);
+      const usedLabel   = usedMin.toFixed(1);
+      const allowLabel  = allowMin.toFixed(0);
       const remainLabel = Math.max(0, remainMin).toFixed(1);
 
       const text = `${usedLabel}/${allowLabel} min · libre ${remainLabel} min`;
@@ -248,7 +257,7 @@
 
 
     // ============================
-    // (RESTO DEL SCRIPT IGUAL A TU ORIGINAL)
+    // LÓGICA PRINCIPAL TRANSCRIPTOR
     // ============================
 
     const idiomaSel=$("#idioma-select");
@@ -273,9 +282,16 @@
     }
 
     drop.onclick = ()=> fileInput.click();
-    drop.ondragover = e=>{e.preventDefault(); drop.style.borderColor="#60a5fa";}
+    drop.ondragover = e=>{e.preventDefault(); drop.style.borderColor="#60a5fa";};
     drop.ondragleave= ()=> drop.style.borderColor="#97bff7";
-    drop.ondrop = e=>{e.preventDefault(); drop.style.borderColor="#97bff7"; if(e.dataTransfer.files[0]){ fileInput.files=e.dataTransfer.files; dFile.textContent=e.dataTransfer.files[0].name; }};
+    drop.ondrop = e=>{
+      e.preventDefault();
+      drop.style.borderColor="#97bff7";
+      if(e.dataTransfer.files[0]){
+        fileInput.files=e.dataTransfer.files;
+        dFile.textContent=e.dataTransfer.files[0].name;
+      }
+    };
 
     fileInput.onchange = ()=> dFile.textContent = fileInput.files[0]?.name || "—";
 
@@ -318,7 +334,7 @@
 
         showOk("Completado");
 
-        refreshBadge(); // <=== IMPORTANTE, recargar badge
+        refreshBadge(); // recargar badge tras usar minutos
       }
       finally{
         btnTrans.disabled=false;
@@ -338,8 +354,8 @@
 
   })();
   </script>
-    <!-- Otros scripts -->
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/exports_v2.js') }}"></script>
- </body>
+
+  <!-- Otros scripts (sin app.js viejo) -->
+  <script src="{{ url_for('static', filename='js/exports_v2.js') }}"></script>
+</body>
 </html>
