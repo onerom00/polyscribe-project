@@ -159,6 +159,11 @@
       padding:12px;
       resize:vertical;
       line-height:1.7;
+      /* ya NO se justifica globalmente */
+    }
+
+    /* Solo la transcripción justificada */
+    #transcript{
       text-align:justify;
       text-justify:inter-word;
       hyphens:auto;
@@ -205,12 +210,6 @@
       color:#0f5132;
       background:#d1f7e7;
       border-color:#94e2c1;
-    }
-
-    .alert.info{
-      color:#0c4a6e;
-      background:#e0f2fe;
-      border-color:#7dd3fc;
     }
 
     .hidden{display:none}
@@ -313,13 +312,6 @@
       color:#fff;
       font-size:11px;
     }
-
-    .status-bar{
-      margin-top:10px;
-      margin-bottom:4px;
-      font-size:13px;
-      color:#166534;
-    }
   </style>
 </head>
 
@@ -369,7 +361,6 @@
     </div>
 
     <p class="details">Sube tu audio y recibe transcripción + resumen.</p>
-    <div class="status-bar" id="status-bar"></div>
     <div class="alert" id="alert-box"></div>
 
     <div class="card grid" style="gap:20px">
@@ -449,7 +440,7 @@
   <script src="{{ url_for('static', filename='js/exports_buttons.js') }}"></script>
   <script src="{{ url_for('static', filename='js/nav_auth.js') }}"></script>
 
-  <!-- Lógica principal -->
+  <!-- Lógica principal (versión que ya funcionaba) -->
   <script>
   (function(){
 
@@ -462,8 +453,6 @@
     if (!USER_ID) USER_ID = localStorage.getItem("user_id") || "";
     if (USER_ID) localStorage.setItem("user_id", USER_ID);
     if (!USER_ID) USER_ID = "guest";
-
-    const statusBar = $("#status-bar");
 
     // ============================
     // API helper
@@ -495,13 +484,14 @@
       }
 
       const data = r.body || {};
+      console.log("usage", data);
 
       const usedSec      = Number(data.used_seconds || 0);
       const allowanceSec = Number(data.allowance_seconds || 0);
 
-      const usedMin   = usedSec / 60;
-      const allowMin  = allowanceSec / 60;
-      const remainMin = allowMin - usedMin;
+      const usedMin      = usedSec / 60;
+      const allowMin     = allowanceSec / 60;
+      const remainMin    = allowMin - usedMin;
 
       const usedLabel   = usedMin.toFixed(1);
       const allowLabel  = allowMin.toFixed(0);
@@ -533,38 +523,24 @@
 
     const MAX_MB = 100;
 
-    function showError(msg){
-      alertBox.textContent = msg;
-      alertBox.classList.remove("success","info");
+    function showError(x){
+      alertBox.textContent = x;
+      alertBox.classList.remove("success");
       alertBox.style.display = "block";
     }
-
-    function showOk(msg){
-      alertBox.textContent = msg;
-      alertBox.classList.remove("info");
+    function showOk(x){
+      alertBox.textContent = x;
       alertBox.classList.add("success");
       alertBox.style.display = "block";
     }
-
-    function showInfo(msg){
-      alertBox.textContent = msg;
-      alertBox.classList.remove("success");
-      alertBox.classList.add("info");
-      alertBox.style.display = "block";
-    }
-
     function clearAlert(){
-      alertBox.style.display="none";
-      alertBox.classList.remove("success","info");
-    }
-
-    function setStatus(msg){
-      statusBar.textContent = msg || "";
+      alertBox.style.display = "none";
+      alertBox.classList.remove("success");
     }
 
     function applyDirection(code){
       const rtl = ["ar","he","fa","ur","ps"];
-      const c = (code||"").slice(0,2);
+      const c   = (code || "").slice(0,2);
       [taT, taS].forEach(el => el.setAttribute("dir", rtl.includes(c) ? "rtl" : "ltr"));
     }
 
@@ -577,11 +553,9 @@
       e.preventDefault();
       drop.style.borderColor="#60a5fa";
     };
-
     drop.ondragleave = () => {
       drop.style.borderColor="#97bff7";
     };
-
     drop.ondrop = e => {
       e.preventDefault();
       drop.style.borderColor="#97bff7";
@@ -616,17 +590,9 @@
     // ============================
     async function crearJob(){
       clearAlert();
-      setStatus("");
-
       const file = fileInput.files?.[0];
-      if (!file){
-        showError("Selecciona un archivo de audio para continuar.");
-        return;
-      }
-      if (file.size > MAX_MB*1024*1024){
-        showError("El archivo supera el límite de 100 MB.");
-        return;
-      }
+      if (!file) return showError("Selecciona un archivo.");
+      if (file.size > MAX_MB*1024*1024) return showError("Archivo demasiado grande.");
 
       const lang = (idiomaSel.value||"auto").trim().toLowerCase();
 
@@ -635,10 +601,6 @@
       applyDirection(lang);
 
       btnTrans.disabled = true;
-      const originalLabel = "Transcribir";
-      btnTrans.textContent = "Transcribiendo…";
-      setStatus("Procesando tu archivo. Esto puede tardar unos segundos…");
-      showInfo("Procesando archivo…");
 
       try{
         const fd = new FormData();
@@ -646,35 +608,17 @@
         fd.append("language", lang);
 
         const r = await api("/jobs", {method:"POST", body:fd});
+        if(!r.ok) return showError(r.body.error||"Error");
 
-        if (!r.ok){
-          if (r.body && r.body.error === "NO_CREDITS"){
-            showError("No tienes minutos suficientes para esta transcripción. Revisa tus planes en la sección Precios.");
-          } else {
-            showError(r.body && r.body.error ? r.body.error : "Ocurrió un error al transcribir.");
-          }
-          setStatus("");
-          return;
-        }
-
-        const job = r.body || {};
-        dJob.textContent = job.id || "—";
+        const job = r.body;
+        dJob.textContent = job.id;
 
         taT.value = job.transcript || "";
         taS.value = job.summary || "";
         dDet.textContent = job.language_detected || "";
 
         showOk("Completado");
-        setStatus("Transcripción y resumen generados correctamente.");
-        btnTrans.textContent = "Transcribir de nuevo";
-
-        // Actualizar badge de minutos
-        refreshBadge();
-      }
-      catch(e){
-        console.error(e);
-        showError("No se pudo completar la transcripción. Intenta nuevamente.");
-        setStatus("");
+        refreshBadge(); // recargar badge
       }
       finally{
         btnTrans.disabled = false;
@@ -687,18 +631,16 @@
     // RESET
     // ============================
     btnReset.onclick = () => {
-      taT.value = "";
-      taS.value = "";
-      dFile.textContent = "—";
-      dDet.textContent = "—";
-      dJob.textContent = "—";
-      idiomaSel.value = "auto";
-      dLang.textContent = "auto";
-      fileInput.value = "";
+      taT.value="";
+      taS.value="";
+      dFile.textContent="—";
+      dDet.textContent="—";
+      dJob.textContent="—";
+      idiomaSel.value="auto";
+      dLang.textContent="auto";
+      fileInput.value="";
       clearAlert();
-      setStatus("");
       applyDirection("auto");
-      btnTrans.textContent = "Transcribir";
     };
 
   })();
