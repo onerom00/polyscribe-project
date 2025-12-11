@@ -82,17 +82,8 @@
         <span id="usage-badge-nav" class="badge-usage">
           <span id="usage-text-nav">—/— min · libre —</span>
         </span>
-        <!-- Login directo -->
-        <a href="/dev-login" class="a11y-btn" id="nav-login-link">Entrar</a>
-        <!-- Registro directo -->
-        <a
-          href="/dev-login?signup=1"
-          class="a11y-btn"
-          id="nav-signup-link"
-          style="background:#22c55e;border-color:#16a34a;color:#0b111d"
-        >
-          Registro
-        </a>
+        <a href="#login" class="a11y-btn" id="nav-login-link">Entrar</a>
+        <a href="#signup" class="a11y-btn" style="background:#22c55e;border-color:#16a34a;color:#0b111d">Registro</a>
       </div>
     </div>
   </header>
@@ -185,14 +176,12 @@
     </div>
   </div>
 
-  <!-- JS auxiliares -->
-  <script src="{{ url_for('static', filename='js/exports_buttons.js') }}"></script>
+  <!-- JS auxiliar (login / registro demo) -->
   <script src="{{ url_for('static', filename='js/nav_auth.js') }}"></script>
 
   <!-- Lógica principal -->
   <script>
   (function(){
-
     const $ = s => document.querySelector(s);
 
     // ============================
@@ -203,9 +192,50 @@
     if (USER_ID) localStorage.setItem("user_id", USER_ID);
     if (!USER_ID) USER_ID = "guest";
 
+    // ============================
+    // Helpers genéricos
+    // ============================
+    function downloadBlob(filename, mime, blobOrText){
+      const blob = blobOrText instanceof Blob
+        ? blobOrText
+        : new Blob([blobOrText], {type: mime || "application/octet-stream"});
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename || "resultado";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function copyToClipboard(text){
+      if (!text) return;
+      if (navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(
+          () => showOk("Texto copiado al portapapeles."),
+          ()  => fallback()
+        );
+      } else {
+        fallback();
+      }
+
+      function fallback(){
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        try{ document.execCommand("copy"); }catch(e){}
+        document.body.removeChild(ta);
+        showOk("Texto copiado al portapapeles.");
+      }
+    }
 
     // ============================
-    // API helper
+    // API helper (JSON)
     // ============================
     async function api(url, opts = {}){
       try{
@@ -234,8 +264,6 @@
       }
 
       const data = r.body || {};
-      console.log("usage", data);
-
       const usedSec      = Number(data.used_seconds || 0);
       const allowanceSec = Number(data.allowance_seconds || 0);
 
@@ -248,74 +276,95 @@
       const remainLabel = Math.max(0, remainMin).toFixed(1);
 
       const text = `${usedLabel}/${allowLabel} min · libre ${remainLabel} min`;
-
       document.getElementById("usage-text").textContent = text;
       document.getElementById("usage-text-nav").textContent = text;
     }
     document.getElementById("btn-refresh").addEventListener("click", refreshBadge);
     refreshBadge();
 
-
     // ============================
-    // LÓGICA PRINCIPAL TRANSCRIPTOR
+    // ELEMENTOS PRINCIPALES
     // ============================
+    const idiomaSel = $("#idioma-select");
+    const fileInput = $("#audio-file");
+    const drop      = $("#dropzone");
+    const btnTrans  = $("#btn-transcribir");
+    const btnReset  = $("#btn-reset");
+    const taT       = $("#transcript");
+    const taS       = $("#summary");
+    const alertBox  = $("#alert-box");
+    const dFile     = $("#d-file");
+    const dLang     = $("#d-lang");
+    const dDet      = $("#d-det");
+    const dJob      = $("#d-job");
+    const MAX_MB    = 100;
 
-    const idiomaSel=$("#idioma-select");
-    const fileInput=$("#audio-file");
-    const drop=$("#dropzone");
-    const btnTrans=$("#btn-transcribir");
-    const btnReset=$("#btn-reset");
-    const taT=$("#transcript");
-    const taS=$("#summary");
-    const alertBox=$("#alert-box");
-    const dFile=$("#d-file"), dLang=$("#d-lang"), dDet=$("#d-det"), dJob=$("#d-job");
-    const MAX_MB = 100;
-
-    function showError(x){ alertBox.textContent=x; alertBox.classList.remove("success"); alertBox.style.display="block"; }
-    function showOk(x){ alertBox.textContent=x; alertBox.classList.add("success"); alertBox.style.display="block"; }
-    function clearAlert(){ alertBox.style.display="none"; alertBox.classList.remove("success"); }
-
-    function applyDirection(code){
-      const rtl=["ar","he","fa","ur","ps"];
-      const c=(code||"").slice(0,2);
-      [taT,taS].forEach(el=> el.setAttribute("dir", rtl.includes(c)?"rtl":"ltr"));
+    function showError(x){
+      alertBox.textContent = x;
+      alertBox.classList.remove("success");
+      alertBox.style.display = "block";
+    }
+    function showOk(x){
+      alertBox.textContent = x;
+      alertBox.classList.add("success");
+      alertBox.style.display = "block";
+    }
+    function clearAlert(){
+      alertBox.style.display = "none";
+      alertBox.classList.remove("success");
     }
 
-    drop.onclick = ()=> fileInput.click();
-    drop.ondragover = e=>{e.preventDefault(); drop.style.borderColor="#60a5fa";};
-    drop.ondragleave= ()=> drop.style.borderColor="#97bff7";
-    drop.ondrop = e=>{
+    function applyDirection(code){
+      const rtl = ["ar","he","fa","ur","ps"];
+      const c   = (code||"").slice(0,2);
+      [taT,taS].forEach(el => el.setAttribute("dir", rtl.includes(c) ? "rtl" : "ltr"));
+    }
+
+    // ============================
+    // Dropzone / archivo
+    // ============================
+    drop.onclick = () => fileInput.click();
+    drop.ondragover = e => {e.preventDefault(); drop.style.borderColor="#60a5fa";};
+    drop.ondragleave= () => {drop.style.borderColor="#97bff7";};
+    drop.ondrop = e =>{
       e.preventDefault();
       drop.style.borderColor="#97bff7";
-      if(e.dataTransfer.files[0]){
-        fileInput.files=e.dataTransfer.files;
-        dFile.textContent=e.dataTransfer.files[0].name;
+      if (e.dataTransfer.files[0]){
+        fileInput.files = e.dataTransfer.files;
+        dFile.textContent = e.dataTransfer.files[0].name;
       }
     };
 
-    fileInput.onchange = ()=> dFile.textContent = fileInput.files[0]?.name || "—";
+    fileInput.onchange = () => {
+      dFile.textContent = fileInput.files[0]?.name || "—";
+    };
 
-    idiomaSel.onchange=()=>{
-      const code=idiomaSel.value||"auto";
-      dLang.textContent=code;
+    idiomaSel.onchange = () =>{
+      const code = idiomaSel.value || "auto";
+      dLang.textContent = code;
       applyDirection(code);
     };
 
-    document.getElementById("btn-history").onclick=()=> location.href="/history";
+    document.getElementById("btn-history").onclick = () => {
+      location.href = "/history";
+    };
 
+    // ============================
+    // Crear Job (transcribir)
+    // ============================
     async function crearJob(){
       clearAlert();
-      const file=fileInput.files?.[0];
+      const file = fileInput.files?.[0];
       if (!file) return showError("Selecciona un archivo.");
       if (file.size > MAX_MB*1024*1024) return showError("Archivo demasiado grande.");
 
       const lang = (idiomaSel.value||"auto").trim().toLowerCase();
 
-      dFile.textContent=file.name;
-      dLang.textContent=lang;
+      dFile.textContent = file.name;
+      dLang.textContent = lang;
       applyDirection(lang);
 
-      btnTrans.disabled=true;
+      btnTrans.disabled = true;
 
       try{
         const fd = new FormData();
@@ -323,39 +372,141 @@
         fd.append("language", lang);
 
         const r = await api("/jobs", {method:"POST", body:fd});
-        if(!r.ok) return showError(r.body.error||"Error");
+        if (!r.ok){
+          const msg = (r.body && r.body.error) || "Error al procesar el audio.";
+          return showError(msg);
+        }
 
-        const job=r.body;
-        dJob.textContent=job.id;
+        const job = r.body;
+        dJob.textContent = job.id || job.job_id || "—";
 
         taT.value = job.transcript || "";
         taS.value = job.summary || "";
         dDet.textContent = job.language_detected || "";
 
         showOk("Completado");
-
-        refreshBadge(); // recargar badge tras usar minutos
+        refreshBadge();
       }
       finally{
-        btnTrans.disabled=false;
+        btnTrans.disabled = false;
       }
     }
-
     btnTrans.onclick = crearJob;
 
-    btnReset.onclick = ()=>{
-      taT.value=""; taS.value="";
-      dFile.textContent="—"; dDet.textContent="—"; dJob.textContent="—";
-      idiomaSel.value="auto"; dLang.textContent="auto";
-      fileInput.value="";
+    // Reset
+    btnReset.onclick = () =>{
+      taT.value = "";
+      taS.value = "";
+      dFile.textContent = "—";
+      dDet.textContent  = "—";
+      dJob.textContent  = "—";
+      idiomaSel.value   = "auto";
+      dLang.textContent = "auto";
+      fileInput.value   = "";
       clearAlert();
       applyDirection("auto");
     };
 
+    // ============================
+    // Copiar y descargas locales
+    // ============================
+    const btnCopyTrans = $("#copy-trans");
+    const btnCopySum   = $("#copy-sum");
+    const btnTxt       = $("#download-txt");
+    const btnSumTxt    = $("#download-sum");
+    const btnJson      = $("#download-json");
+    const btnSrt       = $("#download-srt");
+    const btnVtt       = $("#download-vtt");
+    const btnDocx      = $("#download-docx");
+    const btnPdf       = $("#download-pdf");
+
+    btnCopyTrans.onclick = () => {
+      if (!taT.value.trim()) return showError("No hay texto para copiar.");
+      copyToClipboard(taT.value);
+    };
+
+    btnCopySum.onclick = () => {
+      if (!taS.value.trim()) return showError("No hay resumen para copiar.");
+      copyToClipboard(taS.value);
+    };
+
+    btnTxt.onclick = () => {
+      if (!taT.value.trim()) return showError("No hay texto para exportar.");
+      const base = (dFile.textContent || "transcripcion").replace(/\.[^.\s]+$/, "");
+      downloadBlob(`${base}.txt`, "text/plain;charset=utf-8", taT.value || "");
+    };
+
+    btnSumTxt.onclick = () => {
+      if (!taS.value.trim()) return showError("No hay resumen para exportar.");
+      const base = (dFile.textContent || "resumen").replace(/\.[^.\s]+$/, "");
+      downloadBlob(`${base}_resumen.txt`, "text/plain;charset=utf-8", taS.value || "");
+    };
+
+    btnJson.onclick = () => {
+      if (!taT.value.trim() && !taS.value.trim()){
+        return showError("No hay datos para exportar.");
+      }
+      const payload = {
+        transcript: taT.value || "",
+        summary: taS.value || "",
+        language_selected: dLang.textContent || "",
+        language_detected: dDet.textContent || "",
+        job_id: dJob.textContent || "",
+        filename: dFile.textContent || "",
+        exported_at: new Date().toISOString()
+      };
+      const base = (dFile.textContent || "polyscribe").replace(/\.[^.\s]+$/, "");
+      downloadBlob(`${base}.json`, "application/json", JSON.stringify(payload, null, 2));
+    };
+
+    // ============================
+    // Descargas vía API (SRT/VTT/DOCX/PDF)
+    // ============================
+    async function downloadFromApi(fmt){
+      if (!taT.value.trim() && !taS.value.trim()){
+        return showError("No hay contenido para exportar.");
+      }
+      const payload = {
+        transcript: taT.value || "",
+        summary: taS.value || "",
+        filename: dFile.textContent || "resultado"
+      };
+
+      try{
+        const res = await fetch(`/api/exports/${fmt}`, {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok){
+          let msg = "Error al exportar.";
+          try{
+            const txt = await res.text();
+            const json = JSON.parse(txt);
+            if (json && json.error) msg = json.error;
+          }catch(_){}
+          return showError(msg);
+        }
+
+        const blob = await res.blob();
+        const cd   = res.headers.get("Content-Disposition") || "";
+        let fname  = `resultado.${fmt}`;
+        const m = cd.match(/filename="?([^"]+)"?/i);
+        if (m && m[1]) fname = m[1];
+
+        downloadBlob(fname, blob.type, blob);
+      }catch(e){
+        showError("Error al exportar: " + e);
+      }
+    }
+
+    btnSrt.onclick  = () => downloadFromApi("srt");
+    btnVtt.onclick  = () => downloadFromApi("vtt");
+    btnDocx.onclick = () => downloadFromApi("docx");
+    btnPdf.onclick  = () => downloadFromApi("pdf");
+
   })();
   </script>
-
-  <!-- Otros scripts (sin app.js viejo) -->
-  <script src="{{ url_for('static', filename='js/exports_v2.js') }}"></script>
 </body>
 </html>
