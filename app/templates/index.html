@@ -496,24 +496,41 @@
     // ============================
     // ALERTAS
     // ============================
+    const alertBox = $("#alert-box");
+
     function showError(msg){
       alertBox.textContent = msg;
       alertBox.classList.remove("success");
       alertBox.style.display = "block";
+
+      // Estilo ROJO (error)
+      alertBox.style.background = "#fde2e2";
+      alertBox.style.borderColor = "#f3abab";
+      alertBox.style.color = "#8a1c1c";
     }
+
     function showOk(msg){
       alertBox.textContent = msg;
       alertBox.classList.add("success");
       alertBox.style.display = "block";
+
+      // Estilo VERDE (éxito)
+      alertBox.style.background = "#d1f7e7";
+      alertBox.style.borderColor = "#94e2c1";
+      alertBox.style.color = "#0f5132";
     }
+
     function showInfo(msg){
       alertBox.textContent = msg;
       alertBox.classList.remove("success");
       alertBox.style.display = "block";
+
+      // Estilo AMARILLO (procesando / aviso)
+      alertBox.style.background = "#fef3c7";  // amarillo suave
+      alertBox.style.borderColor = "#facc15"; // borde dorado
+      alertBox.style.color = "#854d0e";       // texto marrón
     }
-    function clearAlert(){
-      alertBox.style.display = "none";
-      alertBox.classList.remove("success");
+
     }
 
     // ============================
