@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 
-  <!-- Estilos globales -->
+  <!-- Estilos globales existentes -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/nav.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/theme_light.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/badge.css') }}">
@@ -159,7 +159,7 @@
       padding:12px;
       resize:vertical;
       line-height:1.7;
-      /* ya NO se justifica globalmente */
+      /* NO justificar globalmente para respetar bullets del resumen */
     }
 
     /* Solo la transcripción justificada */
@@ -436,15 +436,37 @@
     </div>
   </div>
 
-  <!-- JS auxiliares -->
-  <script src="{{ url_for('static', filename='js/exports_buttons.js') }}"></script>
+  <!-- Script nav (activo en el menú, etc.) -->
   <script src="{{ url_for('static', filename='js/nav_auth.js') }}"></script>
 
-  <!-- Lógica principal (versión que ya funcionaba) -->
+  <!-- Lógica principal + exportaciones -->
   <script>
   (function(){
-
     const $ = s => document.querySelector(s);
+
+    // ============================
+    // DOM
+    // ============================
+    const idiomaSel  = $("#idioma-select");
+    const fileInput  = $("#audio-file");
+    const drop       = $("#dropzone");
+    const btnTrans   = $("#btn-transcribir");
+    const btnReset   = $("#btn-reset");
+    const taT        = $("#transcript");
+    const taS        = $("#summary");
+    const dFile      = $("#d-file");
+    const dLang      = $("#d-lang");
+    const dDet      = $("#d-det");
+    const dJob       = $("#d-job");
+    const alertBox   = $("#alert-box");
+    const btnRefresh = $("#btn-refresh");
+    const btnHistory = $("#btn-history");
+    const usageBadge = $("#usage-badge");
+    const usageBadgeNav = $("#usage-badge-nav");
+    const usageText  = $("#usage-text");
+    const usageTextNav = $("#usage-text-nav");
+
+    const MAX_MB = 100;
 
     // ============================
     // USER ID
@@ -459,16 +481,39 @@
     // ============================
     async function api(url, opts = {}){
       try{
-        const h = opts.headers ? {...opts.headers} : {};
+        const h = opts.headers ? { ...opts.headers } : {};
         if (USER_ID !== "guest" && !h["X-User-Id"]) h["X-User-Id"] = USER_ID;
-        const res = await fetch(url, {...opts, headers:h});
+        const res = await fetch(url, { ...opts, headers: h });
         const txt = await res.text();
         let body;
-        try{ body = JSON.parse(txt); }catch{ body = txt; }
-        return {ok:res.ok, status:res.status, body};
+        try { body = JSON.parse(txt); } catch { body = txt; }
+        return { ok: res.ok, status: res.status, body };
       }catch(e){
-        return {ok:false, status:0, body:{error:String(e)}};
+        return { ok:false, status:0, body:{ error: String(e) } };
       }
+    }
+
+    // ============================
+    // ALERTAS
+    // ============================
+    function showError(msg){
+      alertBox.textContent = msg;
+      alertBox.classList.remove("success");
+      alertBox.style.display = "block";
+    }
+    function showOk(msg){
+      alertBox.textContent = msg;
+      alertBox.classList.add("success");
+      alertBox.style.display = "block";
+    }
+    function showInfo(msg){
+      alertBox.textContent = msg;
+      alertBox.classList.remove("success");
+      alertBox.style.display = "block";
+    }
+    function clearAlert(){
+      alertBox.style.display = "none";
+      alertBox.classList.remove("success");
     }
 
     // ============================
@@ -478,87 +523,50 @@
       const url = `/api/usage/balance?user_id=${encodeURIComponent(USER_ID)}`;
       const r = await api(url);
       if (!r.ok){
-        document.getElementById("usage-badge").style.display="none";
-        document.getElementById("usage-badge-nav").style.display="none";
+        if (usageBadge) usageBadge.style.display = "none";
+        if (usageBadgeNav) usageBadgeNav.style.display = "none";
         return;
       }
-
       const data = r.body || {};
-      console.log("usage", data);
+      const usedSec  = Number(data.used_seconds || 0);
+      const allowSec = Number(data.allowance_seconds || 0);
+      const usedMin  = usedSec / 60;
+      const allowMin = allowSec / 60;
+      const remain   = Math.max(0, allowMin - usedMin);
 
-      const usedSec      = Number(data.used_seconds || 0);
-      const allowanceSec = Number(data.allowance_seconds || 0);
-
-      const usedMin      = usedSec / 60;
-      const allowMin     = allowanceSec / 60;
-      const remainMin    = allowMin - usedMin;
-
-      const usedLabel   = usedMin.toFixed(1);
-      const allowLabel  = allowMin.toFixed(0);
-      const remainLabel = Math.max(0, remainMin).toFixed(1);
-
-      const text = `${usedLabel}/${allowLabel} min · libre ${remainLabel} min`;
-
-      document.getElementById("usage-text").textContent = text;
-      document.getElementById("usage-text-nav").textContent = text;
+      const text = `${usedMin.toFixed(1)}/${allowMin.toFixed(0)} min · libre ${remain.toFixed(1)} min`;
+      if (usageText) usageText.textContent = text;
+      if (usageTextNav) usageTextNav.textContent = text;
     }
-    document.getElementById("btn-refresh").addEventListener("click", refreshBadge);
+
+    if (btnRefresh) btnRefresh.addEventListener("click", refreshBadge);
     refreshBadge();
 
     // ============================
-    // ELEMENTOS PRINCIPALES
+    // DIRECCIÓN (RTL/LTR)
     // ============================
-    const idiomaSel = $("#idioma-select");
-    const fileInput = $("#audio-file");
-    const drop      = $("#dropzone");
-    const btnTrans  = $("#btn-transcribir");
-    const btnReset  = $("#btn-reset");
-    const taT       = $("#transcript");
-    const taS       = $("#summary");
-    const alertBox  = $("#alert-box");
-    const dFile     = $("#d-file");
-    const dLang     = $("#d-lang");
-    const dDet      = $("#d-det");
-    const dJob      = $("#d-job");
-
-    const MAX_MB = 100;
-
-    function showError(x){
-      alertBox.textContent = x;
-      alertBox.classList.remove("success");
-      alertBox.style.display = "block";
-    }
-    function showOk(x){
-      alertBox.textContent = x;
-      alertBox.classList.add("success");
-      alertBox.style.display = "block";
-    }
-    function clearAlert(){
-      alertBox.style.display = "none";
-      alertBox.classList.remove("success");
-    }
-
     function applyDirection(code){
-      const rtl = ["ar","he","fa","ur","ps"];
-      const c   = (code || "").slice(0,2);
-      [taT, taS].forEach(el => el.setAttribute("dir", rtl.includes(c) ? "rtl" : "ltr"));
+      const rtl = ["ar", "he", "fa", "ur", "ps"];
+      const c = (code || "").slice(0,2);
+      const dir = rtl.includes(c) ? "rtl" : "ltr";
+      taT.setAttribute("dir", dir);
+      taS.setAttribute("dir", dir);
     }
 
     // ============================
     // DROPZONE
     // ============================
     drop.onclick = () => fileInput.click();
-
     drop.ondragover = e => {
       e.preventDefault();
-      drop.style.borderColor="#60a5fa";
+      drop.style.borderColor = "#60a5fa";
     };
     drop.ondragleave = () => {
-      drop.style.borderColor="#97bff7";
+      drop.style.borderColor = "#97bff7";
     };
     drop.ondrop = e => {
       e.preventDefault();
-      drop.style.borderColor="#97bff7";
+      drop.style.borderColor = "#97bff7";
       if (e.dataTransfer.files[0]){
         fileInput.files = e.dataTransfer.files;
         dFile.textContent = e.dataTransfer.files[0].name;
@@ -570,7 +578,7 @@
     };
 
     // ============================
-    // IDIOMA
+    // CAMBIO DE IDIOMA
     // ============================
     idiomaSel.onchange = () => {
       const code = idiomaSel.value || "auto";
@@ -581,9 +589,9 @@
     // ============================
     // HISTORIAL
     // ============================
-    document.getElementById("btn-history").onclick = () => {
-      location.href = "/history";
-    };
+    if (btnHistory){
+      btnHistory.onclick = () => { window.location.href = "/history"; };
+    }
 
     // ============================
     // CREAR JOB
@@ -592,14 +600,21 @@
       clearAlert();
       const file = fileInput.files?.[0];
       if (!file) return showError("Selecciona un archivo.");
-      if (file.size > MAX_MB*1024*1024) return showError("Archivo demasiado grande.");
+      if (file.size > MAX_MB * 1024 * 1024){
+        return showError("El archivo supera el límite de 100 MB.");
+      }
 
-      const lang = (idiomaSel.value||"auto").trim().toLowerCase();
-
+      const lang = (idiomaSel.value || "auto").trim().toLowerCase();
       dFile.textContent = file.name;
       dLang.textContent = lang;
       applyDirection(lang);
 
+      taT.value = "";
+      taS.value = "";
+      dDet.textContent = "—";
+      dJob.textContent = "—";
+
+      showInfo("Procesando… esto puede tardar unos segundos.");
       btnTrans.disabled = true;
 
       try{
@@ -607,20 +622,31 @@
         fd.append("file", file);
         fd.append("language", lang);
 
-        const r = await api("/jobs", {method:"POST", body:fd});
-        if(!r.ok) return showError(r.body.error||"Error");
+        const r = await api("/jobs", { method:"POST", body: fd });
+        if (!r.ok){
+          if (r.body && r.body.error === "NO_CREDITS"){
+            return showError("No tienes minutos suficientes para este archivo.");
+          }
+          const msg = (r.body && r.body.error) || "Error al procesar el archivo.";
+          return showError(msg);
+        }
 
-        const job = r.body;
-        dJob.textContent = job.id;
-
+        const job = r.body || {};
         taT.value = job.transcript || "";
         taS.value = job.summary || "";
         dDet.textContent = job.language_detected || "";
+        dJob.textContent = job.id || job.job_id || "—";
 
-        showOk("Completado");
-        refreshBadge(); // recargar badge
-      }
-      finally{
+        if (job.language_detected){
+          applyDirection(job.language_detected);
+        }
+
+        showOk("Completado.");
+        refreshBadge();
+      }catch(e){
+        console.error(e);
+        showError("Ocurrió un error inesperado al procesar el archivo.");
+      }finally{
         btnTrans.disabled = false;
       }
     }
@@ -631,23 +657,139 @@
     // RESET
     // ============================
     btnReset.onclick = () => {
-      taT.value="";
-      taS.value="";
-      dFile.textContent="—";
-      dDet.textContent="—";
-      dJob.textContent="—";
-      idiomaSel.value="auto";
-      dLang.textContent="auto";
-      fileInput.value="";
-      clearAlert();
+      taT.value = "";
+      taS.value = "";
+      dFile.textContent = "—";
+      dLang.textContent = "auto";
+      dDet.textContent = "—";
+      dJob.textContent = "—";
+      fileInput.value = "";
+      idiomaSel.value = "auto";
       applyDirection("auto");
+      clearAlert();
+    };
+
+    // ============================
+    // EXPORT TXT CLIENTE
+    // ============================
+    function downloadClient(baseName, ext, content, mime){
+      const safeName = baseName || "resultado";
+      const blob = new Blob([content || ""], { type: mime || "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${safeName}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function getBaseName(){
+      const name = dFile.textContent || "";
+      if (!name || name === "—") return "resultado";
+      return name.replace(/\.[^.]+$/, "");
+    }
+
+    // ============================
+    // BOTONES TRANSCRIPCIÓN
+    // ============================
+    $("#copy-trans").onclick = async () => {
+      const txt = taT.value || "";
+      if (!txt) return;
+      try{
+        await navigator.clipboard.writeText(txt);
+        showOk("Transcripción copiada al portapapeles.");
+      }catch{
+        showError("No se pudo copiar la transcripción.");
+      }
+    };
+
+    $("#download-txt").onclick = () => {
+      if (!taT.value) return showError("No hay transcripción para exportar.");
+      const base = getBaseName() || "transcripcion";
+      downloadClient(base, "txt", taT.value, "text/plain;charset=utf-8");
+    };
+
+    async function exportServer(fmt){
+      if (!taT.value){
+        return showError("No hay transcripción para exportar.");
+      }
+      const payload = {
+        transcript: taT.value || "",
+        summary: taS.value || "",
+        filename: dFile.textContent || ""
+      };
+
+      try{
+        const res = await fetch(`/api/exports/${fmt}`, {
+          method: "POST",
+          headers: { "Content-Type":"application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok){
+          const txt = await res.text();
+          let data;
+          try{ data = JSON.parse(txt); }catch{ data = {}; }
+          const msg = (data && data.error) || `No se pudo exportar (${fmt}).`;
+          return showError(msg);
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        const base = getBaseName();
+        a.href = url;
+        a.download = `${base}.${fmt}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }catch(e){
+        console.error(e);
+        showError(`No se pudo exportar (${fmt}).`);
+      }
+    }
+
+    $("#download-srt").onclick  = () => exportServer("srt");
+    $("#download-vtt").onclick  = () => exportServer("vtt");
+    $("#download-docx").onclick = () => exportServer("docx");
+    $("#download-pdf").onclick  = () => exportServer("pdf");
+
+    // ============================
+    // BOTONES RESUMEN
+    // ============================
+    $("#copy-sum").onclick = async () => {
+      const txt = taS.value || "";
+      if (!txt) return;
+      try{
+        await navigator.clipboard.writeText(txt);
+        showOk("Resumen copiado al portapapeles.");
+      }catch{
+        showError("No se pudo copiar el resumen.");
+      }
+    };
+
+    $("#download-sum").onclick = () => {
+      if (!taS.value) return showError("No hay resumen para exportar.");
+      const base = getBaseName() || "resumen";
+      downloadClient(base, "txt", taS.value, "text/plain;charset=utf-8");
+    };
+
+    $("#download-json").onclick = () => {
+      const obj = {
+        filename: dFile.textContent || null,
+        language_selected: dLang.textContent || null,
+        language_detected: dDet.textContent || null,
+        job_id: dJob.textContent || null,
+        transcript: taT.value || "",
+        summary: taS.value || ""
+      };
+      const json = JSON.stringify(obj, null, 2);
+      const base = getBaseName();
+      downloadClient(base, "json", json, "application/json;charset=utf-8");
     };
 
   })();
   </script>
-
-  <!-- Otros scripts del proyecto -->
-  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/exports_v2.js') }}"></script>
 </body>
 </html>
