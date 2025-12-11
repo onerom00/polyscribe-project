@@ -10,59 +10,316 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 
-  <!-- Estilos -->
+  <!-- Estilos globales -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/nav.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/theme_light.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/badge.css') }}">
 
   <style>
     :root{
-      --bg:#0f172a; --panel:#111827; --muted:#94a3b8; --text:#0b1424;
-      --accent:#22c55e; --accent-2:#60a5fa; --danger:#ef4444;
-      --card:#ffffff; --border:#d9e4f7; --fs:1;
+      --bg:#0f172a;
+      --panel:#111827;
+      --muted:#94a3b8;
+      --text:#0b1424;
+      --accent:#22c55e;
+      --accent-2:#0b62e0;
+      --danger:#ef4444;
+      --card:#ffffff;
+      --border:#d9e4f7;
+      --fs:1;
     }
+
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{
-      margin:0; font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;
-      background:linear-gradient(180deg,#a6d6fb 0%, #9acef8 100%) fixed;
-      color:var(--text); font-size:calc(16px * var(--fs));
-    }
-    .container{max-width:1080px;margin:32px auto;padding:0 16px}
-    h1{margin:0;font-size:26px;font-weight:700;color:#0b1424}
-    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
-    .grid{display:grid;gap:16px}
-    .grid-2{grid-template-columns:1fr 1fr}
-    label{font-size:15px;font-weight:700;margin-bottom:8px;display:block}
-    select,button,input,textarea{font-family:inherit}
-    .row{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
-    select{background:#fff;border:1px solid #c6d3ec;color:#0b1424;padding:8px 10px;border-radius:10px;min-width:220px}
-    .btn{background:#0b62e0;border:1px solid #0a59c9;color:#fff;padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:700}
-    .btn:hover{filter:brightness(1.02)}
-    .btn-primary{background:var(--accent);border-color:#16a34a;color:#0b111d;font-weight:800;box-shadow:0 0 0 3px rgba(34,197,94,.18) inset}
-    .dropzone{border:2px dashed #97bff7;border-radius:14px;padding:22px;text-align:center;color:#24508f;background:#f1f7ff}
-    .dropzone:hover{border-color:#60a5fa}
-    .help{font-size:15px;color:#113160;margin-bottom:6px}
-    .formats{font-size:13px;color:#0b62e0;font-weight:700}
-    textarea{
-      width:100%;min-height:220px;background:#fff;border:1px solid #c6d3ec;color:#0b1424;border-radius:12px;padding:12px;resize:vertical;line-height:1.7;
-      text-align:justify;text-justify:inter-word;hyphens:auto;
-    }
-    .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
-    .details{font-size:14px;color:#13406f}
-    .pill{display:inline-flex;align-items:center;gap:6px;border:1px solid #c6d3ec;background:#fff;border-radius:999px;padding:4px 10px;margin-right:8px;color:#0b1424}
-    .alert{background:#fde2e2;border:1px solid #f3abab;color:#8a1c1c;padding:10px;border-radius:12px;margin-bottom:12px;display:none}
-    .alert.success{color:#0f5132;background:#d1f7e7;border-color:#94e2c1}
-    .hidden{display:none}
-    @media (max-width:900px){.grid-2{grid-template-columns:1fr}}
 
-    header.ps-nav{background:#fff;border-bottom:1px solid var(--border)}
-    .ps-nav .inner{max-width:1080px;margin:0 auto;padding:10px 16px;display:flex;gap:12px;align-items:center;justify-content:space-between}
-    .ps-nav .brand{font-weight:800;color:#0b1424;text-decoration:none}
-    .ps-nav .links a{margin-right:14px;text-decoration:none;color:#13406f;font-weight:700}
-    .ps-nav .links a.active{color:#0b62e0}
-    .badge-usage{display:inline-flex;align-items:center;gap:8px;background:#e8f3ff;color:#0b1424;border:1px solid #b9d9ff;border-radius:999px;padding:5px 10px;font-size:13px;font-weight:700}
-    .a11y-btn{background:#f2f6ff;border:1px solid #cddaf5;color:#0b1424;padding:6px 10px;border-radius:10px;cursor:pointer;font-weight:600;font-size:.95rem}
+    body{
+      margin:0;
+      font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;
+      background:linear-gradient(180deg,#a6d6fb 0%, #9acef8 100%) fixed;
+      color:var(--text);
+      font-size:calc(16px * var(--fs));
+    }
+
+    .container{
+      max-width:1160px;
+      margin:32px auto 40px;
+      padding:0 16px;
+    }
+
+    h1{
+      margin:0;
+      font-size:26px;
+      font-weight:700;
+      color:#0b1424;
+    }
+
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:18px 18px 20px;
+      box-shadow:0 10px 28px rgba(15,35,52,.16);
+    }
+
+    .grid{display:grid;gap:16px}
+    .grid-2{grid-template-columns:1.1fr 0.9fr}
+
+    label{
+      font-size:15px;
+      font-weight:700;
+      margin-bottom:8px;
+      display:block;
+    }
+
+    select,button,input,textarea{font-family:inherit}
+
+    .row{
+      display:flex;
+      align-items:flex-end;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+
+    select{
+      background:#fff;
+      border:1px solid #c6d3ec;
+      color:#0b1424;
+      padding:8px 10px;
+      border-radius:10px;
+      min-width:220px;
+    }
+
+    .btn{
+      background:#0b62e0;
+      border:1px solid #0a59c9;
+      color:#fff;
+      padding:8px 12px;
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:700;
+      font-size:0.95rem;
+      transition:transform .08s ease, box-shadow .08s ease, filter .08s ease;
+    }
+
+    .btn:hover{
+      filter:brightness(1.03);
+      box-shadow:0 6px 16px rgba(37,99,235,0.28);
+      transform:translateY(-1px);
+    }
+
+    .btn:disabled{
+      opacity:0.65;
+      cursor:default;
+      transform:none;
+      box-shadow:none;
+    }
+
+    .btn-primary{
+      background:var(--accent);
+      border-color:#16a34a;
+      color:#0b111d;
+      font-weight:800;
+      box-shadow:0 0 0 3px rgba(34,197,94,.18) inset;
+    }
+
+    .dropzone{
+      border:2px dashed #97bff7;
+      border-radius:14px;
+      padding:22px;
+      text-align:center;
+      color:#24508f;
+      background:#f1f7ff;
+      transition:border-color .12s ease, background .12s ease, box-shadow .12s ease;
+    }
+
+    .dropzone:hover{
+      border-color:#60a5fa;
+      box-shadow:0 4px 12px rgba(15,23,42,0.1);
+    }
+
+    .help{
+      font-size:15px;
+      color:#113160;
+      margin-bottom:6px;
+    }
+
+    .formats{
+      font-size:13px;
+      color:#0b62e0;
+      font-weight:700;
+    }
+
+    textarea{
+      width:100%;
+      min-height:220px;
+      background:#fff;
+      border:1px solid #c6d3ec;
+      color:#0b1424;
+      border-radius:12px;
+      padding:12px;
+      resize:vertical;
+      line-height:1.7;
+      text-align:justify;
+      text-justify:inter-word;
+      hyphens:auto;
+    }
+
+    .toolbar{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:10px;
+    }
+
+    .details{
+      font-size:14px;
+      color:#13406f;
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      border:1px solid #c6d3ec;
+      background:#fff;
+      border-radius:999px;
+      padding:4px 10px;
+      margin-right:8px;
+      margin-top:6px;
+      color:#0b1424;
+      font-size:13px;
+    }
+
+    .alert{
+      background:#fde2e2;
+      border:1px solid #f3abab;
+      color:#8a1c1c;
+      padding:10px;
+      border-radius:12px;
+      margin-bottom:12px;
+      display:none;
+      font-size:14px;
+    }
+
+    .alert.success{
+      color:#0f5132;
+      background:#d1f7e7;
+      border-color:#94e2c1;
+    }
+
+    .alert.info{
+      color:#0c4a6e;
+      background:#e0f2fe;
+      border-color:#7dd3fc;
+    }
+
+    .hidden{display:none}
+
+    @media (max-width:900px){
+      .grid-2{grid-template-columns:1fr}
+    }
+
+    /* NAV */
+    header.ps-nav{
+      background:#fff;
+      border-bottom:1px solid var(--border);
+    }
+
+    .ps-nav .inner{
+      max-width:1160px;
+      margin:0 auto;
+      padding:10px 16px;
+      display:flex;
+      gap:12px;
+      align-items:center;
+      justify-content:space-between;
+    }
+
+    .ps-nav .brand{
+      font-weight:800;
+      color:#0b1424;
+      text-decoration:none;
+      font-size:1.05rem;
+    }
+
+    .ps-nav .links a{
+      margin-right:14px;
+      text-decoration:none;
+      color:#13406f;
+      font-weight:700;
+      font-size:0.95rem;
+    }
+
+    .ps-nav .links a.active{
+      color:#0b62e0;
+    }
+
+    .badge-usage{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      background:#e8f3ff;
+      color:#0b1424;
+      border:1px solid #b9d9ff;
+      border-radius:999px;
+      padding:5px 10px;
+      font-size:13px;
+      font-weight:700;
+    }
+
+    .a11y-btn{
+      background:#f2f6ff;
+      border:1px solid #cddaf5;
+      color:#0b1424;
+      padding:6px 10px;
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:600;
+      font-size:.95rem;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+    }
+
+    .steps-strip{
+      margin:6px 0 14px;
+      font-size:13px;
+      color:#0b1424;
+      background:rgba(255,255,255,0.75);
+      border:1px solid #cbdcf8;
+      border-radius:999px;
+      padding:6px 14px;
+      display:inline-flex;
+      gap:14px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+
+    .steps-strip span{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+    }
+
+    .steps-strip b{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:18px;
+      height:18px;
+      border-radius:999px;
+      background:#0b62e0;
+      color:#fff;
+      font-size:11px;
+    }
+
+    .status-bar{
+      margin-top:10px;
+      margin-bottom:4px;
+      font-size:13px;
+      color:#166534;
+    }
   </style>
 </head>
 
@@ -82,15 +339,24 @@
         <span id="usage-badge-nav" class="badge-usage">
           <span id="usage-text-nav">—/— min · libre —</span>
         </span>
-        <a href="#login" class="a11y-btn" id="nav-login-link">Entrar</a>
-        <a href="#signup" class="a11y-btn" style="background:#22c55e;border-color:#16a34a;color:#0b111d">Registro</a>
+        <a href="/dev-login" class="a11y-btn" id="nav-login-link">Entrar</a>
+        <a href="/dev-login?signup=1" class="a11y-btn" style="background:#22c55e;border-color:#16a34a;color:#0b111d">
+          Registro
+        </a>
       </div>
     </div>
   </header>
 
   <div class="container">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin:18px 0">
-      <h1>PolyScribe · Transcriptor Global</h1>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:18px 0 4px;">
+      <div>
+        <h1>PolyScribe · Transcriptor Global</h1>
+        <div class="steps-strip">
+          <span><b>1</b> Sube tu archivo</span>
+          <span><b>2</b> Elige idioma (opcional)</span>
+          <span><b>3</b> Pulsa <strong>Transcribir</strong></span>
+        </div>
+      </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         <div class="badge-usage" id="usage-badge">
           <span id="usage-text">—/— min · libre —</span>
@@ -103,6 +369,7 @@
     </div>
 
     <p class="details">Sube tu audio y recibe transcripción + resumen.</p>
+    <div class="status-bar" id="status-bar"></div>
     <div class="alert" id="alert-box"></div>
 
     <div class="card grid" style="gap:20px">
@@ -139,7 +406,9 @@
       </div>
 
       <!-- Botón transcribir -->
-      <div><button class="btn btn-primary" id="btn-transcribir">Transcribir</button></div>
+      <div>
+        <button class="btn btn-primary" id="btn-transcribir">Transcribir</button>
+      </div>
 
       <!-- Resultado -->
       <div class="grid grid-2">
@@ -176,12 +445,14 @@
     </div>
   </div>
 
-  <!-- JS auxiliar (login / registro demo) -->
+  <!-- JS auxiliares -->
+  <script src="{{ url_for('static', filename='js/exports_buttons.js') }}"></script>
   <script src="{{ url_for('static', filename='js/nav_auth.js') }}"></script>
 
   <!-- Lógica principal -->
   <script>
   (function(){
+
     const $ = s => document.querySelector(s);
 
     // ============================
@@ -192,50 +463,10 @@
     if (USER_ID) localStorage.setItem("user_id", USER_ID);
     if (!USER_ID) USER_ID = "guest";
 
-    // ============================
-    // Helpers genéricos
-    // ============================
-    function downloadBlob(filename, mime, blobOrText){
-      const blob = blobOrText instanceof Blob
-        ? blobOrText
-        : new Blob([blobOrText], {type: mime || "application/octet-stream"});
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename || "resultado";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    }
-
-    function copyToClipboard(text){
-      if (!text) return;
-      if (navigator.clipboard && navigator.clipboard.writeText){
-        navigator.clipboard.writeText(text).then(
-          () => showOk("Texto copiado al portapapeles."),
-          ()  => fallback()
-        );
-      } else {
-        fallback();
-      }
-
-      function fallback(){
-        const ta = document.createElement("textarea");
-        ta.value = text;
-        ta.style.position = "fixed";
-        ta.style.opacity = "0";
-        document.body.appendChild(ta);
-        ta.select();
-        try{ document.execCommand("copy"); }catch(e){}
-        document.body.removeChild(ta);
-        showOk("Texto copiado al portapapeles.");
-      }
-    }
+    const statusBar = $("#status-bar");
 
     // ============================
-    // API helper (JSON)
+    // API helper
     // ============================
     async function api(url, opts = {}){
       try{
@@ -264,18 +495,20 @@
       }
 
       const data = r.body || {};
+
       const usedSec      = Number(data.used_seconds || 0);
       const allowanceSec = Number(data.allowance_seconds || 0);
 
-      const usedMin      = usedSec / 60;
-      const allowMin     = allowanceSec / 60;
-      const remainMin    = allowMin - usedMin;
+      const usedMin   = usedSec / 60;
+      const allowMin  = allowanceSec / 60;
+      const remainMin = allowMin - usedMin;
 
       const usedLabel   = usedMin.toFixed(1);
       const allowLabel  = allowMin.toFixed(0);
       const remainLabel = Math.max(0, remainMin).toFixed(1);
 
       const text = `${usedLabel}/${allowLabel} min · libre ${remainLabel} min`;
+
       document.getElementById("usage-text").textContent = text;
       document.getElementById("usage-text-nav").textContent = text;
     }
@@ -297,36 +530,59 @@
     const dLang     = $("#d-lang");
     const dDet      = $("#d-det");
     const dJob      = $("#d-job");
-    const MAX_MB    = 100;
 
-    function showError(x){
-      alertBox.textContent = x;
-      alertBox.classList.remove("success");
+    const MAX_MB = 100;
+
+    function showError(msg){
+      alertBox.textContent = msg;
+      alertBox.classList.remove("success","info");
       alertBox.style.display = "block";
     }
-    function showOk(x){
-      alertBox.textContent = x;
+
+    function showOk(msg){
+      alertBox.textContent = msg;
+      alertBox.classList.remove("info");
       alertBox.classList.add("success");
       alertBox.style.display = "block";
     }
-    function clearAlert(){
-      alertBox.style.display = "none";
+
+    function showInfo(msg){
+      alertBox.textContent = msg;
       alertBox.classList.remove("success");
+      alertBox.classList.add("info");
+      alertBox.style.display = "block";
+    }
+
+    function clearAlert(){
+      alertBox.style.display="none";
+      alertBox.classList.remove("success","info");
+    }
+
+    function setStatus(msg){
+      statusBar.textContent = msg || "";
     }
 
     function applyDirection(code){
       const rtl = ["ar","he","fa","ur","ps"];
-      const c   = (code||"").slice(0,2);
-      [taT,taS].forEach(el => el.setAttribute("dir", rtl.includes(c) ? "rtl" : "ltr"));
+      const c = (code||"").slice(0,2);
+      [taT, taS].forEach(el => el.setAttribute("dir", rtl.includes(c) ? "rtl" : "ltr"));
     }
 
     // ============================
-    // Dropzone / archivo
+    // DROPZONE
     // ============================
     drop.onclick = () => fileInput.click();
-    drop.ondragover = e => {e.preventDefault(); drop.style.borderColor="#60a5fa";};
-    drop.ondragleave= () => {drop.style.borderColor="#97bff7";};
-    drop.ondrop = e =>{
+
+    drop.ondragover = e => {
+      e.preventDefault();
+      drop.style.borderColor="#60a5fa";
+    };
+
+    drop.ondragleave = () => {
+      drop.style.borderColor="#97bff7";
+    };
+
+    drop.ondrop = e => {
       e.preventDefault();
       drop.style.borderColor="#97bff7";
       if (e.dataTransfer.files[0]){
@@ -339,24 +595,38 @@
       dFile.textContent = fileInput.files[0]?.name || "—";
     };
 
-    idiomaSel.onchange = () =>{
+    // ============================
+    // IDIOMA
+    // ============================
+    idiomaSel.onchange = () => {
       const code = idiomaSel.value || "auto";
       dLang.textContent = code;
       applyDirection(code);
     };
 
+    // ============================
+    // HISTORIAL
+    // ============================
     document.getElementById("btn-history").onclick = () => {
       location.href = "/history";
     };
 
     // ============================
-    // Crear Job (transcribir)
+    // CREAR JOB
     // ============================
     async function crearJob(){
       clearAlert();
+      setStatus("");
+
       const file = fileInput.files?.[0];
-      if (!file) return showError("Selecciona un archivo.");
-      if (file.size > MAX_MB*1024*1024) return showError("Archivo demasiado grande.");
+      if (!file){
+        showError("Selecciona un archivo de audio para continuar.");
+        return;
+      }
+      if (file.size > MAX_MB*1024*1024){
+        showError("El archivo supera el límite de 100 MB.");
+        return;
+      }
 
       const lang = (idiomaSel.value||"auto").trim().toLowerCase();
 
@@ -365,6 +635,10 @@
       applyDirection(lang);
 
       btnTrans.disabled = true;
+      const originalLabel = "Transcribir";
+      btnTrans.textContent = "Transcribiendo…";
+      setStatus("Procesando tu archivo. Esto puede tardar unos segundos…");
+      showInfo("Procesando archivo…");
 
       try{
         const fd = new FormData();
@@ -372,141 +646,66 @@
         fd.append("language", lang);
 
         const r = await api("/jobs", {method:"POST", body:fd});
+
         if (!r.ok){
-          const msg = (r.body && r.body.error) || "Error al procesar el audio.";
-          return showError(msg);
+          if (r.body && r.body.error === "NO_CREDITS"){
+            showError("No tienes minutos suficientes para esta transcripción. Revisa tus planes en la sección Precios.");
+          } else {
+            showError(r.body && r.body.error ? r.body.error : "Ocurrió un error al transcribir.");
+          }
+          setStatus("");
+          return;
         }
 
-        const job = r.body;
-        dJob.textContent = job.id || job.job_id || "—";
+        const job = r.body || {};
+        dJob.textContent = job.id || "—";
 
         taT.value = job.transcript || "";
         taS.value = job.summary || "";
         dDet.textContent = job.language_detected || "";
 
         showOk("Completado");
+        setStatus("Transcripción y resumen generados correctamente.");
+        btnTrans.textContent = "Transcribir de nuevo";
+
+        // Actualizar badge de minutos
         refreshBadge();
+      }
+      catch(e){
+        console.error(e);
+        showError("No se pudo completar la transcripción. Intenta nuevamente.");
+        setStatus("");
       }
       finally{
         btnTrans.disabled = false;
       }
     }
+
     btnTrans.onclick = crearJob;
 
-    // Reset
-    btnReset.onclick = () =>{
+    // ============================
+    // RESET
+    // ============================
+    btnReset.onclick = () => {
       taT.value = "";
       taS.value = "";
       dFile.textContent = "—";
-      dDet.textContent  = "—";
-      dJob.textContent  = "—";
-      idiomaSel.value   = "auto";
+      dDet.textContent = "—";
+      dJob.textContent = "—";
+      idiomaSel.value = "auto";
       dLang.textContent = "auto";
-      fileInput.value   = "";
+      fileInput.value = "";
       clearAlert();
+      setStatus("");
       applyDirection("auto");
+      btnTrans.textContent = "Transcribir";
     };
-
-    // ============================
-    // Copiar y descargas locales
-    // ============================
-    const btnCopyTrans = $("#copy-trans");
-    const btnCopySum   = $("#copy-sum");
-    const btnTxt       = $("#download-txt");
-    const btnSumTxt    = $("#download-sum");
-    const btnJson      = $("#download-json");
-    const btnSrt       = $("#download-srt");
-    const btnVtt       = $("#download-vtt");
-    const btnDocx      = $("#download-docx");
-    const btnPdf       = $("#download-pdf");
-
-    btnCopyTrans.onclick = () => {
-      if (!taT.value.trim()) return showError("No hay texto para copiar.");
-      copyToClipboard(taT.value);
-    };
-
-    btnCopySum.onclick = () => {
-      if (!taS.value.trim()) return showError("No hay resumen para copiar.");
-      copyToClipboard(taS.value);
-    };
-
-    btnTxt.onclick = () => {
-      if (!taT.value.trim()) return showError("No hay texto para exportar.");
-      const base = (dFile.textContent || "transcripcion").replace(/\.[^.\s]+$/, "");
-      downloadBlob(`${base}.txt`, "text/plain;charset=utf-8", taT.value || "");
-    };
-
-    btnSumTxt.onclick = () => {
-      if (!taS.value.trim()) return showError("No hay resumen para exportar.");
-      const base = (dFile.textContent || "resumen").replace(/\.[^.\s]+$/, "");
-      downloadBlob(`${base}_resumen.txt`, "text/plain;charset=utf-8", taS.value || "");
-    };
-
-    btnJson.onclick = () => {
-      if (!taT.value.trim() && !taS.value.trim()){
-        return showError("No hay datos para exportar.");
-      }
-      const payload = {
-        transcript: taT.value || "",
-        summary: taS.value || "",
-        language_selected: dLang.textContent || "",
-        language_detected: dDet.textContent || "",
-        job_id: dJob.textContent || "",
-        filename: dFile.textContent || "",
-        exported_at: new Date().toISOString()
-      };
-      const base = (dFile.textContent || "polyscribe").replace(/\.[^.\s]+$/, "");
-      downloadBlob(`${base}.json`, "application/json", JSON.stringify(payload, null, 2));
-    };
-
-    // ============================
-    // Descargas vía API (SRT/VTT/DOCX/PDF)
-    // ============================
-    async function downloadFromApi(fmt){
-      if (!taT.value.trim() && !taS.value.trim()){
-        return showError("No hay contenido para exportar.");
-      }
-      const payload = {
-        transcript: taT.value || "",
-        summary: taS.value || "",
-        filename: dFile.textContent || "resultado"
-      };
-
-      try{
-        const res = await fetch(`/api/exports/${fmt}`, {
-          method: "POST",
-          headers: {"Content-Type":"application/json"},
-          body: JSON.stringify(payload)
-        });
-
-        if (!res.ok){
-          let msg = "Error al exportar.";
-          try{
-            const txt = await res.text();
-            const json = JSON.parse(txt);
-            if (json && json.error) msg = json.error;
-          }catch(_){}
-          return showError(msg);
-        }
-
-        const blob = await res.blob();
-        const cd   = res.headers.get("Content-Disposition") || "";
-        let fname  = `resultado.${fmt}`;
-        const m = cd.match(/filename="?([^"]+)"?/i);
-        if (m && m[1]) fname = m[1];
-
-        downloadBlob(fname, blob.type, blob);
-      }catch(e){
-        showError("Error al exportar: " + e);
-      }
-    }
-
-    btnSrt.onclick  = () => downloadFromApi("srt");
-    btnVtt.onclick  = () => downloadFromApi("vtt");
-    btnDocx.onclick = () => downloadFromApi("docx");
-    btnPdf.onclick  = () => downloadFromApi("pdf");
 
   })();
   </script>
+
+  <!-- Otros scripts del proyecto -->
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/exports_v2.js') }}"></script>
 </body>
 </html>
