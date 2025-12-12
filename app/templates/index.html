@@ -598,11 +598,16 @@
     };
 
     // ============================
-    // HISTORIAL
     // ============================
-    if (btnHistory){
-      btnHistory.onclick = () => { window.location.href = "/history"; };
-    }
+   // BOTÓN HISTORIAL (FIJO)
+  // ============================
+  const btnHistoryEl = document.getElementById("btn-history");
+  if (btnHistoryEl) {
+    btnHistoryEl.addEventListener("click", () => {
+        window.location.href = "/history";
+    });
+  }
+
 
     // ============================
     // CREAR JOB
