@@ -20,13 +20,15 @@
     .left{display:flex;flex-direction:column;gap:6px}
     .meta{display:flex;gap:8px;flex-wrap:wrap}
     .pill{border:1px solid var(--border);border-radius:999px;padding:2px 8px;color:#1f2937;background:#f7fbff;font-size:12px}
-    .actions{display:flex;gap:8px}
-    .btn{background:#0b62e0;border:1px solid #0a59c9;color:#fff;font-weight:700;padding:8px 12px;border-radius:10px;cursor:pointer}
+    .actions{display:flex;gap:8px;flex-wrap:wrap}
+    .btn{background:#0b62e0;border:1px solid #0a59c9;color:#fff;font-weight:700;padding:8px 12px;border-radius:10px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}
     .btn-secondary{background:#f2f6ff;color:#0b1424;border:1px solid #cddaf5}
     h1{font-size:20px;margin:8px 0 16px}
-    nav{display:flex;gap:12px;font-weight:700}
-    .topbar{display:flex;gap:8px;justify-content:flex-end;margin-bottom:8px}
+    nav{display:flex;gap:12px;font-weight:700;flex-wrap:wrap}
+    .topbar{display:flex;gap:8px;justify-content:flex-end;margin-bottom:8px;align-items:center;flex-wrap:wrap}
     .badge{background:#e8f3ff;border:1px solid #b9d9ff;border-radius:999px;padding:6px 10px;color:#0b1424;font-size:12px;font-weight:700}
+    .muted{color:var(--muted);font-size:13px}
+    .alert{display:none;margin:10px 0 12px;background:#fff4e5;border:1px solid #f4c08a;color:#7b3d00;padding:10px;border-radius:12px;font-size:14px}
     @media (max-width:700px){.card{flex-direction:column;align-items:flex-start;gap:10px}}
   </style>
 </head>
@@ -47,51 +49,146 @@
     </header>
 
     <h1>Historial</h1>
+    <div class="muted">Tus transcripciones recientes (según tu usuario actual).</div>
+    <div class="alert" id="alert-box"></div>
 
-    {% if items and items|length > 0 %}
-      <div class="cards">
-        {% for it in items %}
-          <div class="card">
-            <div class="left">
-              <div><strong>{{ it.filename or ('job ' ~ it.id) }}</strong></div>
-              <div class="meta">
-                <span class="pill">id: {{ it.id }}</span>
-                <span class="pill">sel: {{ it.language or 'auto' }}</span>
-                <span class="pill">det: {{ it.language_detected or '—' }}</span>
-                <span class="pill">{{ it.status or 'done' }}</span>
-                {% if it.created_at %}<span class="pill">{{ it.created_at }}</span>{% endif %}
-              </div>
-            </div>
-            <div class="actions">
-              {# Construye /?job_id=... y preserva user_id si viene #}
-              {% set q = {'job_id': it.id} %}
-              {% for k,v in base_query.items() %}{% set _ = q.update({k:v}) %}{% endfor %}
-              <a class="btn" href="{{ url_for('index') }}?{{ q|tojson|safe | replace('{','') | replace('}','') | replace('\"','') | replace(':', '=') | replace(',', '&') }}">
-                Ver
-              </a>
-              <a class="btn btn-secondary" href="{{ url_for('history.history_job_json', job_id=it.id) }}">JSON</a>
-            </div>
-          </div>
-        {% endfor %}
-      </div>
-    {% else %}
-      <p>No hay registros.</p>
-    {% endif %}
+    <div class="cards" id="cards"></div>
+
+    <p class="muted" id="empty" style="display:none;margin-top:14px;">No hay registros.</p>
   </div>
 
   <script>
-    // Pequeño badge reutilizando tu endpoint existente
-    (async function(){
-      try{
-        const r = await fetch('/api/usage/balance');
-        if(!r.ok) return;
-        const j = await r.json();
-        const used = Math.round((j.used_seconds||0)/60);
-        const allow = Math.round((j.allowance_seconds||0)/60);
-        const remain = Math.max(0, allow-used);
-        const el = document.getElementById('usage-text');
-        if(el) el.textContent = `${used}/${allow} min · libre ${remain} min`;
-      }catch{}
+    (function(){
+      const $ = (s) => document.querySelector(s);
+
+      const cards = $("#cards");
+      const empty = $("#empty");
+      const alertBox = $("#alert-box");
+
+      function showWarn(msg){
+        alertBox.textContent = msg;
+        alertBox.style.display = "block";
+      }
+      function hideWarn(){
+        alertBox.style.display = "none";
+        alertBox.textContent = "";
+      }
+
+      // USER_ID (igual que en index)
+      let USER_ID = (localStorage.getItem("user_id") || "").trim();
+      if (!USER_ID) USER_ID = "guest";
+
+      async function api(url, opts = {}){
+        const h = opts.headers ? {...opts.headers} : {};
+        if (USER_ID !== "guest" && !h["X-User-Id"]) h["X-User-Id"] = USER_ID;
+        const res = await fetch(url, {...opts, headers: h});
+        const txt = await res.text();
+        let body;
+        try{ body = JSON.parse(txt); }catch{ body = txt; }
+        return { ok: res.ok, status: res.status, body };
+      }
+
+      // Badge de uso
+      async function refreshBadge(){
+        try{
+          const r = await api(`/api/usage/balance?user_id=${encodeURIComponent(USER_ID)}`);
+          if(!r.ok) return;
+          const j = r.body || {};
+          const used = Math.round((j.used_seconds||0)/60);
+          const allow = Math.round((j.allowance_seconds||0)/60);
+          const remain = Math.max(0, allow-used);
+          const el = document.getElementById('usage-text');
+          if(el) el.textContent = `${used}/${allow} min · libre ${remain} min`;
+        }catch{}
+      }
+
+      function esc(s){
+        return String(s||"").replace(/[&<>"']/g, (c) => ({
+          "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+        }[c]));
+      }
+
+      function pill(text){
+        const sp = document.createElement("span");
+        sp.className = "pill";
+        sp.textContent = text;
+        return sp;
+      }
+
+      function buildCard(it){
+        const id = it.id || it.job_id || "";
+        const filename = it.filename || (id ? ("job " + id) : "job");
+        const langSel = it.language || "auto";
+        const langDet = it.language_detected || "—";
+        const status = it.status || "done";
+        const created = it.created_at || "";
+
+        const card = document.createElement("div");
+        card.className = "card";
+
+        const left = document.createElement("div");
+        left.className = "left";
+
+        const title = document.createElement("div");
+        title.innerHTML = `<strong>${esc(filename)}</strong>`;
+        left.appendChild(title);
+
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        meta.appendChild(pill(`id: ${id}`));
+        meta.appendChild(pill(`sel: ${langSel}`));
+        meta.appendChild(pill(`det: ${langDet}`));
+        meta.appendChild(pill(status));
+        if (created) meta.appendChild(pill(created));
+        left.appendChild(meta);
+
+        const actions = document.createElement("div");
+        actions.className = "actions";
+
+        // VER: abre el home con job_id y user_id (para que el home pueda cargarlo si ya tienes esa lógica)
+        const aVer = document.createElement("a");
+        aVer.className = "btn";
+        aVer.href = `/?job_id=${encodeURIComponent(id)}&user_id=${encodeURIComponent(USER_ID)}`;
+        aVer.textContent = "Ver";
+        actions.appendChild(aVer);
+
+        // JSON: usa el endpoint REAL que ya tienes: GET /jobs/<id>
+        const aJson = document.createElement("a");
+        aJson.className = "btn btn-secondary";
+        aJson.href = `/jobs/${encodeURIComponent(id)}?user_id=${encodeURIComponent(USER_ID)}`;
+        aJson.target = "_blank";
+        aJson.rel = "noopener";
+        aJson.textContent = "JSON";
+        actions.appendChild(aJson);
+
+        card.appendChild(left);
+        card.appendChild(actions);
+        return card;
+      }
+
+      async function loadHistory(){
+        hideWarn();
+        cards.innerHTML = "";
+        empty.style.display = "none";
+
+        const r = await api(`/api/history?limit=100&user_id=${encodeURIComponent(USER_ID)}`);
+        if(!r.ok){
+          showWarn("No se pudo cargar el historial. Verifica que /api/history esté activo.");
+          empty.style.display = "block";
+          return;
+        }
+
+        const items = (r.body && r.body.items) ? r.body.items : [];
+        if(!items.length){
+          empty.style.display = "block";
+          return;
+        }
+
+        items.forEach(it => cards.appendChild(buildCard(it)));
+      }
+
+      refreshBadge();
+      loadHistory();
     })();
   </script>
 </body>
