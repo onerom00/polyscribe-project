@@ -195,11 +195,10 @@
       font-size:13px;
     }
 
-    /* ALERTA base = INFO (amarillo) */
     .alert{
-      background:#fff8e1;              /* amarillo suave */
-      border:1px solid #ffecb3;
-      color:#7c5b00;
+      background:#fde2e2;
+      border:1px solid #f3abab;
+      color:#8a1c1c;
       padding:10px;
       border-radius:12px;
       margin-bottom:12px;
@@ -207,18 +206,17 @@
       font-size:14px;
     }
 
-    /* Error = rojo */
-    .alert.error{
-      background:#fde2e2;
-      border:1px solid #f3abab;
-      color:#8a1c1c;
-    }
-
-    /* Éxito = verde */
     .alert.success{
       color:#0f5132;
       background:#d1f7e7;
       border-color:#94e2c1;
+    }
+
+    /* En proceso -> amarillo (no rojo) */
+    .alert.info{
+      color:#7b3d00;
+      background:#fff4e5;
+      border-color:#f4c08a;
     }
 
     .hidden{display:none}
@@ -478,10 +476,14 @@
     const MAX_MB = 100;
 
     // ============================
-    // USER ID
+    // USER ID (soporta ?user_id=... desde historial)
     // ============================
+    const qs = new URLSearchParams(window.location.search);
     let USER_ID = (document.body.dataset.userId || "").trim();
-    if (!USER_ID) USER_ID = localStorage.getItem("user_id") || "";
+    const qsUser = (qs.get("user_id") || "").trim();
+
+    if (!USER_ID && qsUser) USER_ID = qsUser;
+    if (!USER_ID) USER_ID = (localStorage.getItem("user_id") || "").trim();
     if (USER_ID) localStorage.setItem("user_id", USER_ID);
     if (!USER_ID) USER_ID = "guest";
 
@@ -507,24 +509,22 @@
     // ============================
     function showError(msg){
       alertBox.textContent = msg;
-      alertBox.classList.remove("success");
-      alertBox.classList.add("error");
+      alertBox.className = "alert";
       alertBox.style.display = "block";
     }
     function showOk(msg){
       alertBox.textContent = msg;
-      alertBox.classList.remove("error");
-      alertBox.classList.add("success");
+      alertBox.className = "alert success";
       alertBox.style.display = "block";
     }
     function showInfo(msg){
       alertBox.textContent = msg;
-      alertBox.classList.remove("success","error");
+      alertBox.className = "alert info";
       alertBox.style.display = "block";
     }
     function clearAlert(){
       alertBox.style.display = "none";
-      alertBox.classList.remove("success","error");
+      alertBox.className = "alert";
     }
 
     // ============================
@@ -568,13 +568,8 @@
     // DROPZONE
     // ============================
     drop.onclick = () => fileInput.click();
-    drop.ondragover = e => {
-      e.preventDefault();
-      drop.style.borderColor = "#60a5fa";
-    };
-    drop.ondragleave = () => {
-      drop.style.borderColor = "#97bff7";
-    };
+    drop.ondragover = e => { e.preventDefault(); drop.style.borderColor = "#60a5fa"; };
+    drop.ondragleave = () => { drop.style.borderColor = "#97bff7"; };
     drop.ondrop = e => {
       e.preventDefault();
       drop.style.borderColor = "#97bff7";
@@ -584,9 +579,7 @@
       }
     };
 
-    fileInput.onchange = () => {
-      dFile.textContent = fileInput.files[0]?.name || "—";
-    };
+    fileInput.onchange = () => { dFile.textContent = fileInput.files[0]?.name || "—"; };
 
     // ============================
     // CAMBIO DE IDIOMA
@@ -598,15 +591,53 @@
     };
 
     // ============================
-    // BOTÓN HISTORIAL (FIJO)
+    // HISTORIAL
     // ============================
-    const btnHistoryEl = document.getElementById("btn-history");
-    if (btnHistoryEl) {
-       btnHistoryEl.addEventListener("click", () => {
-           window.location.href = "/history";
-       });
+    if (btnHistory){
+      btnHistory.onclick = () => { window.location.href = "/history"; };
     }
 
+    // ============================
+    // CARGAR JOB POR QUERYSTRING (CLAVE)
+    // ============================
+    async function loadJobFromQuery(){
+      const jobId = (qs.get("job_id") || "").trim();
+      if (!jobId) return;
+
+      clearAlert();
+      showInfo("Cargando transcripción desde Historial…");
+
+      const r = await api(`/jobs/${encodeURIComponent(jobId)}?user_id=${encodeURIComponent(USER_ID)}`);
+      if (!r.ok){
+        const msg = (r.body && r.body.error) ? r.body.error : "No se pudo cargar el job desde el historial.";
+        return showError(msg);
+      }
+
+      const job = r.body || {};
+
+      taT.value = job.transcript || "";
+      taS.value = job.summary || "";
+      dDet.textContent = job.language_detected || "—";
+      dJob.textContent = job.id || job.job_id || jobId;
+
+      // filename (si el backend lo trae)
+      dFile.textContent = job.filename || dFile.textContent || "—";
+
+      // language selected (si viene)
+      const langSel = (job.language || job.language_selected || "").trim();
+      if (langSel){
+        dLang.textContent = langSel;
+        if (idiomaSel && [...idiomaSel.options].some(o => o.value === langSel)){
+          idiomaSel.value = langSel;
+        }
+      }
+
+      if (job.language_detected){
+        applyDirection(job.language_detected);
+      }
+
+      showOk("Cargado desde Historial.");
+    }
 
     // ============================
     // CREAR JOB
@@ -803,6 +834,9 @@
       const base = getBaseName();
       downloadClient(base, "json", json, "application/json;charset=utf-8");
     };
+
+    // Ejecutar al cargar la página (si vienes desde Historial)
+    loadJobFromQuery();
 
   })();
   </script>
