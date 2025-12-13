@@ -44,7 +44,7 @@
       </nav>
       <div class="topbar">
         <span class="badge" id="usage-text">—/— min · libre —</span>
-        <!-- ✅ VOLVER INTELIGENTE -->
+        <!-- VOLVER INTELIGENTE -->
         <a class="btn btn-secondary" href="/" id="btn-back">Volver</a>
       </div>
     </header>
@@ -90,28 +90,13 @@
         return { ok: res.ok, status: res.status, body };
       }
 
-      // ✅ VOLVER INTELIGENTE
+      // VOLVER INTELIGENTE (sin depender de referrer)
       function setBackLink(){
-        try{
-          const ref = (document.referrer || "").trim();
-          // Si vienes del home (por ejemplo /?job_id=...) regresa exacto ahí
-          if (ref) {
-            const u = new URL(ref, window.location.origin);
-            if (u.origin === window.location.origin) {
-              btnBack.href = u.href;
-              return;
-            }
-          }
-        }catch{}
-
-        // Si no hay referrer útil, usa el último job visto
         const lastJob = (localStorage.getItem("ps_last_job_id") || "").trim();
         if (lastJob) {
           btnBack.href = `/?job_id=${encodeURIComponent(lastJob)}&user_id=${encodeURIComponent(USER_ID)}`;
           return;
         }
-
-        // Si no hay last job, vuelve al home preservando user_id
         btnBack.href = `/?user_id=${encodeURIComponent(USER_ID)}`;
       }
 
@@ -172,20 +157,17 @@
         const actions = document.createElement("div");
         actions.className = "actions";
 
-        // VER: abre el home con job_id y user_id
+        // VER: abre el home con job_id y user_id + guarda last job
         const aVer = document.createElement("a");
         aVer.className = "btn";
         aVer.href = `/?job_id=${encodeURIComponent(id)}&user_id=${encodeURIComponent(USER_ID)}`;
         aVer.textContent = "Ver";
-
-        // ✅ guardamos el último job para que "Volver" no quede vacío
         aVer.addEventListener("click", () => {
           try{ localStorage.setItem("ps_last_job_id", String(id||"")); }catch{}
         });
-
         actions.appendChild(aVer);
 
-        // JSON: usa el endpoint real: GET /jobs/<id>
+        // JSON: endpoint real
         const aJson = document.createElement("a");
         aJson.className = "btn btn-secondary";
         aJson.href = `/jobs/${encodeURIComponent(id)}?user_id=${encodeURIComponent(USER_ID)}`;
