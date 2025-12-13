@@ -162,7 +162,7 @@
       /* NO justificar globalmente para respetar bullets del resumen */
     }
 
-    /* Solo la transcripción justificada */
+    /* ✅ Solo la transcripción justificada */
     #transcript{
       text-align:justify;
       text-justify:inter-word;
@@ -212,7 +212,7 @@
       border-color:#94e2c1;
     }
 
-    /* ✅ NUEVO: “Procesando…” en amarillo premium */
+    /* ✅ “Procesando…” en amarillo premium */
     .alert.info{
       background:#fff7cc;
       border:1px solid #fde68a;
@@ -476,10 +476,13 @@
     const MAX_MB = 100;
 
     // ============================
-    // USER ID
+    // USER ID (también desde querystring)
     // ============================
+    const qs0 = new URLSearchParams(window.location.search);
+    const userIdFromQuery = (qs0.get("user_id") || "").trim();
+
     let USER_ID = (document.body.dataset.userId || "").trim();
-    if (!USER_ID) USER_ID = localStorage.getItem("user_id") || "";
+    if (!USER_ID) USER_ID = userIdFromQuery || (localStorage.getItem("user_id") || "");
     if (USER_ID) localStorage.setItem("user_id", USER_ID);
     if (!USER_ID) USER_ID = "guest";
 
@@ -490,6 +493,7 @@
       try{
         const h = opts.headers ? { ...opts.headers } : {};
         if (USER_ID !== "guest" && !h["X-User-Id"]) h["X-User-Id"] = USER_ID;
+
         const res = await fetch(url, { ...opts, headers: h });
         const txt = await res.text();
         let body;
@@ -501,7 +505,7 @@
     }
 
     // ============================
-    // ALERTAS (✅ A1 Premium)
+    // ALERTAS
     // ============================
     function showError(msg){
       alertBox.textContent = msg;
@@ -563,16 +567,18 @@
     }
 
     // ============================
+    // HISTORIAL
+    // ============================
+    if (btnHistory){
+      btnHistory.onclick = () => { window.location.href = "/history"; };
+    }
+
+    // ============================
     // DROPZONE
     // ============================
     drop.onclick = () => fileInput.click();
-    drop.ondragover = e => {
-      e.preventDefault();
-      drop.style.borderColor = "#60a5fa";
-    };
-    drop.ondragleave = () => {
-      drop.style.borderColor = "#97bff7";
-    };
+    drop.ondragover = e => { e.preventDefault(); drop.style.borderColor = "#60a5fa"; };
+    drop.ondragleave = () => { drop.style.borderColor = "#97bff7"; };
     drop.ondrop = e => {
       e.preventDefault();
       drop.style.borderColor = "#97bff7";
@@ -581,10 +587,7 @@
         dFile.textContent = e.dataTransfer.files[0].name;
       }
     };
-
-    fileInput.onchange = () => {
-      dFile.textContent = fileInput.files[0]?.name || "—";
-    };
+    fileInput.onchange = () => { dFile.textContent = fileInput.files[0]?.name || "—"; };
 
     // ============================
     // CAMBIO DE IDIOMA
@@ -594,13 +597,6 @@
       dLang.textContent = code;
       applyDirection(code);
     };
-
-    // ============================
-    // HISTORIAL
-    // ============================
-    if (btnHistory){
-      btnHistory.onclick = () => { window.location.href = "/history"; };
-    }
 
     // ============================
     // CREAR JOB
@@ -623,7 +619,6 @@
       dDet.textContent = "—";
       dJob.textContent = "—";
 
-      // ✅ A1: mensaje premium + amarillo (info)
       showInfo("⏳ Procesando audio… por favor espera.");
       btnTrans.disabled = true;
 
@@ -651,7 +646,6 @@
           applyDirection(job.language_detected);
         }
 
-        // ✅ A1: mensaje premium éxito
         showOk("✅ Transcripción y resumen listos.");
         refreshBadge();
       }catch(e){
@@ -661,7 +655,6 @@
         btnTrans.disabled = false;
       }
     }
-
     btnTrans.onclick = crearJob;
 
     // ============================
@@ -708,12 +701,8 @@
     $("#copy-trans").onclick = async () => {
       const txt = taT.value || "";
       if (!txt) return;
-      try{
-        await navigator.clipboard.writeText(txt);
-        showOk("✅ Transcripción copiada.");
-      }catch{
-        showError("No se pudo copiar la transcripción.");
-      }
+      try{ await navigator.clipboard.writeText(txt); showOk("✅ Transcripción copiada."); }
+      catch{ showError("No se pudo copiar la transcripción."); }
     };
 
     $("#download-txt").onclick = () => {
@@ -723,14 +712,9 @@
     };
 
     async function exportServer(fmt){
-      if (!taT.value){
-        return showError("No hay transcripción para exportar.");
-      }
-      const payload = {
-        transcript: taT.value || "",
-        summary: taS.value || "",
-        filename: dFile.textContent || ""
-      };
+      if (!taT.value) return showError("No hay transcripción para exportar.");
+
+      const payload = { transcript: taT.value || "", summary: taS.value || "", filename: dFile.textContent || "" };
 
       try{
         const res = await fetch(`/api/exports/${fmt}`, {
@@ -740,10 +724,8 @@
         });
         if (!res.ok){
           const txt = await res.text();
-          let data;
-          try{ data = JSON.parse(txt); }catch{ data = {}; }
-          const msg = (data && data.error) || `No se pudo exportar (${fmt}).`;
-          return showError(msg);
+          let data; try{ data = JSON.parse(txt); }catch{ data = {}; }
+          return showError((data && data.error) || `No se pudo exportar (${fmt}).`);
         }
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
@@ -772,12 +754,8 @@
     $("#copy-sum").onclick = async () => {
       const txt = taS.value || "";
       if (!txt) return;
-      try{
-        await navigator.clipboard.writeText(txt);
-        showOk("✅ Resumen copiado.");
-      }catch{
-        showError("No se pudo copiar el resumen.");
-      }
+      try{ await navigator.clipboard.writeText(txt); showOk("✅ Resumen copiado."); }
+      catch{ showError("No se pudo copiar el resumen."); }
     };
 
     $("#download-sum").onclick = () => {
@@ -800,9 +778,8 @@
       downloadClient(base, "json", json, "application/json;charset=utf-8");
     };
 
-  })();
-      // ============================
-    // CARGAR JOB DESDE HISTORIAL (/?job_id=...)
+    // ============================
+    // ✅ CARGAR JOB DESDE HISTORIAL (/?job_id=...)
     // ============================
     async function loadJobFromQuery(){
       const qs = new URLSearchParams(window.location.search);
@@ -813,29 +790,47 @@
       showInfo("📄 Cargando resultado del historial…");
       btnTrans.disabled = true;
 
+      // Probamos varios endpoints, porque depende de cómo quedó tu backend
+      const candidates = [
+        `/jobs/${encodeURIComponent(jobId)}?user_id=${encodeURIComponent(USER_ID)}`,
+        `/api/jobs/${encodeURIComponent(jobId)}?user_id=${encodeURIComponent(USER_ID)}`,
+        `/api/history/${encodeURIComponent(jobId)}?user_id=${encodeURIComponent(USER_ID)}`,
+        `/history/${encodeURIComponent(jobId)}?user_id=${encodeURIComponent(USER_ID)}`
+      ];
+
       try{
-        // Soporta tu backend típico: GET /jobs/<id>
-        const r = await api(`/jobs/${encodeURIComponent(jobId)}`, { method:"GET" });
-        if (!r.ok){
-          const msg = (r.body && r.body.error) ? r.body.error : "No se pudo cargar el job.";
-          return showError(msg);
+        let job = null;
+
+        for (const url of candidates){
+          const r = await api(url, { method:"GET" });
+          if (r.ok){
+            job = r.body || {};
+            break;
+          }
         }
 
-        const job = r.body || {};
-        taT.value = job.transcript || "";
-        taS.value = job.summary || "";
-        dDet.textContent = job.language_detected || "—";
+        if (!job){
+          return showError("No se pudo cargar el job desde el historial (endpoint no encontrado).");
+        }
+
+        // Normalizamos posibles nombres de campos
+        const transcript = job.transcript || job.text || job.result || "";
+        const summary    = job.summary || job.resume || job.summary_text || "";
+
+        taT.value = transcript || "";
+        taS.value = summary || "";
+
+        dDet.textContent = job.language_detected || job.detected_language || "—";
         dJob.textContent = job.id || job.job_id || jobId;
 
-        // Mostrar archivo si existe
         if (job.filename) dFile.textContent = job.filename;
 
-        // Idioma seleccionado si existe
-        if (job.language) {
+        if (job.language){
           dLang.textContent = job.language;
           if (idiomaSel) idiomaSel.value = job.language;
           applyDirection(job.language);
         }
+
         if (job.language_detected){
           applyDirection(job.language_detected);
         }
@@ -853,6 +848,8 @@
     // Ejecutar al abrir la página
     loadJobFromQuery();
 
+  })();
   </script>
+
 </body>
 </html>
