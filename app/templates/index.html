@@ -160,6 +160,7 @@
       resize:vertical;
       line-height:1.7;
       /* NO justificar globalmente para respetar bullets del resumen */
+      white-space:pre-wrap; /* mantiene saltos y bullets */
     }
 
     /* ✅ Solo la transcripción justificada */
@@ -443,10 +444,9 @@
     </div>
   </div>
 
-  <!-- Script nav (activo en el menú, etc.) -->
+  <!-- Script nav -->
   <script src="{{ url_for('static', filename='js/nav_auth.js') }}"></script>
 
-  <!-- Lógica principal + exportaciones -->
   <script>
   (function(){
     const $ = s => document.querySelector(s);
@@ -476,13 +476,14 @@
     const MAX_MB = 100;
 
     // ============================
-    // USER ID (también desde querystring)
+    // USER ID (✅ toma ?user_id= de la URL)
     // ============================
     const qs0 = new URLSearchParams(window.location.search);
-    const userIdFromQuery = (qs0.get("user_id") || "").trim();
+    const urlUserId = (qs0.get("user_id") || "").trim();
 
     let USER_ID = (document.body.dataset.userId || "").trim();
-    if (!USER_ID) USER_ID = userIdFromQuery || (localStorage.getItem("user_id") || "");
+    if (!USER_ID) USER_ID = urlUserId || "";
+    if (!USER_ID) USER_ID = localStorage.getItem("user_id") || "";
     if (USER_ID) localStorage.setItem("user_id", USER_ID);
     if (!USER_ID) USER_ID = "guest";
 
@@ -493,7 +494,6 @@
       try{
         const h = opts.headers ? { ...opts.headers } : {};
         if (USER_ID !== "guest" && !h["X-User-Id"]) h["X-User-Id"] = USER_ID;
-
         const res = await fetch(url, { ...opts, headers: h });
         const txt = await res.text();
         let body;
@@ -551,7 +551,6 @@
       if (usageText) usageText.textContent = text;
       if (usageTextNav) usageTextNav.textContent = text;
     }
-
     if (btnRefresh) btnRefresh.addEventListener("click", refreshBadge);
     refreshBadge();
 
@@ -564,13 +563,6 @@
       const dir = rtl.includes(c) ? "rtl" : "ltr";
       taT.setAttribute("dir", dir);
       taS.setAttribute("dir", dir);
-    }
-
-    // ============================
-    // HISTORIAL
-    // ============================
-    if (btnHistory){
-      btnHistory.onclick = () => { window.location.href = "/history"; };
     }
 
     // ============================
@@ -599,15 +591,20 @@
     };
 
     // ============================
+    // HISTORIAL BTN
+    // ============================
+    if (btnHistory){
+      btnHistory.onclick = () => { window.location.href = "/history"; };
+    }
+
+    // ============================
     // CREAR JOB
     // ============================
     async function crearJob(){
       clearAlert();
       const file = fileInput.files?.[0];
       if (!file) return showError("Selecciona un archivo.");
-      if (file.size > MAX_MB * 1024 * 1024){
-        return showError("El archivo supera el límite de 100 MB.");
-      }
+      if (file.size > MAX_MB * 1024 * 1024) return showError("El archivo supera el límite de 100 MB.");
 
       const lang = (idiomaSel.value || "auto").trim().toLowerCase();
       dFile.textContent = file.name;
@@ -629,9 +626,7 @@
 
         const r = await api("/jobs", { method:"POST", body: fd });
         if (!r.ok){
-          if (r.body && r.body.error === "NO_CREDITS"){
-            return showError("No tienes minutos suficientes para este archivo.");
-          }
+          if (r.body && r.body.error === "NO_CREDITS") return showError("No tienes minutos suficientes para este archivo.");
           const msg = (r.body && r.body.error) || "No se pudo procesar el archivo.";
           return showError(msg);
         }
@@ -642,9 +637,7 @@
         dDet.textContent = job.language_detected || "";
         dJob.textContent = job.id || job.job_id || "—";
 
-        if (job.language_detected){
-          applyDirection(job.language_detected);
-        }
+        if (job.language_detected) applyDirection(job.language_detected);
 
         showOk("✅ Transcripción y resumen listos.");
         refreshBadge();
@@ -674,7 +667,7 @@
     };
 
     // ============================
-    // EXPORT TXT CLIENTE
+    // DESCARGAS CLIENTE
     // ============================
     function downloadClient(baseName, ext, content, mime){
       const safeName = baseName || "resultado";
@@ -690,7 +683,7 @@
     }
 
     function getBaseName(){
-      const name = dFile.textContent || "";
+      const name = (dFile.textContent || "").trim();
       if (!name || name === "—") return "resultado";
       return name.replace(/\.[^.]+$/, "");
     }
@@ -707,8 +700,7 @@
 
     $("#download-txt").onclick = () => {
       if (!taT.value) return showError("No hay transcripción para exportar.");
-      const base = getBaseName() || "transcripcion";
-      downloadClient(base, "txt", taT.value, "text/plain;charset=utf-8");
+      downloadClient(getBaseName(), "txt", taT.value, "text/plain;charset=utf-8");
     };
 
     async function exportServer(fmt){
@@ -727,12 +719,12 @@
           let data; try{ data = JSON.parse(txt); }catch{ data = {}; }
           return showError((data && data.error) || `No se pudo exportar (${fmt}).`);
         }
+
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        const base = getBaseName();
         a.href = url;
-        a.download = `${base}.${fmt}`;
+        a.download = `${getBaseName()}.${fmt}`;
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -760,8 +752,7 @@
 
     $("#download-sum").onclick = () => {
       if (!taS.value) return showError("No hay resumen para exportar.");
-      const base = getBaseName() || "resumen";
-      downloadClient(base, "txt", taS.value, "text/plain;charset=utf-8");
+      downloadClient(getBaseName(), "txt", taS.value, "text/plain;charset=utf-8");
     };
 
     $("#download-json").onclick = () => {
@@ -773,9 +764,7 @@
         transcript: taT.value || "",
         summary: taS.value || ""
       };
-      const json = JSON.stringify(obj, null, 2);
-      const base = getBaseName();
-      downloadClient(base, "json", json, "application/json;charset=utf-8");
+      downloadClient(getBaseName(), "json", JSON.stringify(obj, null, 2), "application/json;charset=utf-8");
     };
 
     // ============================
@@ -790,37 +779,17 @@
       showInfo("📄 Cargando resultado del historial…");
       btnTrans.disabled = true;
 
-      // Probamos varios endpoints, porque depende de cómo quedó tu backend
-      const candidates = [
-        `/jobs/${encodeURIComponent(jobId)}?user_id=${encodeURIComponent(USER_ID)}`,
-        `/api/jobs/${encodeURIComponent(jobId)}?user_id=${encodeURIComponent(USER_ID)}`,
-        `/api/history/${encodeURIComponent(jobId)}?user_id=${encodeURIComponent(USER_ID)}`,
-        `/history/${encodeURIComponent(jobId)}?user_id=${encodeURIComponent(USER_ID)}`
-      ];
-
       try{
-        let job = null;
-
-        for (const url of candidates){
-          const r = await api(url, { method:"GET" });
-          if (r.ok){
-            job = r.body || {};
-            break;
-          }
+        const r = await api(`/jobs/${encodeURIComponent(jobId)}`, { method:"GET" });
+        if (!r.ok){
+          const msg = (r.body && r.body.error) ? r.body.error : "No se pudo cargar el job.";
+          return showError(msg);
         }
 
-        if (!job){
-          return showError("No se pudo cargar el job desde el historial (endpoint no encontrado).");
-        }
-
-        // Normalizamos posibles nombres de campos
-        const transcript = job.transcript || job.text || job.result || "";
-        const summary    = job.summary || job.resume || job.summary_text || "";
-
-        taT.value = transcript || "";
-        taS.value = summary || "";
-
-        dDet.textContent = job.language_detected || job.detected_language || "—";
+        const job = r.body || {};
+        taT.value = job.transcript || "";
+        taS.value = job.summary || "";
+        dDet.textContent = job.language_detected || "—";
         dJob.textContent = job.id || job.job_id || jobId;
 
         if (job.filename) dFile.textContent = job.filename;
@@ -830,10 +799,7 @@
           if (idiomaSel) idiomaSel.value = job.language;
           applyDirection(job.language);
         }
-
-        if (job.language_detected){
-          applyDirection(job.language_detected);
-        }
+        if (job.language_detected) applyDirection(job.language_detected);
 
         showOk("✅ Resultado cargado desde historial.");
         refreshBadge();
@@ -845,11 +811,10 @@
       }
     }
 
-    // Ejecutar al abrir la página
+    // Ejecutar al abrir
     loadJobFromQuery();
 
   })();
   </script>
-
 </body>
 </html>
