@@ -12,8 +12,23 @@
     :root{--bg:#e6f0ff;--card:#fff;--text:#0b1424;--muted:#4b5563;--border:#d9e4f7;--accent:#0b62e0;}
     *{box-sizing:border-box}
     body{margin:0;background:#cfe5ff;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--text)}
-    .container{max-width:980px;margin:24px auto;padding:0 16px}
-    header{display:flex;align-items:center;justify-content:space-between;margin:8px 0 16px}
+
+    /* ✅ Igual que Home: ancho y centrado */
+    .container{max-width:1160px;margin:24px auto;padding:0 16px}
+
+    /* ✅ Header centrado (como pediste) */
+    header{margin:8px 0 16px}
+    .header-inner{
+      max-width:1160px;
+      margin:0 auto;
+      padding:0 16px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      flex-wrap:wrap;
+    }
+
     a{color:var(--accent);text-decoration:none}
     .cards{display:grid;grid-template-columns:1fr;gap:12px}
     .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;align-items:center;justify-content:space-between}
@@ -21,11 +36,14 @@
     .meta{display:flex;gap:8px;flex-wrap:wrap}
     .pill{border:1px solid var(--border);border-radius:999px;padding:2px 8px;color:#1f2937;background:#f7fbff;font-size:12px}
     .actions{display:flex;gap:8px;flex-wrap:wrap}
+
     .btn{background:#0b62e0;border:1px solid #0a59c9;color:#fff;font-weight:700;padding:8px 12px;border-radius:10px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}
     .btn-secondary{background:#f2f6ff;color:#0b1424;border:1px solid #cddaf5}
+
     h1{font-size:20px;margin:8px 0 16px}
     nav{display:flex;gap:12px;font-weight:700;flex-wrap:wrap}
-    .topbar{display:flex;gap:8px;justify-content:flex-end;margin-bottom:8px;align-items:center;flex-wrap:wrap}
+    .topbar{display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap}
+
     .badge{background:#e8f3ff;border:1px solid #b9d9ff;border-radius:999px;padding:6px 10px;color:#0b1424;font-size:12px;font-weight:700}
     .muted{color:var(--muted);font-size:13px}
     .alert{display:none;margin:10px 0 12px;background:#fff4e5;border:1px solid #f4c08a;color:#7b3d00;padding:10px;border-radius:12px;font-size:14px}
@@ -35,16 +53,18 @@
 <body>
   <div class="container">
     <header>
-      <nav>
-        <a href="/">PolyScribe</a>
-        <a href="/">Transcribir</a>
-        <a href="/history">Historial</a>
-        <a href="/pricing">Precios</a>
-        <a href="/ayuda">Ayuda</a>
-      </nav>
-      <div class="topbar">
-        <span class="badge" id="usage-text">—/— min · libre —</span>
-        <a class="btn btn-secondary" href="/">Volver</a>
+      <div class="header-inner">
+        <nav>
+          <a href="/">PolyScribe</a>
+          <a href="/">Transcribir</a>
+          <a href="/history">Historial</a>
+          <a href="/pricing">Precios</a>
+          <a href="/ayuda">Ayuda</a>
+        </nav>
+        <div class="topbar">
+          <span class="badge" id="usage-text">—/— min · libre —</span>
+          <a class="btn btn-secondary" href="/">Volver</a>
+        </div>
       </div>
     </header>
 
@@ -145,14 +165,14 @@
         const actions = document.createElement("div");
         actions.className = "actions";
 
-        // VER: abre el home con job_id y user_id (para que el home pueda cargarlo si ya tienes esa lógica)
+        // VER: abre el home con job_id y user_id
         const aVer = document.createElement("a");
         aVer.className = "btn";
         aVer.href = `/?job_id=${encodeURIComponent(id)}&user_id=${encodeURIComponent(USER_ID)}`;
         aVer.textContent = "Ver";
         actions.appendChild(aVer);
 
-        // JSON: usa el endpoint REAL que ya tienes: GET /jobs/<id>
+        // JSON: usa GET /jobs/<id>
         const aJson = document.createElement("a");
         aJson.className = "btn btn-secondary";
         aJson.href = `/jobs/${encodeURIComponent(id)}?user_id=${encodeURIComponent(USER_ID)}`;
