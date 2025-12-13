@@ -12,10 +12,23 @@
             background: #e4f0ff;
             margin: 0;
         }
+
+        /* ✅ NAV CENTRADO */
         .nav {
             padding: 12px 24px;
             font-size: 14px;
+            display: flex;
+            justify-content: center; /* centra el menú */
         }
+        .nav .nav-inner{
+            width: 100%;
+            max-width: 1100px;       /* mismo ancho que .page para que alinee */
+            display: flex;
+            justify-content: center; /* centra los links */
+            gap: 6px;
+            flex-wrap: wrap;         /* responsive */
+        }
+
         .nav a {
             text-decoration: none;
             color: #0057d8;
@@ -173,11 +186,13 @@
 </head>
 <body>
     <div class="nav">
-        <a href="/">PolyScribe</a> ·
-        <a href="/transcribir">Transcribir</a> ·
-        <a href="/history">Historial</a> ·
-        <span><strong>Precios</strong></span> ·
-        <a href="/ayuda">Ayuda</a>
+        <div class="nav-inner">
+            <a href="/">PolyScribe</a> ·
+            <a href="/transcribir">Transcribir</a> ·
+            <a href="/history">Historial</a> ·
+            <span><strong>Precios</strong></span> ·
+            <a href="/ayuda">Ayuda</a>
+        </div>
     </div>
 
     <div class="page">
@@ -227,7 +242,6 @@
                     <div class="plan-header">
                         <span class="plan-tag">Recomendado</span>
                         <div class="plan-name">Starter</div>
-                        <!-- 9.99 USD · 60 minutos -->
                         <div class="plan-price">$9.99 <span>prepago</span></div>
                     </div>
                     <div class="plan-body">
@@ -250,7 +264,6 @@
                 <div>
                     <div class="plan-header">
                         <div class="plan-name">Pro</div>
-                        <!-- 19.99 USD · 300 minutos -->
                         <div class="plan-price">$19.99 <span>prepago</span></div>
                     </div>
                     <div class="plan-body">
@@ -273,7 +286,6 @@
                 <div>
                     <div class="plan-header">
                         <div class="plan-name">Business</div>
-                        <!-- 49.99 USD · 1200 minutos -->
                         <div class="plan-price">$49.99 <span>prepago</span></div>
                     </div>
                     <div class="plan-body">
