@@ -801,6 +801,58 @@
     };
 
   })();
+      // ============================
+    // CARGAR JOB DESDE HISTORIAL (/?job_id=...)
+    // ============================
+    async function loadJobFromQuery(){
+      const qs = new URLSearchParams(window.location.search);
+      const jobId = (qs.get("job_id") || "").trim();
+      if (!jobId) return;
+
+      clearAlert();
+      showInfo("📄 Cargando resultado del historial…");
+      btnTrans.disabled = true;
+
+      try{
+        // Soporta tu backend típico: GET /jobs/<id>
+        const r = await api(`/jobs/${encodeURIComponent(jobId)}`, { method:"GET" });
+        if (!r.ok){
+          const msg = (r.body && r.body.error) ? r.body.error : "No se pudo cargar el job.";
+          return showError(msg);
+        }
+
+        const job = r.body || {};
+        taT.value = job.transcript || "";
+        taS.value = job.summary || "";
+        dDet.textContent = job.language_detected || "—";
+        dJob.textContent = job.id || job.job_id || jobId;
+
+        // Mostrar archivo si existe
+        if (job.filename) dFile.textContent = job.filename;
+
+        // Idioma seleccionado si existe
+        if (job.language) {
+          dLang.textContent = job.language;
+          if (idiomaSel) idiomaSel.value = job.language;
+          applyDirection(job.language);
+        }
+        if (job.language_detected){
+          applyDirection(job.language_detected);
+        }
+
+        showOk("✅ Resultado cargado desde historial.");
+        refreshBadge();
+      }catch(e){
+        console.error(e);
+        showError("Error inesperado cargando el historial.");
+      }finally{
+        btnTrans.disabled = false;
+      }
+    }
+
+    // Ejecutar al abrir la página
+    loadJobFromQuery();
+
   </script>
 </body>
 </html>
