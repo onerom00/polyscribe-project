@@ -160,10 +160,9 @@
       resize:vertical;
       line-height:1.7;
       /* NO justificar globalmente para respetar bullets del resumen */
-      white-space:pre-wrap; /* mantiene saltos y bullets */
     }
 
-    /* ✅ Solo la transcripción justificada */
+    /* Solo la transcripción justificada */
     #transcript{
       text-align:justify;
       text-justify:inter-word;
@@ -320,6 +319,49 @@
       color:#fff;
       font-size:11px;
     }
+
+    /* ✅ NUEVO: banner de saldo (low / zero) */
+    .credits-banner{
+      display:none;
+      margin:10px 0 12px;
+      border-radius:14px;
+      padding:12px 12px;
+      border:1px solid #fde68a;
+      background:#fff7cc;
+      color:#92400e;
+      font-size:14px;
+      box-shadow:0 6px 16px rgba(15,23,42,0.08);
+    }
+    .credits-banner.zero{
+      border-color:#fbbf24;
+      background:#ffefb3;
+    }
+    .credits-banner .rowb{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .credits-banner .cta{
+      background:#0b62e0;
+      border:1px solid #0a59c9;
+      color:#fff;
+      padding:8px 12px;
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:800;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      white-space:nowrap;
+    }
+    .credits-banner .sub{
+      margin-top:6px;
+      color:#7b3d00;
+      font-size:13px;
+    }
   </style>
 </head>
 
@@ -369,6 +411,16 @@
     </div>
 
     <p class="details">Sube tu audio y recibe transcripción + resumen.</p>
+
+    <!-- ✅ NUEVO: banner saldo bajo / cero -->
+    <div class="credits-banner" id="credits-banner">
+      <div class="rowb">
+        <div id="credits-msg">—</div>
+        <a class="cta" href="/pricing" id="btn-upgrade">🚀 Mejorar plan</a>
+      </div>
+      <div class="sub" id="credits-sub">🔒 Tus transcripciones anteriores se conservan.</div>
+    </div>
+
     <div class="alert" id="alert-box"></div>
 
     <div class="card grid" style="gap:20px">
@@ -444,9 +496,10 @@
     </div>
   </div>
 
-  <!-- Script nav -->
+  <!-- Script nav (activo en el menú, etc.) -->
   <script src="{{ url_for('static', filename='js/nav_auth.js') }}"></script>
 
+  <!-- Lógica principal + exportaciones -->
   <script>
   (function(){
     const $ = s => document.querySelector(s);
@@ -473,16 +526,17 @@
     const usageText  = $("#usage-text");
     const usageTextNav = $("#usage-text-nav");
 
+    // ✅ banner saldo
+    const creditsBanner = $("#credits-banner");
+    const creditsMsg = $("#credits-msg");
+    const btnUpgrade = $("#btn-upgrade");
+
     const MAX_MB = 100;
 
     // ============================
-    // USER ID (✅ toma ?user_id= de la URL)
+    // USER ID
     // ============================
-    const qs0 = new URLSearchParams(window.location.search);
-    const urlUserId = (qs0.get("user_id") || "").trim();
-
     let USER_ID = (document.body.dataset.userId || "").trim();
-    if (!USER_ID) USER_ID = urlUserId || "";
     if (!USER_ID) USER_ID = localStorage.getItem("user_id") || "";
     if (USER_ID) localStorage.setItem("user_id", USER_ID);
     if (!USER_ID) USER_ID = "guest";
@@ -505,7 +559,7 @@
     }
 
     // ============================
-    // ALERTAS
+    // ALERTAS (A1 Premium)
     // ============================
     function showError(msg){
       alertBox.textContent = msg;
@@ -530,6 +584,45 @@
     }
 
     // ============================
+    // SALDO / RENTABILIDAD (LOW -> UPGRADE, ZERO -> BLOQUEO)
+    // ============================
+    const LOW_THRESHOLD_MIN = 5;      // saldo bajo <= 5 min
+    let REMAIN_MIN = null;            // cache del saldo disponible
+
+    function updateCreditsUI(remainMin){
+      if (!creditsBanner || !creditsMsg) return;
+
+      // Si no hay dato aún, oculta
+      if (remainMin === null || Number.isNaN(remainMin)){
+        creditsBanner.style.display = "none";
+        creditsBanner.classList.remove("zero");
+        return;
+      }
+
+      const r = Math.max(0, remainMin);
+
+      // CERO: bloque elegante
+      if (r <= 0.01){
+        creditsBanner.style.display = "block";
+        creditsBanner.classList.add("zero");
+        creditsMsg.textContent = "❌ No tienes minutos disponibles. Desbloquea más minutos para seguir transcribiendo.";
+        return;
+      }
+
+      // BAJO: aviso premium amarillo
+      if (r <= LOW_THRESHOLD_MIN){
+        creditsBanner.style.display = "block";
+        creditsBanner.classList.remove("zero");
+        creditsMsg.textContent = `⚠️ Te quedan solo ${r.toFixed(1)} minutos disponibles.`;
+        return;
+      }
+
+      // Normal: ocultar
+      creditsBanner.style.display = "none";
+      creditsBanner.classList.remove("zero");
+    }
+
+    // ============================
     // BADGE USO
     // ============================
     async function refreshBadge(){
@@ -538,6 +631,8 @@
       if (!r.ok){
         if (usageBadge) usageBadge.style.display = "none";
         if (usageBadgeNav) usageBadgeNav.style.display = "none";
+        REMAIN_MIN = null;
+        updateCreditsUI(REMAIN_MIN);
         return;
       }
       const data = r.body || {};
@@ -547,12 +642,23 @@
       const allowMin = allowSec / 60;
       const remain   = Math.max(0, allowMin - usedMin);
 
+      REMAIN_MIN = remain;
+
       const text = `${usedMin.toFixed(1)}/${allowMin.toFixed(0)} min · libre ${remain.toFixed(1)} min`;
       if (usageText) usageText.textContent = text;
       if (usageTextNav) usageTextNav.textContent = text;
+
+      // ✅ actualiza banner low/zero
+      updateCreditsUI(REMAIN_MIN);
     }
+
     if (btnRefresh) btnRefresh.addEventListener("click", refreshBadge);
     refreshBadge();
+
+    // CTA upgrade (por si quieres forzar JS; igual ya es link)
+    if (btnUpgrade) btnUpgrade.addEventListener("click", (e) => {
+      // normal link
+    });
 
     // ============================
     // DIRECCIÓN (RTL/LTR)
@@ -569,8 +675,13 @@
     // DROPZONE
     // ============================
     drop.onclick = () => fileInput.click();
-    drop.ondragover = e => { e.preventDefault(); drop.style.borderColor = "#60a5fa"; };
-    drop.ondragleave = () => { drop.style.borderColor = "#97bff7"; };
+    drop.ondragover = e => {
+      e.preventDefault();
+      drop.style.borderColor = "#60a5fa";
+    };
+    drop.ondragleave = () => {
+      drop.style.borderColor = "#97bff7";
+    };
     drop.ondrop = e => {
       e.preventDefault();
       drop.style.borderColor = "#97bff7";
@@ -579,7 +690,10 @@
         dFile.textContent = e.dataTransfer.files[0].name;
       }
     };
-    fileInput.onchange = () => { dFile.textContent = fileInput.files[0]?.name || "—"; };
+
+    fileInput.onchange = () => {
+      dFile.textContent = fileInput.files[0]?.name || "—";
+    };
 
     // ============================
     // CAMBIO DE IDIOMA
@@ -591,7 +705,7 @@
     };
 
     // ============================
-    // HISTORIAL BTN
+    // HISTORIAL
     // ============================
     if (btnHistory){
       btnHistory.onclick = () => { window.location.href = "/history"; };
@@ -602,9 +716,23 @@
     // ============================
     async function crearJob(){
       clearAlert();
+
+      // ✅ BLOQUEO ELEGANTE cuando saldo = 0
+      if (REMAIN_MIN !== null && REMAIN_MIN <= 0.01){
+        updateCreditsUI(REMAIN_MIN);
+        showError("No tienes minutos disponibles. Pulsa “Mejorar plan” para continuar.");
+        // scroll al banner para que lo vean
+        if (creditsBanner && creditsBanner.style.display !== "none"){
+          creditsBanner.scrollIntoView({behavior:"smooth", block:"center"});
+        }
+        return;
+      }
+
       const file = fileInput.files?.[0];
       if (!file) return showError("Selecciona un archivo.");
-      if (file.size > MAX_MB * 1024 * 1024) return showError("El archivo supera el límite de 100 MB.");
+      if (file.size > MAX_MB * 1024 * 1024){
+        return showError("El archivo supera el límite de 100 MB.");
+      }
 
       const lang = (idiomaSel.value || "auto").trim().toLowerCase();
       dFile.textContent = file.name;
@@ -616,6 +744,7 @@
       dDet.textContent = "—";
       dJob.textContent = "—";
 
+      // ✅ mensaje premium + amarillo (info)
       showInfo("⏳ Procesando audio… por favor espera.");
       btnTrans.disabled = true;
 
@@ -626,7 +755,16 @@
 
         const r = await api("/jobs", { method:"POST", body: fd });
         if (!r.ok){
-          if (r.body && r.body.error === "NO_CREDITS") return showError("No tienes minutos suficientes para este archivo.");
+          if (r.body && r.body.error === "NO_CREDITS"){
+            // ✅ backend confirma cero: bloque + CTA
+            REMAIN_MIN = 0;
+            updateCreditsUI(REMAIN_MIN);
+            showError("No tienes minutos suficientes para este archivo. Pulsa “Mejorar plan” para continuar.");
+            if (creditsBanner && creditsBanner.style.display !== "none"){
+              creditsBanner.scrollIntoView({behavior:"smooth", block:"center"});
+            }
+            return;
+          }
           const msg = (r.body && r.body.error) || "No se pudo procesar el archivo.";
           return showError(msg);
         }
@@ -637,10 +775,12 @@
         dDet.textContent = job.language_detected || "";
         dJob.textContent = job.id || job.job_id || "—";
 
-        if (job.language_detected) applyDirection(job.language_detected);
+        if (job.language_detected){
+          applyDirection(job.language_detected);
+        }
 
         showOk("✅ Transcripción y resumen listos.");
-        refreshBadge();
+        await refreshBadge(); // ✅ refresca y actualiza banner low/zero
       }catch(e){
         console.error(e);
         showError("Ocurrió un error inesperado al procesar el archivo.");
@@ -648,6 +788,7 @@
         btnTrans.disabled = false;
       }
     }
+
     btnTrans.onclick = crearJob;
 
     // ============================
@@ -667,7 +808,7 @@
     };
 
     // ============================
-    // DESCARGAS CLIENTE
+    // EXPORT TXT CLIENTE
     // ============================
     function downloadClient(baseName, ext, content, mime){
       const safeName = baseName || "resultado";
@@ -683,7 +824,7 @@
     }
 
     function getBaseName(){
-      const name = (dFile.textContent || "").trim();
+      const name = dFile.textContent || "";
       if (!name || name === "—") return "resultado";
       return name.replace(/\.[^.]+$/, "");
     }
@@ -694,19 +835,29 @@
     $("#copy-trans").onclick = async () => {
       const txt = taT.value || "";
       if (!txt) return;
-      try{ await navigator.clipboard.writeText(txt); showOk("✅ Transcripción copiada."); }
-      catch{ showError("No se pudo copiar la transcripción."); }
+      try{
+        await navigator.clipboard.writeText(txt);
+        showOk("✅ Transcripción copiada.");
+      }catch{
+        showError("No se pudo copiar la transcripción.");
+      }
     };
 
     $("#download-txt").onclick = () => {
       if (!taT.value) return showError("No hay transcripción para exportar.");
-      downloadClient(getBaseName(), "txt", taT.value, "text/plain;charset=utf-8");
+      const base = getBaseName() || "transcripcion";
+      downloadClient(base, "txt", taT.value, "text/plain;charset=utf-8");
     };
 
     async function exportServer(fmt){
-      if (!taT.value) return showError("No hay transcripción para exportar.");
-
-      const payload = { transcript: taT.value || "", summary: taS.value || "", filename: dFile.textContent || "" };
+      if (!taT.value){
+        return showError("No hay transcripción para exportar.");
+      }
+      const payload = {
+        transcript: taT.value || "",
+        summary: taS.value || "",
+        filename: dFile.textContent || ""
+      };
 
       try{
         const res = await fetch(`/api/exports/${fmt}`, {
@@ -716,15 +867,17 @@
         });
         if (!res.ok){
           const txt = await res.text();
-          let data; try{ data = JSON.parse(txt); }catch{ data = {}; }
-          return showError((data && data.error) || `No se pudo exportar (${fmt}).`);
+          let data;
+          try{ data = JSON.parse(txt); }catch{ data = {}; }
+          const msg = (data && data.error) || `No se pudo exportar (${fmt}).`;
+          return showError(msg);
         }
-
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
+        const base = getBaseName();
         a.href = url;
-        a.download = `${getBaseName()}.${fmt}`;
+        a.download = `${base}.${fmt}`;
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -746,13 +899,18 @@
     $("#copy-sum").onclick = async () => {
       const txt = taS.value || "";
       if (!txt) return;
-      try{ await navigator.clipboard.writeText(txt); showOk("✅ Resumen copiado."); }
-      catch{ showError("No se pudo copiar el resumen."); }
+      try{
+        await navigator.clipboard.writeText(txt);
+        showOk("✅ Resumen copiado.");
+      }catch{
+        showError("No se pudo copiar el resumen.");
+      }
     };
 
     $("#download-sum").onclick = () => {
       if (!taS.value) return showError("No hay resumen para exportar.");
-      downloadClient(getBaseName(), "txt", taS.value, "text/plain;charset=utf-8");
+      const base = getBaseName() || "resumen";
+      downloadClient(base, "txt", taS.value, "text/plain;charset=utf-8");
     };
 
     $("#download-json").onclick = () => {
@@ -764,55 +922,10 @@
         transcript: taT.value || "",
         summary: taS.value || ""
       };
-      downloadClient(getBaseName(), "json", JSON.stringify(obj, null, 2), "application/json;charset=utf-8");
+      const json = JSON.stringify(obj, null, 2);
+      const base = getBaseName();
+      downloadClient(base, "json", json, "application/json;charset=utf-8");
     };
-
-    // ============================
-    // ✅ CARGAR JOB DESDE HISTORIAL (/?job_id=...)
-    // ============================
-    async function loadJobFromQuery(){
-      const qs = new URLSearchParams(window.location.search);
-      const jobId = (qs.get("job_id") || "").trim();
-      if (!jobId) return;
-
-      clearAlert();
-      showInfo("📄 Cargando resultado del historial…");
-      btnTrans.disabled = true;
-
-      try{
-        const r = await api(`/jobs/${encodeURIComponent(jobId)}`, { method:"GET" });
-        if (!r.ok){
-          const msg = (r.body && r.body.error) ? r.body.error : "No se pudo cargar el job.";
-          return showError(msg);
-        }
-
-        const job = r.body || {};
-        taT.value = job.transcript || "";
-        taS.value = job.summary || "";
-        dDet.textContent = job.language_detected || "—";
-        dJob.textContent = job.id || job.job_id || jobId;
-
-        if (job.filename) dFile.textContent = job.filename;
-
-        if (job.language){
-          dLang.textContent = job.language;
-          if (idiomaSel) idiomaSel.value = job.language;
-          applyDirection(job.language);
-        }
-        if (job.language_detected) applyDirection(job.language_detected);
-
-        showOk("✅ Resultado cargado desde historial.");
-        refreshBadge();
-      }catch(e){
-        console.error(e);
-        showError("Error inesperado cargando el historial.");
-      }finally{
-        btnTrans.disabled = false;
-      }
-    }
-
-    // Ejecutar al abrir
-    loadJobFromQuery();
 
   })();
   </script>
