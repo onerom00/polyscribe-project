@@ -12,23 +12,8 @@
     :root{--bg:#e6f0ff;--card:#fff;--text:#0b1424;--muted:#4b5563;--border:#d9e4f7;--accent:#0b62e0;}
     *{box-sizing:border-box}
     body{margin:0;background:#cfe5ff;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--text)}
-
-    /* ✅ Igual que Home: ancho y centrado */
-    .container{max-width:1160px;margin:24px auto;padding:0 16px}
-
-    /* ✅ Header centrado (como pediste) */
-    header{margin:8px 0 16px}
-    .header-inner{
-      max-width:1160px;
-      margin:0 auto;
-      padding:0 16px;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:12px;
-      flex-wrap:wrap;
-    }
-
+    .container{max-width:980px;margin:24px auto;padding:0 16px}
+    header{display:flex;align-items:center;justify-content:space-between;margin:8px 0 16px}
     a{color:var(--accent);text-decoration:none}
     .cards{display:grid;grid-template-columns:1fr;gap:12px}
     .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;align-items:center;justify-content:space-between}
@@ -36,14 +21,11 @@
     .meta{display:flex;gap:8px;flex-wrap:wrap}
     .pill{border:1px solid var(--border);border-radius:999px;padding:2px 8px;color:#1f2937;background:#f7fbff;font-size:12px}
     .actions{display:flex;gap:8px;flex-wrap:wrap}
-
     .btn{background:#0b62e0;border:1px solid #0a59c9;color:#fff;font-weight:700;padding:8px 12px;border-radius:10px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}
     .btn-secondary{background:#f2f6ff;color:#0b1424;border:1px solid #cddaf5}
-
     h1{font-size:20px;margin:8px 0 16px}
     nav{display:flex;gap:12px;font-weight:700;flex-wrap:wrap}
-    .topbar{display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap}
-
+    .topbar{display:flex;gap:8px;justify-content:flex-end;margin-bottom:8px;align-items:center;flex-wrap:wrap}
     .badge{background:#e8f3ff;border:1px solid #b9d9ff;border-radius:999px;padding:6px 10px;color:#0b1424;font-size:12px;font-weight:700}
     .muted{color:var(--muted);font-size:13px}
     .alert{display:none;margin:10px 0 12px;background:#fff4e5;border:1px solid #f4c08a;color:#7b3d00;padding:10px;border-radius:12px;font-size:14px}
@@ -53,18 +35,17 @@
 <body>
   <div class="container">
     <header>
-      <div class="header-inner">
-        <nav>
-          <a href="/">PolyScribe</a>
-          <a href="/">Transcribir</a>
-          <a href="/history">Historial</a>
-          <a href="/pricing">Precios</a>
-          <a href="/ayuda">Ayuda</a>
-        </nav>
-        <div class="topbar">
-          <span class="badge" id="usage-text">—/— min · libre —</span>
-          <a class="btn btn-secondary" href="/">Volver</a>
-        </div>
+      <nav>
+        <a href="/">PolyScribe</a>
+        <a href="/">Transcribir</a>
+        <a href="/history">Historial</a>
+        <a href="/pricing">Precios</a>
+        <a href="/ayuda">Ayuda</a>
+      </nav>
+      <div class="topbar">
+        <span class="badge" id="usage-text">—/— min · libre —</span>
+        <!-- ✅ VOLVER INTELIGENTE -->
+        <a class="btn btn-secondary" href="/" id="btn-back">Volver</a>
       </div>
     </header>
 
@@ -84,6 +65,7 @@
       const cards = $("#cards");
       const empty = $("#empty");
       const alertBox = $("#alert-box");
+      const btnBack = $("#btn-back");
 
       function showWarn(msg){
         alertBox.textContent = msg;
@@ -106,6 +88,31 @@
         let body;
         try{ body = JSON.parse(txt); }catch{ body = txt; }
         return { ok: res.ok, status: res.status, body };
+      }
+
+      // ✅ VOLVER INTELIGENTE
+      function setBackLink(){
+        try{
+          const ref = (document.referrer || "").trim();
+          // Si vienes del home (por ejemplo /?job_id=...) regresa exacto ahí
+          if (ref) {
+            const u = new URL(ref, window.location.origin);
+            if (u.origin === window.location.origin) {
+              btnBack.href = u.href;
+              return;
+            }
+          }
+        }catch{}
+
+        // Si no hay referrer útil, usa el último job visto
+        const lastJob = (localStorage.getItem("ps_last_job_id") || "").trim();
+        if (lastJob) {
+          btnBack.href = `/?job_id=${encodeURIComponent(lastJob)}&user_id=${encodeURIComponent(USER_ID)}`;
+          return;
+        }
+
+        // Si no hay last job, vuelve al home preservando user_id
+        btnBack.href = `/?user_id=${encodeURIComponent(USER_ID)}`;
       }
 
       // Badge de uso
@@ -170,9 +177,15 @@
         aVer.className = "btn";
         aVer.href = `/?job_id=${encodeURIComponent(id)}&user_id=${encodeURIComponent(USER_ID)}`;
         aVer.textContent = "Ver";
+
+        // ✅ guardamos el último job para que "Volver" no quede vacío
+        aVer.addEventListener("click", () => {
+          try{ localStorage.setItem("ps_last_job_id", String(id||"")); }catch{}
+        });
+
         actions.appendChild(aVer);
 
-        // JSON: usa GET /jobs/<id>
+        // JSON: usa el endpoint real: GET /jobs/<id>
         const aJson = document.createElement("a");
         aJson.className = "btn btn-secondary";
         aJson.href = `/jobs/${encodeURIComponent(id)}?user_id=${encodeURIComponent(USER_ID)}`;
@@ -207,6 +220,7 @@
         items.forEach(it => cards.appendChild(buildCard(it)));
       }
 
+      setBackLink();
       refreshBadge();
       loadHistory();
     })();
