@@ -1,6 +1,4 @@
 # app/models/__init__.py
-# Hace que app.models sea el punto único de importación de modelos.
+# Exporta los modelos para imports tipo: from app.models import AudioJob
 
-from .audio_job import AudioJob
-
-__all__ = ["AudioJob"]
+from app.models.audio_job import AudioJob  # noqa: F401
