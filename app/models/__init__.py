@@ -1,2 +1,6 @@
 # app/models/__init__.py
-# Archivo requerido para que Python reconozca models como paquete
+# Hace que app.models sea el punto único de importación de modelos.
+
+from .audio_job import AudioJob
+
+__all__ = ["AudioJob"]
