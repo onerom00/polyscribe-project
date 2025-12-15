@@ -1,68 +1,38 @@
 # app/routes/history.py
 from __future__ import annotations
-from flask import Blueprint, render_template, url_for, request
+
+import os
+from flask import Blueprint, jsonify, request, session
+
 from app import db
+from app.models import AudioJob
 
-try:
-    from app.models import AudioJob
-except Exception:
-    AudioJob = None  # type: ignore
+bp = Blueprint("history", __name__, url_prefix="/api/history")
 
-history_bp = Blueprint("history", __name__)
 
-@history_bp.route("/history", methods=["GET"])
-def history_page():
-    """
-    Lista simple de los últimos 200 trabajos, sin filtrar por usuario.
-    (Así siempre ves lo que se guardó, tengas o no sesión/config de DEV_USER_ID).
-    """
-    items = []
-    if AudioJob is not None:
-        try:
-            rows = (
-                db.session.query(AudioJob)
-                .order_by(getattr(AudioJob, "id").desc())
-                .limit(200)
-                .all()
-            )
-            for r in rows:
-                items.append({
-                    "id": getattr(r, "id", None),
-                    "filename": getattr(r, "filename", "") or f"job {getattr(r, 'id', '')}",
-                    "language": getattr(r, "language", "") or "auto",
-                    "language_detected": getattr(r, "language_detected", "") or "",
-                    "status": getattr(r, "status", "done"),
-                    "created_at": getattr(r, "created_at", None),
-                })
-        except Exception:
-            items = []
+def _get_user_id() -> str:
+    raw = (
+        session.get("user_id")
+        or session.get("uid")
+        or request.headers.get("X-User-Id")
+        or request.args.get("user_id")
+        or os.getenv("DEV_USER_ID", "")
+    )
+    s = str(raw).strip() if raw else ""
+    return s or "guest"
 
-    # Sin necesidad de user_id; el botón Ver va directo con ?job_id=...
-    base_query = {}
-    return render_template("history.html", items=items, base_query=base_query)
 
-@history_bp.route("/api/jobs/<int:job_id>.json", methods=["GET"])
-def history_job_json(job_id: int):
-    """
-    Exporta el job como JSON para el botón "JSON" del historial.
-    """
-    from flask import jsonify
+@bp.get("")
+def history_list():
+    user_id = _get_user_id()
+    limit = int(request.args.get("limit", "100") or 100)
+    limit = max(1, min(limit, 500))
 
-    if AudioJob is None:
-        return jsonify({"error": "No model"}), 404
-
-    r = db.session.get(AudioJob, job_id)
-    if not r:
-        return jsonify({"error": "No existe"}), 404
-
-    return jsonify({
-        "id": getattr(r, "id", None),
-        "filename": getattr(r, "filename", ""),
-        "language": getattr(r, "language", ""),
-        "language_detected": getattr(r, "language_detected", ""),
-        "status": getattr(r, "status", "done"),
-        "transcript": getattr(r, "transcript", ""),
-        "summary": getattr(r, "summary", ""),
-        "created_at": str(getattr(r, "created_at", "")),
-        "updated_at": str(getattr(r, "updated_at", "")),
-    }), 200
+    q = (
+        db.session.query(AudioJob)
+        .filter(AudioJob.user_id == user_id)
+        .order_by(AudioJob.created_at.desc())
+        .limit(limit)
+    )
+    items = [j.to_dict() for j in q.all()]
+    return jsonify({"ok": True, "items": items, "count": len(items)})
