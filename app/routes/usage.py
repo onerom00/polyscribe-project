@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+
 from flask import Blueprint, current_app, jsonify, request, session
 
 from app import db
@@ -31,7 +32,7 @@ def usage_balance():
     user_id = _get_user_id()
     free_min = int(current_app.config.get("FREE_TIER_MINUTES", 10))
 
-    # Minutos pagados (solo capturados)
+    # Minutos pagados (captured)
     paid_min = 0
     try:
         q = db.session.query(Payment).filter(
@@ -43,7 +44,7 @@ def usage_balance():
         current_app.logger.error("usage_balance: error leyendo pagos: %s", e)
         paid_min = 0
 
-    # Segundos usados por este user
+    # Segundos usados (sumando duration_seconds de jobs por user)
     used_seconds = 0
     try:
         qj = db.session.query(AudioJob).filter(AudioJob.user_id == user_id)
@@ -57,7 +58,11 @@ def usage_balance():
 
     current_app.logger.info(
         "USAGE_BALANCE uid=%s used_seconds=%s allowance_seconds=%s free_min=%s paid_min=%s",
-        user_id, used_seconds, allowance_seconds, free_min, paid_min
+        user_id,
+        used_seconds,
+        allowance_seconds,
+        free_min,
+        paid_min,
     )
 
     return jsonify(
