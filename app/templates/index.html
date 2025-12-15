@@ -159,7 +159,6 @@
       padding:12px;
       resize:vertical;
       line-height:1.7;
-      /* NO justificar globalmente para respetar bullets del resumen */
     }
 
     /* Solo la transcripción justificada */
@@ -362,6 +361,79 @@
       color:#7b3d00;
       font-size:13px;
     }
+
+    /* ============================
+       ✅ DEMO SECTION (nuevo)
+       ============================ */
+    .demo-wrap{
+      margin:14px 0 16px;
+      display:grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap:16px;
+      align-items:stretch;
+    }
+    @media (max-width:900px){
+      .demo-wrap{grid-template-columns:1fr}
+    }
+    .demo-card{
+      background:#ffffff;
+      border:1px solid var(--border);
+      border-radius:16px;
+      box-shadow:0 10px 28px rgba(15,35,52,.12);
+      overflow:hidden;
+    }
+    .demo-head{
+      padding:14px 16px 0;
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .demo-title{
+      margin:0;
+      font-size:16px;
+      font-weight:800;
+      color:#0b1424;
+    }
+    .demo-sub{
+      margin:6px 0 0;
+      font-size:13px;
+      color:#13406f;
+    }
+    .demo-video{
+      width:100%;
+      height:auto;
+      display:block;
+      background:#0b1424;
+      border-top:1px solid #eef3ff;
+    }
+    .demo-side{
+      padding:16px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .demo-bullets{
+      margin:0;
+      padding-left:18px;
+      color:#113160;
+      font-size:13px;
+      line-height:1.6;
+    }
+    .demo-cta{
+      margin-top:auto;
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .demo-cta .btn{
+      width:auto;
+    }
+    .demo-note{
+      font-size:12px;
+      color:#4b5563;
+    }
   </style>
 </head>
 
@@ -411,6 +483,45 @@
     </div>
 
     <p class="details">Sube tu audio y recibe transcripción + resumen.</p>
+
+    <!-- ✅ DEMO (nuevo bloque) -->
+    <div class="demo-wrap">
+      <div class="demo-card">
+        <div class="demo-head">
+          <div>
+            <h2 class="demo-title">🎬 Demo rápido (40s)</h2>
+            <p class="demo-sub">Mira el flujo completo: sube → IA procesa → transcripción + resumen → exporta.</p>
+          </div>
+          <a class="a11y-btn" href="/pricing" style="white-space:nowrap;">Ver planes</a>
+        </div>
+
+        <video class="demo-video" controls autoplay muted loop playsinline preload="metadata">
+          <source src="{{ url_for('static', filename='demo/polyscribe-demo.mp4') }}" type="video/mp4">
+          Tu navegador no soporta video HTML5.
+        </video>
+      </div>
+
+      <div class="demo-card demo-side">
+        <div style="font-weight:800;color:#0b1424;">Qué vas a lograr</div>
+        <ul class="demo-bullets">
+          <li>Transcribe audio/video en segundos con calidad profesional.</li>
+          <li>Resumen con puntos clave listo para copiar y compartir.</li>
+          <li>Exporta en PDF, DOCX, SRT, VTT, TXT y JSON.</li>
+          <li>Historial por usuario + “Volver” inteligente sin pantalla vacía.</li>
+        </ul>
+
+        <div class="demo-cta">
+          <button class="btn btn-primary" type="button" onclick="document.getElementById('audio-file').click()">
+            🚀 Probar ahora
+          </button>
+          <a class="btn" href="/history" style="text-decoration:none;display:inline-flex;align-items:center;">
+            📂 Ver historial
+          </a>
+        </div>
+
+        <div class="demo-note">Tip: si no inicia autoplay en móvil, es normal: iOS suele requerir interacción del usuario.</div>
+      </div>
+    </div>
 
     <!-- Banner saldo bajo / cero -->
     <div class="credits-banner" id="credits-banner">
@@ -541,9 +652,7 @@
     if (USER_ID) localStorage.setItem("user_id", USER_ID);
     if (!USER_ID) USER_ID = "guest";
 
-    // ============================
     // ✅ FIX PRINCIPAL: tomar user_id/job_id del querystring (si vienen del historial)
-    // ============================
     const qs = new URLSearchParams(window.location.search);
     const qUser = (qs.get("user_id") || "").trim();
     const qJob  = (qs.get("job_id") || "").trim();
@@ -748,7 +857,6 @@
           applyDirection(job.language_detected);
         }
 
-        // ✅ guardar último job visto
         try{ localStorage.setItem("ps_last_job_id", String(dJob.textContent || qJob)); }catch{}
 
         showOk("✅ Resultado cargado desde historial.");
@@ -827,7 +935,6 @@
           applyDirection(job.language_detected);
         }
 
-        // ✅ guardar último job visto para "Volver" inteligente
         try{ localStorage.setItem("ps_last_job_id", String(dJob.textContent || "")); }catch{}
 
         showOk("✅ Transcripción y resumen listos.");
