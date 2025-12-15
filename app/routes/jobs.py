@@ -2,148 +2,22 @@
 from __future__ import annotations
 
 import os
-import re
-import math
 import uuid
 import tempfile
-import datetime as dt
 import subprocess
-from typing import Optional, Dict, Any, List
+from typing import Optional
 
-from flask import Blueprint, request, jsonify, current_app, session
+from flask import Blueprint, current_app, jsonify, request, session
+
 from app import db
+from app.models import AudioJob
 
-# Modelos (tolerantes)
-try:
-    from app.models import AudioJob
-except Exception:
-    AudioJob = None  # type: ignore
+bp = Blueprint("jobs", __name__)
 
-try:
-    from app.models_payment import Payment
-except Exception:
-    Payment = None  # type: ignore
-
-# OpenAI
-try:
-    from openai import OpenAI
-except Exception:
-    OpenAI = None  # type: ignore
-
-from sqlalchemy import inspect
-
-_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", "")) if OpenAI else None
-CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
-ASR_MODEL = os.getenv("OPENAI_TRANSCRIBE_MODEL", "whisper-1")
-
-# Configurables
-MB = 1024 * 1024
-MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "100") or 100)             # front y back a 100 MB
-OPENAI_FILE_HARD_LIMIT_MB = int(os.getenv("OPENAI_FILE_LIMIT_MB", "25"))  # límite por petición a OpenAI
-MAX_CHUNK_SECONDS = int(os.getenv("MAX_CHUNK_SECONDS", "600"))            # 10 minutos
-
-# NUEVO: flag para saltar control de créditos en desarrollo
-DEV_SKIP_CREDITS = os.getenv("DEV_SKIP_CREDITS", "0") == "1"
-
-# =================================================================
-#               Utilidades de idioma / usuario / texto
-# =================================================================
-
-_LANG_ALIASES: Dict[str, str] = {
-    # español
-    "es": "es", "spa": "es", "spanish": "es", "es-es": "es", "castellano": "es",
-    # inglés
-    "en": "en", "eng": "en", "english": "en", "en-us": "en", "en-gb": "en",
-    # portugués
-    "pt": "pt", "por": "pt", "portuguese": "pt", "pt-br": "pt", "pt-pt": "pt",
-    # francés
-    "fr": "fr", "fra": "fr", "fre": "fr", "french": "fr", "fr-fr": "fr",
-    # italiano
-    "it": "it", "ita": "it", "italian": "it",
-    # alemán
-    "de": "de", "deu": "de", "ger": "de", "german": "de", "de-de": "de",
-    # catalán
-    "ca": "ca", "cat": "ca", "catalan": "ca",
-    # chino
-    "zh": "zh", "zho": "zh", "chi": "zh", "chinese": "zh",
-    "zh-cn": "zh", "zh-hans": "zh", "zh-hant": "zh",
-    # japonés
-    "ja": "ja", "jpn": "ja", "japanese": "ja",
-    # coreano
-    "ko": "ko", "kor": "ko", "korean": "ko",
-    # árabe
-    "ar": "ar", "ara": "ar", "arabic": "ar",
-    # ruso
-    "ru": "ru", "rus": "ru", "russian": "ru",
-    # polaco
-    "pl": "pl", "pol": "pl", "polish": "pl",
-    # ucraniano
-    "uk": "uk", "ukr": "uk", "ukrainian": "uk",
-    # turco
-    "tr": "tr", "tur": "tr", "turkish": "tr",
-    # hebreo
-    "he": "he", "heb": "he", "hebrew": "he",
-    # persa/farsi
-    "fa": "fa", "fas": "fa", "per": "fa", "farsi": "fa", "persian": "fa",
-    # hindi
-    "hi": "hi", "hin": "hi", "hindi": "hi",
-    # bengalí
-    "bn": "bn", "ben": "bn", "bengali": "bn",
-    # tamil
-    "ta": "ta", "tam": "ta", "tamil": "ta",
-    # telugu
-    "te": "te", "tel": "te", "telugu": "te",
-    # vietnamita
-    "vi": "vi", "vie": "vi", "vietnamese": "vi",
-    # indonesio
-    "id": "id", "ind": "id", "indonesian": "id",
-    # malayo
-    "ms": "ms", "msa": "ms", "may": "ms", "malay": "ms",
-}
+MAX_MB = int(os.getenv("MAX_UPLOAD_MB", "100") or 100)
 
 
-def _normalize_lang(code_or_name: Optional[str], default: str = "es") -> str:
-    if not code_or_name:
-        return default
-    s = str(code_or_name).strip().lower()
-    s = s.replace("_", "-")
-    if len(s) == 2 and s in _LANG_ALIASES:
-        return s
-    if "-" in s:
-        pref = s.split("-", 1)[0]
-        if pref in _LANG_ALIASES:
-            return _LANG_ALIASES[pref]
-    if s in _LANG_ALIASES:
-        return _LANG_ALIASES[s]
-    if len(s) >= 3 and s[:3] in _LANG_ALIASES:
-        return _LANG_ALIASES[s[:3]]
-    two = s[:2]
-    return _LANG_ALIASES.get(two, default)
-
-
-def _lang_human(code: str) -> str:
-    m = {
-        "es": "español", "en": "inglés", "pt": "portugués", "fr": "francés",
-        "it": "italiano", "de": "alemán", "ca": "catalán", "zh": "chino",
-        "ja": "japonés", "ko": "coreano", "ar": "árabe", "ru": "ruso",
-        "pl": "polaco", "uk": "ucraniano", "tr": "turco", "he": "hebreo",
-        "fa": "persa", "hi": "hindi", "bn": "bengalí", "ta": "tamil",
-        "te": "telugu", "vi": "vietnamita", "id": "indonesio", "ms": "malayo",
-    }
-    c = _normalize_lang(code or "es", default="es")
-    return m.get(c, "español")
-
-
-# NUEVO: helper de user_id unificado (igual filosofía que PayPal)
 def _get_user_id() -> str:
-    """
-    Intenta resolver el user_id desde:
-      1) session (si existe)
-      2) Cabecera X-User-Id
-      3) Query string ?user_id=...
-      4) JSON body {"user_id": "..."}
-      5) DEV_USER_ID o 'guest'
-    """
     raw = (
         session.get("user_id")
         or session.get("uid")
@@ -151,602 +25,109 @@ def _get_user_id() -> str:
         or request.args.get("user_id")
         or os.getenv("DEV_USER_ID", "")
     )
-
-    if not raw:
-        try:
-            data = request.get_json(silent=True) or {}
-        except Exception:
-            data = {}
-        raw = data.get("user_id")
-
     s = str(raw).strip() if raw else ""
     return s or "guest"
 
 
-def _dedupe_lines(txt: str) -> str:
-    lines = [l.strip() for l in (txt or "").splitlines() if l and l.strip()]
-    seen, out = set(), []
-    for l in lines:
-        key = re.sub(r"\W+", " ", l.lower()).strip()
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(l)
-    return "\n".join(out)
-
-
-def _too_similar(summary: str, source: str, thresh: float = 0.6) -> bool:
-    sents = [s.strip().lower() for s in re.split(r"[.!?]\s+", summary or "") if len(s.strip()) >= 8]
-    if not sents:
-        return False
-    src = (source or "").lower()
-    matches = sum(1 for s in sents if s and s in src)
-    return (matches / max(1, len(sents))) >= thresh
-
-
-def _fallback_extractive_summary(text: str, max_sents: int = 5) -> str:
-    sents = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text or "") if len(s.strip()) > 0]
-    if not sents:
-        return ""
-    words = re.findall(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ']+", text or "")
-    freq: Dict[str, int] = {}
-    for w in words:
-        wl = w.lower()
-        if len(wl) <= 2:
-            continue
-        freq[wl] = freq.get(wl, 0) + 1
-
-    def score(sent: str) -> float:
-        tokens = re.findall(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ']+", sent.lower())
-        if not tokens:
-            return 0.0
-        return sum(freq.get(t, 0) for t in tokens) / math.sqrt(len(tokens))
-
-    ranked = sorted(((score(s), i, s) for i, s in enumerate(sents)), reverse=True)
-    top = sorted(ranked[:max_sents], key=lambda t: t[1])
-    # ARREGLADO: antes había un string mal formado "\n.join(...)"
-    return "\n".join("• " + s.strip() for _, _, s in top)
-
-
-def _summarize_llm(clean_text: str, language_code: str = "es") -> str:
-    if not _client:
-        return ""
-    lang_hint = _lang_human(language_code)
-    system = (
-        f"Eres un asistente que resume en {lang_hint}."
-        " Objetivo: producir un resumen breve, ABSTRACTIVO, con 3–6 viñetas."
-        " Reglas: (1) No copies frases literales (máx. 6 palabras seguidas)."
-        " (2) Usa sinónimos y generaliza; (3) 80–130 palabras; (4) Solo viñetas (• ...)."
-    )
-    user = f"Texto a resumir:\n\n{clean_text}\n\nGenera el resumen ahora."
-    resp = _client.chat.completions.create(
-        model=CHAT_MODEL,
-        temperature=0.3,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-    )
-    out = (resp.choices[0].message.content or "").strip()
-    if "•" not in out:
-        lines = [l.strip("-• ").strip() for l in out.splitlines() if l.strip()]
-        out = "\n".join("• " + l for l in lines)
-    return out
-
-
-def _summarize_robust(raw_text: str, language_code: str = "es") -> str:
-    cleaned = _dedupe_lines(raw_text or "")
-    if not cleaned:
-        return ""
-    target = _normalize_lang(language_code or "es", default="es")
-
-    s1 = ""
+def _probe_duration_seconds(path: str) -> int:
+    """
+    Usa ffprobe para calcular duración real del audio/video.
+    Si falla, devuelve 0 (pero no rompe el flujo).
+    """
     try:
-        s1 = _summarize_llm(cleaned, target)
-    except Exception:
-        s1 = ""
+        cmd = [
+            "ffprobe",
+            "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            path,
+        ]
+        out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True).strip()
+        sec = float(out)
+        return max(0, int(round(sec)))
+    except Exception as e:
+        current_app.logger.warning("ffprobe duration failed: %s", e)
+        return 0
 
-    if s1 and _too_similar(s1, cleaned):
+
+@bp.post("/jobs")
+def create_job():
+    user_id = _get_user_id()
+
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"ok": False, "error": "Selecciona un archivo."}), 400
+
+    # tamaño (si el cliente manda content-length, esto es extra seguro)
+    f.stream.seek(0, os.SEEK_END)
+    size = f.stream.tell()
+    f.stream.seek(0)
+    if size > MAX_MB * 1024 * 1024:
+        return jsonify({"ok": False, "error": f"El archivo supera el límite de {MAX_MB} MB."}), 400
+
+    lang = (request.form.get("language") or "auto").strip().lower()
+    filename = (f.filename or "").strip() or "audio"
+
+    job_id = str(uuid.uuid4())
+
+    # Guardar temporalmente para calcular duración y para enviar a tu motor de transcripción
+    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(filename)[-1] or ".bin") as tmp:
+        tmp_path = tmp.name
+        f.save(tmp_path)
+
+    duration_seconds = _probe_duration_seconds(tmp_path)
+
+    # ✅ CREAR REGISTRO EN DB (desde el principio)
+    job = AudioJob(
+        id=job_id,
+        user_id=user_id,
+        filename=filename,
+        language=lang,
+        status="processing",
+        duration_seconds=duration_seconds,
+    )
+    db.session.add(job)
+    db.session.commit()
+
+    try:
+        # ==========================================================
+        # AQUÍ llama a TU lógica real de transcripción + resumen.
+        # Sustituye estas dos líneas por tu integración actual.
+        # ==========================================================
+        transcript_text = current_app.config.get("DEMO_TRANSCRIPT", "")  # placeholder
+        summary_text = current_app.config.get("DEMO_SUMMARY", "")        # placeholder
+
+        # Si tú ya tienes funciones internas tipo transcribe(tmp_path, lang)
+        # entonces úsala aquí y setea transcript_text/summary_text.
+
+        job.status = "done"
+        job.transcript = transcript_text or ""
+        job.summary = summary_text or ""
+        job.language_detected = job.language_detected or (lang if lang != "auto" else None)
+
+        db.session.commit()
+
+        # ✅ RESPUESTA para tu front
+        return jsonify(job.to_dict())
+
+    except Exception as e:
+        current_app.logger.exception("jobs: error procesando: %s", e)
+        job.status = "error"
+        job.error = str(e)
+        db.session.commit()
+        return jsonify({"ok": False, "error": "No se pudo procesar el archivo."}), 500
+
+    finally:
         try:
-            s2 = _summarize_llm(
-                cleaned + "\n\nNOTA: abstrae y no repitas frases; sintetiza temas.",
-                target,
-            )
-            if s2 and not _too_similar(s2, cleaned):
-                return s2
+            os.remove(tmp_path)
         except Exception:
             pass
 
-    if s1 and not _too_similar(s1, cleaned):
-        return s1
 
-    return _fallback_extractive_summary(cleaned, max_sents=5)
-
-
-# =================================================================
-#                    ffmpeg: comprimir / trocear
-# =================================================================
-
-def _ffmpeg() -> str:
-    return os.getenv("FFMPEG_BIN", "ffmpeg")
-
-
-def _ffprobe() -> str:
-    return os.getenv("FFPROBE_BIN", "ffprobe")
-
-
-def _have_ffmpeg() -> bool:
-    try:
-        subprocess.run([_ffmpeg(), "-version"], capture_output=True, check=False)
-        return True
-    except Exception:
-        return False
-
-
-def _file_size_mb(path: str) -> float:
-    try:
-        return os.path.getsize(path) / MB
-    except Exception:
-        return 0.0
-
-
-def _duration_seconds(path: str) -> float:
-    try:
-        r = subprocess.run(
-            [_ffprobe(), "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", path],
-            capture_output=True,
-            check=False,
-        )
-        s = (r.stdout.decode(errors="ignore").strip() or "0")
-        return float(s)
-    except Exception:
-        return 0.0
-
-
-def _compress_to_opus(src: str, dst: str, bitrate: str = "64k") -> bool:
-    try:
-        cmd = [
-            _ffmpeg(), "-y", "-i", src,
-            "-ac", "1", "-ar", "16000",
-            "-c:a", "libopus", "-b:a", bitrate,
-            dst,
-        ]
-        subprocess.run(cmd, capture_output=True, check=False)
-        return os.path.exists(dst) and _file_size_mb(dst) > 0
-    except Exception:
-        return False
-
-
-def _split_audio(src: str, out_dir: str, chunk_seconds: int) -> List[str]:
-    dur = _duration_seconds(src)
-    if dur <= 0:
-        return [src]
-    parts: List[str] = []
-    start, idx = 0.0, 1
-    while start < dur - 0.1:
-        out = os.path.join(out_dir, f"part_{idx:03d}.ogg")
-        cmd = [
-            _ffmpeg(), "-y",
-            "-ss", f"{start:.2f}",
-            "-i", src,
-            "-t", str(chunk_seconds),
-            "-ac", "1", "-ar", "16000",
-            "-c:a", "libopus", "-b:a", "64k",
-            out,
-        ]
-        subprocess.run(cmd, capture_output=True, check=False)
-        if os.path.exists(out) and _file_size_mb(out) > 0:
-            parts.append(out)
-        idx += 1
-        start += float(chunk_seconds)
-    return parts or [src]
-
-
-def _prepare_for_openai(path: str, hard_limit_mb: int) -> List[str]:
-    if _file_size_mb(path) <= hard_limit_mb:
-        return [path]
-    if not _have_ffmpeg():
-        return []
-
-    tmpdir = tempfile.mkdtemp(prefix="prep_")
-    compressed = os.path.join(tmpdir, "compressed.ogg")
-    if not _compress_to_opus(path, compressed, bitrate="48k"):
-        return []
-
-    if _file_size_mb(compressed) <= hard_limit_mb:
-        return [compressed]
-
-    parts = _split_audio(compressed, tmpdir, MAX_CHUNK_SECONDS)
-    ok_parts: List[str] = []
-    for p in parts:
-        if _file_size_mb(p) <= hard_limit_mb:
-            ok_parts.append(p)
-            continue
-        p2 = os.path.join(tmpdir, f"shrunk_{os.path.basename(p)}")
-        if _compress_to_opus(p, p2, bitrate="32k") and _file_size_mb(p2) <= hard_limit_mb:
-            ok_parts.append(p2)
-        else:
-            ok_parts.append(p2 if os.path.exists(p2) else p)
-    return ok_parts
-
-
-# =================================================================
-#                        Transcripción OpenAI
-# =================================================================
-
-def _transcribe_audio(path: str, language_code: Optional[str]) -> Dict[str, Any]:
-    """
-    Devuelve: {"transcript": str, "language_detected": "xx"}
-    """
-    if not _client:
-        return {"transcript": "", "language_detected": _normalize_lang(language_code, "es")}
-
-    model = ASR_MODEL or "whisper-1"
-    lang = _normalize_lang(language_code, None) if language_code else None
-
-    with open(path, "rb") as f:
-        try:
-            res = _client.audio.transcriptions.create(
-                model=model,
-                file=f,
-                language=lang,
-                response_format="verbose_json",
-            )
-            text = (res.text or "").strip()
-            det_raw = getattr(res, "language", None) or lang or "es"
-            det = _normalize_lang(det_raw, "es")
-            return {"transcript": text, "language_detected": det}
-        except Exception as e:
-            current_app.logger.warning("ASR verbose_json falló, reintento texto plano: %s", e)
-            try:
-                f.seek(0)
-                res2 = _client.audio.transcriptions.create(
-                    model=model,
-                    file=f,
-                    language=lang,
-                )
-                text = (getattr(res2, "text", "") or "").strip()
-                det = _normalize_lang(lang or "es", "es")
-                return {"transcript": text, "language_detected": det}
-            except Exception as e2:
-                current_app.logger.error("ASR texto plano también falló: %s", e2)
-                return {"transcript": "", "language_detected": _normalize_lang(lang or "es", "es")}
-
-
-# =================================================================
-#                     Créditos (pagos + uso)
-# =================================================================
-
-def _minutes_from_payments(uid: Optional[str]) -> int:
-    """
-    Suma los minutos de la tabla payments.
-    En modo dev NO filtramos por status, solo por user_id si existe la columna.
-    """
-    if Payment is None:
-        return 0
-
-    try:
-        cols = {c["name"] for c in inspect(db.engine).get_columns("payments")}
-        has_user_id = "user_id" in cols
-
-        q = db.session.query(Payment)
-        if has_user_id and uid and uid != "guest":
-            q = q.filter(getattr(Payment, "user_id") == uid)
-
-        total = 0
-        for p in q.all():
-            total += int(getattr(p, "minutes", 0) or 0)
-
-        return total
-    except Exception as e:
-        current_app.logger.error("minutes_from_payments failed: %s", e)
-        return 0
-
-
-def _usage_stats(uid: str) -> Dict[str, int]:
-    """
-    Devuelve snapshot de uso:
-      - used_seconds
-      - allowance_seconds
-      - remaining_seconds
-
-    IMPORTANTE: en este entorno contamos TODOS los AudioJob,
-    sin filtrar por user_id, porque solo hay un usuario real.
-    """
-    free_min = int(os.getenv("FREE_TIER_MINUTES", "10") or 10)
-    paid_min = _minutes_from_payments(uid)
-    allowance_seconds = int((free_min + paid_min) * 60)
-
-    used_seconds = 0
-    if AudioJob is not None and hasattr(AudioJob, "duration_seconds"):
-        try:
-            # OJO: sin filtro por user_id para evitar problemas de coincidencia
-            q = db.session.query(AudioJob)
-            rows = q.all()
-
-            durations = [int(getattr(r, "duration_seconds", 0) or 0) for r in rows]
-            used_seconds = sum(durations)
-
-            # Log de depuración para ver exactamente qué hay en la DB
-            current_app.logger.info(
-                "USAGE_STATS uid=%s jobs=%s durations=%s used_seconds=%s allowance_seconds=%s",
-                uid,
-                len(rows),
-                durations,
-                used_seconds,
-                allowance_seconds,
-            )
-        except Exception as e:
-            current_app.logger.error("usage_stats: sum duration failed: %s", e)
-            used_seconds = 0
-
-    remaining_seconds = max(0, allowance_seconds - used_seconds)
-    return {
-        "used_seconds": used_seconds,
-        "allowance_seconds": allowance_seconds,
-        "remaining_seconds": remaining_seconds,
-    }
-
-
-def _remaining_seconds(uid: str) -> int:
-    return _usage_stats(uid)["remaining_seconds"]
-
-
-# =================================================================
-#                               Rutas
-# =================================================================
-
-bp = Blueprint("jobs", __name__)
-
-
-@bp.route("/jobs", methods=["GET", "POST"])
-def jobs_root():
-    """
-    GET  /jobs?user_id=...   -> pequeño resumen de historial + uso (para UI)
-    POST /jobs               -> crea un nuevo job (transcripción)
-    """
-    if request.method == "GET":
-        uid = _get_user_id()
-        limit = max(1, min(50, int(request.args.get("limit", "20"))))
-
-        items: List[Dict[str, Any]] = []
-        if AudioJob is not None:
-            try:
-                q = db.session.query(AudioJob)
-                # si en el futuro quieres filtrar por user_id, se puede añadir aquí
-                rows = (
-                    q.order_by(getattr(AudioJob, "created_at").desc())
-                    .limit(limit)
-                    .all()
-                )
-                for r in rows:
-                    items.append(
-                        {
-                            "id": getattr(r, "id", None),
-                            "job_id": getattr(r, "id", None),
-                            "filename": getattr(r, "filename", ""),
-                            "language": getattr(r, "language", ""),
-                            "language_detected": getattr(r, "language_detected", ""),
-                            "status": getattr(r, "status", "done"),
-                            "created_at": str(getattr(r, "created_at", "")),
-                            "updated_at": str(getattr(r, "updated_at", "")),
-                        }
-                    )
-            except Exception as e:
-                current_app.logger.exception("GET /jobs query failed: %s", e)
-
-        usage = _usage_stats(uid)
-        return jsonify(
-            {
-                "ok": True,
-                "user_id": uid,
-                "usage": usage,
-                "items": items,
-            }
-        ), 200
-
-    # ----- POST /jobs (creación) -----
-    uid = _get_user_id()
-
-    file = request.files.get("file")
-    if not file or not file.filename:
-        return jsonify({"error": "Falta archivo"}), 400
-
-    # Límite de subida
-    file.seek(0, os.SEEK_END)
-    size = file.tell()
-    file.seek(0)
-    if MAX_UPLOAD_MB > 0 and size > MAX_UPLOAD_MB * MB:
-        return jsonify({"error": f"El archivo supera {MAX_UPLOAD_MB} MB."}), 400
-
-    # Idioma elegido en UI
-    language_raw = (request.form.get("language") or "auto").strip().lower()
-    language_forced = False
-    if language_raw and language_raw != "auto":
-        language = _normalize_lang(language_raw, "en")
-        language_forced = True
-    else:
-        language = "auto"
-
-    # Guardar temporal
-    tmpdir = tempfile.mkdtemp(prefix="polyscribe_")
-    tmp_path = os.path.join(tmpdir, file.filename)
-    file.save(tmp_path)
-
-    # Duración original (en segundos) para control de créditos
-    orig_duration = _duration_seconds(tmp_path)
-
-    # ---- CONTROL DE CRÉDITOS ANTES DE TRANSCIBIR -----------------
-    stats = _usage_stats(uid)
-    remaining = stats["remaining_seconds"]
-
-    if DEV_SKIP_CREDITS:
-        # Modo desarrollo: solo logueamos, no bloqueamos
-        current_app.logger.info(
-            "DEV_SKIP_CREDITS=1, saltando control de créditos. uid=%s orig_duration=%.2f remaining=%.2f",
-            uid,
-            orig_duration,
-            remaining,
-        )
-    else:
-        # Modo normal: si conocemos la duración y no alcanza el saldo -> NO_CREDITS
-        if orig_duration > 0 and orig_duration > remaining:
-            current_app.logger.info(
-                "NO_CREDITS: uid=%s orig_duration=%.2f remaining=%.2f",
-                uid,
-                orig_duration,
-                remaining,
-            )
-            return jsonify({"error": "NO_CREDITS"}), 400
-    # --------------------------------------------------------------
-
-    # Preparar para OpenAI (comprimir/trocear si hace falta)
-    parts = _prepare_for_openai(tmp_path, OPENAI_FILE_HARD_LIMIT_MB)
-    if not parts:
-        msg = (
-            "No se pudo preparar el audio. Si el archivo supera "
-            f"{OPENAI_FILE_HARD_LIMIT_MB} MB por petición y no hay ffmpeg, no es posible procesarlo."
-        )
-        return jsonify({"error": msg}), 400
-
-    # Transcribir todas las partes y unir
-    transcripts: List[str] = []
-    detected_first: str = ""
-    for idx, part in enumerate(parts, 1):
-        asr = _transcribe_audio(part, None if language == "auto" else language)
-        if idx == 1:
-            detected_first = _normalize_lang(asr.get("language_detected") or language or "es", "es")
-        transcripts.append(asr.get("transcript", "") or "")
-
-    transcript = "\n".join(t for t in transcripts if t).strip()
-    detected_lang = detected_first if language == "auto" else _normalize_lang(language, "en")
-
-    # Resumen robusto en el idioma correcto
-    summary = _summarize_robust(transcript, language_code=detected_lang)
-
-    # Persistir en DB (si el modelo existe)
-    job_id: Optional[str] = None
-    if AudioJob is not None:
-        try:
-            now = dt.datetime.utcnow()
-            job = AudioJob(
-                id=str(uuid.uuid4()),
-                user_id=uid,
-                filename=file.filename,
-                original_filename=getattr(file, "filename", None) or file.filename,
-                audio_s3_key="",
-                local_path=None,
-                mime_type=None,
-                size_bytes=size,
-                language=(language if language != "auto" else "auto"),
-                language_forced=1 if language_forced else 0,
-                language_detected=detected_lang or "",
-                status="done",
-                error=0,
-                error_message=None,
-                transcript=transcript,
-                summary=summary,
-                duration_seconds=orig_duration if orig_duration > 0 else None,
-                model_used=None,
-                cost_cents=None,
-                created_at=now,
-                updated_at=now,
-            )
-            db.session.add(job)
-            db.session.commit()
-            job_id = getattr(job, "id", None)
-        except Exception as e:
-            current_app.logger.error("DB save failed: %s", e)
-            db.session.rollback()
-
-    return jsonify(
-        {
-            "id": job_id,
-            "job_id": job_id,
-            "status": "done" if transcript else "error",
-            "filename": file.filename,
-            "language": (language if language != "auto" else "auto"),
-            "language_detected": detected_lang,
-            "transcript": transcript,
-            "summary": summary,
-        }
-    ), 200
-
-
-@bp.route("/jobs/<job_id>", methods=["GET"])
+@bp.get("/jobs/<job_id>")
 def get_job(job_id: str):
-    if AudioJob is None:
-        return jsonify({"id": job_id, "status": "done"}), 200
-
-    job = db.session.get(AudioJob, job_id)
+    user_id = _get_user_id()
+    job = db.session.query(AudioJob).filter(AudioJob.id == job_id, AudioJob.user_id == user_id).first()
     if not job:
-        try:
-            job = db.session.get(AudioJob, int(job_id))
-        except Exception:
-            job = None
-
-    if not job:
-        return jsonify({"error": "No existe"}), 404
-
-    out = {
-        "id": getattr(job, "id", job_id),
-        "job_id": getattr(job, "id", job_id),
-        "filename": getattr(job, "filename", ""),
-        "language": getattr(job, "language", ""),
-        "language_detected": getattr(job, "language_detected", ""),
-        "transcript": getattr(job, "transcript", ""),
-        "summary": getattr(job, "summary", ""),
-        "status": getattr(job, "status", "done"),
-        "created_at": str(getattr(job, "created_at", "")),
-        "updated_at": str(getattr(job, "updated_at", "")),
-    }
-    return jsonify(out), 200
-
-
-@bp.route("/api/history", methods=["GET"])
-def history_api():
-    limit = max(1, min(200, int(request.args.get("limit", "100"))))
-    uid = _get_user_id()
-
-    items: List[Dict[str, Any]] = []
-
-    if AudioJob is not None:
-        q = db.session.query(AudioJob).filter(getattr(AudioJob, "user_id") == uid)
-        try:
-            rows = (
-                q.order_by(getattr(AudioJob, "created_at").desc())
-                .limit(limit)
-                .all()
-            )
-            for r in rows:
-                items.append(
-                    {
-                        "id": getattr(r, "id", None),
-                        "job_id": getattr(r, "id", None),
-                        "filename": getattr(r, "filename", ""),
-                        "language": getattr(r, "language", ""),
-                        "language_detected": getattr(r, "language_detected", ""),
-                        "status": getattr(r, "status", "done"),
-                        "created_at": str(getattr(r, "created_at", "")),
-                        "updated_at": str(getattr(r, "updated_at", "")),
-                    }
-                )
-        except Exception as e:
-            current_app.logger.exception("history query failed: %s", e)
-
-    return jsonify({"items": items}), 200
-
-
-@bp.route("/api/usage/balance", methods=["GET"])
-def usage_balance():
-    uid = _get_user_id()
-    stats = _usage_stats(uid)
-
-    return jsonify(
-        {
-            "ok": True,
-            "used_seconds": int(stats["used_seconds"]),
-            "allowance_seconds": int(stats["allowance_seconds"]),
-            "file_limit_bytes": int(MAX_UPLOAD_MB * MB),
-        }
-    ), 200
+        return jsonify({"ok": False, "error": "Job no encontrado."}), 404
+    return jsonify(job.to_dict())
