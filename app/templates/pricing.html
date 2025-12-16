@@ -1,299 +1,365 @@
-<!-- templates/pricing.html -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <title>PolyScribe – Planes y Precios</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PolyScribe · Planes y Precios</title>
 
-    <style>
-        body {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            background: #e4f0ff;
-            margin: 0;
-        }
+  <!-- Fuentes -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 
-        .nav {
-            padding: 12px 24px;
-            font-size: 14px;
-        }
-        .nav a {
-            text-decoration: none;
-            color: #0057d8;
-            font-weight: 600;
-        }
-        .nav span {
-            color: #444;
-        }
+  <!-- Estilos globales -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/nav.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme_light.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/badge.css') }}">
 
-        .page {
-            max-width: 1100px;
-            margin: 32px auto 40px;
-            padding: 0 16px;
-        }
+  <style>
+    :root{
+      --text:#0b1424;
+      --muted:#13406f;
+      --card:#ffffff;
+      --border:#d9e4f7;
+      --shadow:0 10px 28px rgba(15,35,52,.16);
+      --blue:#0b62e0;
+      --green:#22c55e;
+      --yellow:#fff7cc;
+      --yellowBorder:#fde68a;
+    }
 
-        h1 {
-            margin: 0 0 6px;
-            font-size: 26px;
-        }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;
+      background:linear-gradient(180deg,#a6d6fb 0%, #9acef8 100%) fixed;
+      color:var(--text);
+    }
 
-        .subtitle {
-            margin: 0 0 18px;
-            font-size: 14px;
-            color: #555;
-        }
+    .container{
+      max-width:1160px;
+      margin:32px auto 44px;
+      padding:0 16px;
+    }
 
-        .banner {
-            padding: 10px 14px;
-            border-radius: 12px;
-            font-size: 13px;
-            margin-bottom: 14px;
-        }
+    h1{
+      margin:0 0 6px;
+      font-size:26px;
+      font-weight:800;
+    }
 
-        .banner-ok {
-            background: #e2f7e9;
-            color: #125325;
-            border: 1px solid #8ad19d;
-        }
+    .sub{
+      margin:0 0 14px;
+      color:var(--muted);
+      font-weight:600;
+      font-size:14px;
+    }
 
-        .banner-warn {
-            background: #fff4e5;
-            color: #7b3d00;
-            border: 1px solid #f4c08a;
-        }
+    .top-actions{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      margin:10px 0 12px;
+    }
 
-        .plans-grid {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 16px;
-            margin-top: 14px;
-            margin-bottom: 30px;
-        }
+    .btn{
+      background:var(--blue);
+      border:1px solid #0a59c9;
+      color:#fff;
+      padding:8px 12px;
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:800;
+      font-size:0.95rem;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      transition:transform .08s ease, box-shadow .08s ease, filter .08s ease;
+    }
+    .btn:hover{ filter:brightness(1.03); box-shadow:0 6px 16px rgba(37,99,235,0.28); transform:translateY(-1px); }
+    .btn.green{
+      background:var(--green);
+      border-color:#16a34a;
+      color:#0b111d;
+      box-shadow:0 0 0 3px rgba(34,197,94,.18) inset;
+    }
+    .btn.ghost{
+      background:#f2f6ff;
+      border:1px solid #cddaf5;
+      color:#0b1424;
+      font-weight:700;
+    }
 
-        @media (max-width: 960px) {
-            .plans-grid {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
-        }
+    .note{
+      background:#d1f7e7;
+      border:1px solid #94e2c1;
+      color:#0f5132;
+      border-radius:12px;
+      padding:10px 12px;
+      font-weight:700;
+      font-size:13px;
+      box-shadow:0 6px 16px rgba(15,23,42,0.08);
+      margin:10px 0 16px;
+    }
 
-        @media (max-width: 640px) {
-            .plans-grid {
-                grid-template-columns: 1fr;
-            }
-        }
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap:14px;
+      align-items:stretch;
+    }
+    @media (max-width:980px){ .grid{ grid-template-columns:1fr 1fr; } }
+    @media (max-width:560px){ .grid{ grid-template-columns:1fr; } }
 
-        .plan {
-            background: #ffffff;
-            border-radius: 18px;
-            padding: 18px;
-            box-shadow: 0 10px 26px rgba(15, 35, 52, 0.14);
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-        }
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:14px 14px 12px;
+      box-shadow:var(--shadow);
+      position:relative;
+      min-height:260px;
+    }
+    .tag{
+      position:absolute;
+      top:10px;
+      right:10px;
+      background:#0b62e0;
+      color:#fff;
+      font-weight:900;
+      font-size:11px;
+      padding:4px 8px;
+      border-radius:999px;
+    }
+    .plan{
+      font-weight:900;
+      font-size:14px;
+      margin:0;
+      color:#0b1424;
+    }
+    .price{
+      font-size:22px;
+      font-weight:900;
+      margin:6px 0 6px;
+    }
+    .small{
+      color:#13406f;
+      font-size:12px;
+      font-weight:700;
+      margin:0 0 10px;
+    }
+    ul{
+      margin:0;
+      padding-left:16px;
+      color:#0b1424;
+      font-size:13px;
+      line-height:1.45;
+      font-weight:700;
+    }
+    li{ margin:6px 0; }
 
-        .plan-header {
-            margin-bottom: 12px;
-        }
+    .pp-wrap{
+      margin-top:12px;
+      display:grid;
+      gap:8px;
+    }
+    .pp{
+      border-radius:10px;
+      overflow:hidden;
+      border:1px solid #e8e8e8;
+      background:#fff;
+      padding:8px;
+      text-align:center;
+      font-weight:800;
+      color:#111;
+    }
 
-        .plan-name {
-            font-size: 16px;
-            font-weight: 600;
-            margin-bottom: 4px;
-        }
+    .section{
+      margin-top:16px;
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:14px;
+      box-shadow:0 10px 28px rgba(15,35,52,.12);
+    }
+    .section h2{
+      margin:0 0 8px;
+      font-size:16px;
+      font-weight:900;
+    }
+    .section p{
+      margin:0;
+      color:#13406f;
+      font-weight:700;
+      font-size:13px;
+      line-height:1.5;
+    }
 
-        .plan-price {
-            font-size: 22px;
-            font-weight: 700;
-        }
+    table{
+      width:100%;
+      border-collapse:collapse;
+      font-size:13px;
+      font-weight:700;
+    }
+    th,td{
+      border-top:1px solid #e8f0ff;
+      padding:8px 8px;
+      text-align:left;
+      color:#0b1424;
+    }
+    th{ color:#13406f; }
 
-        .plan-price span {
-            font-size: 14px;
-            font-weight: 400;
-            color: #555;
-            margin-left: 4px;
-        }
-
-        .plan-body {
-            font-size: 14px;
-            color: #333;
-        }
-
-        .plan-body ul {
-            padding-left: 18px;
-            margin: 10px 0 8px;
-        }
-
-        .plan-body li {
-            margin-bottom: 4px;
-        }
-
-        .plan-footer {
-            margin-top: 14px;
-        }
-
-        .plan-tag {
-            display: inline-block;
-            padding: 2px 8px;
-            font-size: 11px;
-            border-radius: 999px;
-            background: #eef2ff;
-            color: #233472;
-            margin-bottom: 6px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
-            background: white;
-            border-radius: 16px;
-            overflow: hidden;
-            font-size: 13px;
-        }
-
-        th, td {
-            padding: 9px 12px;
-            border-bottom: 1px solid #edf1fb;
-        }
-
-        th {
-            text-align: left;
-            background: #f4f6ff;
-            font-weight: 600;
-        }
-
-        tr:last-child td {
-            border-bottom: none;
-        }
-
-        .footer-note {
-            margin-top: 20px;
-            font-size: 12px;
-            color: #555;
-        }
-    </style>
+    .support{
+      margin-top:12px;
+      background:var(--yellow);
+      border:1px solid var(--yellowBorder);
+      color:#92400e;
+      border-radius:14px;
+      padding:12px;
+      font-weight:800;
+    }
+    .support a{
+      color:#0b62e0;
+      font-weight:900;
+      text-decoration:none;
+    }
+  </style>
 </head>
 
 <body>
 
-    <div class="nav">
-        <a href="/">PolyScribe</a> ·
-        <a href="/">Transcribir</a> ·
-        <a href="/history">Historial</a> ·
-        <span><strong>Precios</strong></span> ·
-        <a href="/ayuda">Ayuda</a>
+  <!-- NAV -->
+  <header class="ps-nav">
+    <div class="inner">
+      <a class="brand" href="/">PolyScribe</a>
+      <nav class="links ps-nav-links">
+        <a href="/" data-path="/">Transcribir</a>
+        <a href="/history" data-path="/history">Historial</a>
+        <a href="/pricing" data-path="/pricing" class="active">Precios</a>
+        <a href="/ayuda" data-path="/ayuda">Ayuda</a>
+      </nav>
+      <div class="right">
+        <span id="usage-badge-nav" class="badge-usage">
+          <span id="usage-text-nav">—/— min · libre —</span>
+        </span>
+        <a href="/dev-login" class="a11y-btn" id="nav-login-link">Entrar</a>
+        <a href="/dev-login?signup=1" class="a11y-btn" style="background:#22c55e;border-color:#16a34a;color:#0b111d">
+          Registro
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <h1>Planes y Precios</h1>
+    <p class="sub">Compra minutos y úsalos cuando quieras. Suscripciones sin compromiso.</p>
+
+    <div class="top-actions">
+      <a class="btn green" href="/">🚀 Ir a transcribir</a>
+      <a class="btn ghost" href="/ayuda">❓ Ayuda</a>
+      <a class="btn ghost" href="/history">🗂️ Ver historial</a>
     </div>
 
-    <div class="page">
-        <h1>Planes y Precios</h1>
-        <p class="subtitle">
-            Compra minutos y úsalos cuando quieras. Sin suscripciones, sin compromisos.
-        </p>
+    <div class="note">✅ PayPal está configurado. Tu saldo de minutos se activa automáticamente después del pago.</div>
 
-        {% if paypal_enabled %}
-        <div class="banner banner-ok">
-            PayPal está configurado. Tu saldo de minutos se activa automáticamente después del pago.
+    <div class="grid">
+      <div class="card">
+        <p class="plan">Free</p>
+        <div class="price">$0</div>
+        <p class="small">para siempre</p>
+        <ul>
+          <li>10 minutos de transcripción al mes</li>
+          <li>Hasta 100 MB por archivo</li>
+          <li>Resumen automático incluido</li>
+          <li>Soporte para múltiples idiomas</li>
+        </ul>
+        <div class="pp-wrap">
+          <div class="pp">Ideal para probar PolyScribe de forma ocasional.</div>
         </div>
-        {% else %}
-        <div class="banner banner-warn">
-            PayPal no está disponible temporalmente. Puedes usar PolyScribe con el plan Free.
+      </div>
+
+      <div class="card">
+        <span class="tag">Recomendado</span>
+        <p class="plan">Starter</p>
+        <div class="price">$9.99</div>
+        <p class="small">prepago</p>
+        <ul>
+          <li>60 minutos de transcripción</li>
+          <li>Hasta 100 MB por archivo</li>
+          <li>Exportar SRT / VTT / DOCX / PDF</li>
+          <li>Resúmenes mejorados por IA</li>
+        </ul>
+        <div class="pp-wrap">
+          <!-- Aquí van tus botones/iframe PayPal reales (los que ya tienes funcionando) -->
+          <div class="pp">PayPal Button (Starter)</div>
         </div>
-        {% endif %}
+      </div>
 
-        <div class="plans-grid">
-
-            <!-- Free -->
-            <div class="plan">
-                <div>
-                    <div class="plan-header">
-                        <div class="plan-name">Free</div>
-                        <div class="plan-price">$0 <span>para siempre</span></div>
-                    </div>
-                    <div class="plan-body">
-                        <ul>
-                            <li>10 minutos al mes</li>
-                            <li>Hasta 100 MB por archivo</li>
-                            <li>Resumen automático</li>
-                            <li>Múltiples idiomas</li>
-                        </ul>
-                    </div>
-                </div>
-                <div class="plan-footer">
-                    <small>Ideal para probar PolyScribe.</small>
-                </div>
-            </div>
-
-            <!-- Starter -->
-            <div class="plan">
-                <div>
-                    <div class="plan-header">
-                        <span class="plan-tag">Recomendado</span>
-                        <div class="plan-name">Starter</div>
-                        <div class="plan-price">$9.99 <span>prepago</span></div>
-                    </div>
-                    <div class="plan-body">
-                        <ul>
-                            <li>60 minutos</li>
-                            <li>Exporta SRT / VTT / DOCX / PDF</li>
-                            <li>Resúmenes mejorados por IA</li>
-                        </ul>
-                    </div>
-                </div>
-                <div class="plan-footer">
-                    <div id="pp-60"></div>
-                </div>
-            </div>
-
-            <!-- Pro -->
-            <div class="plan">
-                <div>
-                    <div class="plan-header">
-                        <div class="plan-name">Pro</div>
-                        <div class="plan-price">$19.99 <span>prepago</span></div>
-                    </div>
-                    <div class="plan-body">
-                        <ul>
-                            <li>300 minutos</li>
-                            <li>Historial completo</li>
-                            <li>Funciones avanzadas de IA</li>
-                        </ul>
-                    </div>
-                </div>
-                <div class="plan-footer">
-                    <div id="pp-300"></div>
-                </div>
-            </div>
-
-            <!-- Business -->
-            <div class="plan">
-                <div>
-                    <div class="plan-header">
-                        <div class="plan-name">Business</div>
-                        <div class="plan-price">$49.99 <span>prepago</span></div>
-                    </div>
-                    <div class="plan-body">
-                        <ul>
-                            <li>1200 minutos</li>
-                            <li>Soporte prioritario</li>
-                            <li>Uso en equipos</li>
-                        </ul>
-                    </div>
-                </div>
-                <div class="plan-footer">
-                    <div id="pp-1200"></div>
-                </div>
-            </div>
-
+      <div class="card">
+        <p class="plan">Pro</p>
+        <div class="price">$19.99</div>
+        <p class="small">prepago</p>
+        <ul>
+          <li>300 minutos de transcripción</li>
+          <li>Hasta 100 MB por archivo</li>
+          <li>Historial completo y descargas</li>
+          <li>Funciones avanzadas de IA</li>
+        </ul>
+        <div class="pp-wrap">
+          <div class="pp">PayPal Button (Pro)</div>
         </div>
+      </div>
 
-        <p class="footer-note">
-            Todos los planes son de tipo <strong>prepago</strong>.  
-            El plan Free siempre permanece activo como respaldo.
-        </p>
+      <div class="card">
+        <p class="plan">Business</p>
+        <div class="price">$49.99</div>
+        <p class="small">prepago</p>
+        <ul>
+          <li>1200 minutos de transcripción</li>
+          <li>Hasta 100 MB por archivo</li>
+          <li>Soporte prioritario</li>
+          <li>Uso compartido dentro de tu equipo</li>
+        </ul>
+        <div class="pp-wrap">
+          <div class="pp">PayPal Button (Business)</div>
+        </div>
+      </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/payments.js') }}"></script>
+    <div class="section" style="margin-top:16px;">
+      <h2>¿Cuánto rinden 100 MB?</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Formato / Bitrate</th>
+            <th>Duración aprox. por 100 MB</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>MP3 / AAC 128 kbps</td><td>≈ 1 h 49 min</td></tr>
+          <tr><td>MP3 / AAC 192 kbps</td><td>≈ 1 h 13 min</td></tr>
+          <tr><td>WAV 16 bit 44.1 kHz estéreo</td><td>≈ 9 min 54 s</td></tr>
+          <tr><td>Opus voz 24–32 kbps</td><td>≈ entre 7–10 horas</td></tr>
+        </tbody>
+      </table>
+      <p style="margin-top:10px;">
+        Tip: convierte tus WAV/estéreo a MP3 128 kbps o Opus 24–32 kbps para obtener más minutos con el mismo límite de tamaño.
+      </p>
+    </div>
 
+    <div class="support">
+      🧩 <b>Soporte:</b> si tienes un problema con un pago, transcripción o exportación, escríbenos a
+      <a href="mailto:helppolyscribe@gmail.com">helppolyscribe@gmail.com</a>
+      o revisa <a href="/ayuda">Ayuda</a>.
+    </div>
+
+    <p class="sub" style="margin-top:10px;">
+      Los planes son de tipo prepago: compras minutos y los usas cuando quieres. El plan Free se mantiene siempre activo como respaldo.
+    </p>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/nav_auth.js') }}"></script>
 </body>
 </html>
