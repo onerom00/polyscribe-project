@@ -2,238 +2,292 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>PolyScribe – Planes y Precios</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <style>
+    :root{
+      --bg:#e4f0ff;
+      --card:#ffffff;
+      --text:#0b1424;
+      --muted:#4b5563;
+      --border:#d9e4f7;
+      --accent:#0b62e0;
+    }
+
+    *{box-sizing:border-box}
+
     body{
-      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-      background:#e4f0ff;
-      margin:0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      margin: 0;
+      color: var(--text);
     }
 
     /* NAV centrado */
-    .nav{
-      padding:12px 24px;
-      font-size:14px;
+    header.topnav{
+      background:rgba(255,255,255,0.9);
+      border-bottom:1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(6px);
+    }
+    .topnav .inner{
+      max-width:1100px;
+      margin:0 auto;
+      padding:10px 16px;
       display:flex;
-      justify-content:center;   /* ✅ centrado */
+      justify-content:center; /* ✅ centrado */
       align-items:center;
-      gap:8px;
+    }
+    .topnav nav{
+      display:flex;
+      gap:14px;
       flex-wrap:wrap;
-      text-align:center;
+      justify-content:center;
+      font-size:14px;
+      font-weight:700;
     }
-    .nav a{
+    .topnav a{
       text-decoration:none;
-      color:#0057d8;
-      font-weight:600;
+      color:#13406f;
+      padding:6px 8px;
+      border-radius:10px;
     }
-    .nav span{color:#444;}
+    .topnav a:hover{
+      background:#f2f6ff;
+    }
+    .topnav a.active{
+      color: var(--accent);
+      background:#e8f3ff;
+      border:1px solid #b9d9ff;
+    }
 
     .page{
-      max-width:1100px;
-      margin:24px auto 40px;
-      padding:0 16px;
+      max-width: 1100px;
+      margin: 24px auto 40px;
+      padding: 0 16px;
     }
 
-    h1{margin:0 0 6px;font-size:26px;}
-    .subtitle{margin:0 0 14px;font-size:14px;color:#555;}
+    .head{
+      display:flex;
+      align-items:flex-end;
+      justify-content:space-between;
+      gap:12px;
+      flex-wrap:wrap;
+      margin-bottom: 10px;
+    }
 
-    .banner{
-      padding:10px 14px;
-      border-radius:12px;
-      font-size:13px;
-      margin-bottom:12px;
+    h1{
+      margin: 0 0 6px;
+      font-size: 26px;
     }
-    .banner-ok{
-      background:#e2f7e9;
-      color:#125325;
-      border:1px solid #8ad19d;
+    .subtitle{
+      margin: 0;
+      font-size: 14px;
+      color: #555;
+      max-width: 680px;
     }
-    .banner-warn{
-      background:#fff4e5;
-      color:#7b3d00;
-      border:1px solid #f4c08a;
-    }
-    #pay-alert{display:none;}
 
-    /* Botones superiores (si ya los tienes en tu versión nueva) */
-    .top-actions{
+    .head-actions{
       display:flex;
       gap:10px;
       flex-wrap:wrap;
       align-items:center;
-      margin:10px 0 10px;
     }
     .btn{
+      background:#0b62e0;
+      border:1px solid #0a59c9;
+      color:#fff;
+      padding:8px 12px;
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:800;
+      font-size:0.95rem;
+      text-decoration:none;
       display:inline-flex;
       align-items:center;
       gap:8px;
-      border-radius:10px;
-      padding:8px 12px;
-      font-weight:800;
-      font-size:13px;
-      text-decoration:none;
-      border:1px solid #cddaf5;
-      background:#f2f6ff;
-      color:#0b1424;
-      cursor:pointer;
+      transition:transform .08s ease, box-shadow .08s ease, filter .08s ease;
+      white-space:nowrap;
     }
-    .btn-primary{
-      background:#0b62e0;
-      border-color:#0a59c9;
-      color:#fff;
+    .btn:hover{
+      filter:brightness(1.03);
+      box-shadow:0 6px 16px rgba(37,99,235,0.28);
+      transform:translateY(-1px);
+    }
+    .btn-secondary{
+      background:#f2f6ff;
+      border:1px solid #cddaf5;
+      color:#0b1424;
+      font-weight:800;
     }
 
-    /* ✅ DEMO (video local) */
-    .demo-wrap{
-      background:#ffffff;
-      border-radius:18px;
-      padding:14px;
-      box-shadow:0 10px 26px rgba(15,35,52,0.14);
-      border:1px solid #d9e4f7;
-      margin:10px 0 14px;
+    .banner{
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 13px;
+      margin: 12px 0 12px;
     }
-    .demo-head{
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      gap:10px;
-      flex-wrap:wrap;
-      margin-bottom:8px;
+    .banner-ok{
+      background: #e2f7e9;
+      color: #125325;
+      border: 1px solid #8ad19d;
     }
-    .demo-title{
-      font-weight:800;
-      font-size:14px;
-      color:#0b1424;
+    .banner-warn{
+      background: #fff4e5;
+      color: #7b3d00;
+      border: 1px solid #f4c08a;
     }
-    .demo-sub{
-      font-size:12px;
-      color:#4b5563;
-      margin-top:2px;
-    }
-    .demo-video{
-      width:100%;
-      border-radius:14px;
-      border:1px solid #e6eefc;
-      background:#000;
-      aspect-ratio:16/9;
-    }
+    #pay-alert{ display:none; }
 
     .plans-grid{
-      display:grid;
-      grid-template-columns:repeat(4,minmax(0,1fr));
-      gap:16px;
-      margin-top:10px;
-      margin-bottom:26px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 10px;
+      margin-bottom: 22px;
     }
-    @media (max-width:960px){
-      .plans-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+    @media (max-width: 960px){
+      .plans-grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
-    @media (max-width:640px){
-      .plans-grid{grid-template-columns:minmax(0,1fr);}
+    @media (max-width: 640px){
+      .plans-grid{ grid-template-columns: minmax(0, 1fr); }
     }
 
     .plan{
-      background:#ffffff;
-      border-radius:18px;
-      padding:18px 18px 20px;
-      box-shadow:0 10px 26px rgba(15,35,52,0.14);
-      display:flex;
-      flex-direction:column;
-      justify-content:space-between;
+      background: var(--card);
+      border-radius: 18px;
+      padding: 18px 18px 20px;
+      box-shadow: 0 10px 26px rgba(15, 35, 52, 0.14);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      border:1px solid rgba(217,228,247,0.9);
     }
-    .plan-header{margin-bottom:12px;}
-    .plan-name{font-size:16px;font-weight:600;margin-bottom:4px;}
-    .plan-price{font-size:22px;font-weight:700;}
-    .plan-price span{font-size:14px;font-weight:400;color:#555;margin-left:4px;}
-    .plan-body{font-size:14px;color:#333;}
-    .plan-body ul{padding-left:18px;margin:10px 0 8px;}
-    .plan-body li{margin-bottom:4px;}
-    .plan-footer{margin-top:12px;}
-    .plan-tag{
-      display:inline-block;
-      padding:2px 8px;
-      font-size:11px;
-      border-radius:999px;
-      background:#eef2ff;
-      color:#233472;
-      margin-bottom:6px;
-      font-weight:700;
+    .plan-header{ margin-bottom: 12px; }
+    .plan-name{
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .plan-price{
+      font-size: 22px;
+      font-weight: 800;
+    }
+    .plan-price span{
+      font-size: 14px;
+      font-weight: 500;
+      color: #555;
+      margin-left: 4px;
     }
 
-    .section-title{margin-top:18px;font-size:16px;font-weight:600;}
+    .plan-body{
+      font-size: 14px;
+      color: #333;
+    }
+    .plan-body ul{
+      padding-left: 18px;
+      margin: 10px 0 8px;
+    }
+    .plan-body li{ margin-bottom: 4px; }
+
+    .plan-footer{ margin-top: 12px; }
+
+    .plan-tag{
+      display: inline-block;
+      padding: 2px 8px;
+      font-size: 11px;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #233472;
+      border:1px solid #cddaf5;
+      margin-bottom: 6px;
+      font-weight:800;
+    }
+
+    .section-title{
+      margin-top: 18px;
+      font-size: 16px;
+      font-weight: 800;
+    }
 
     table{
-      width:100%;
-      border-collapse:collapse;
-      margin-top:10px;
-      background:white;
-      border-radius:16px;
-      overflow:hidden;
-      font-size:13px;
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      background: white;
+      border-radius: 16px;
+      overflow: hidden;
+      font-size: 13px;
+      border:1px solid var(--border);
+      box-shadow: 0 10px 26px rgba(15, 35, 52, 0.08);
     }
-    th,td{padding:9px 12px;border-bottom:1px solid #edf1fb;}
-    th{text-align:left;background:#f4f6ff;font-weight:600;}
-    tr:last-child td{border-bottom:none;}
+    th, td{
+      padding: 9px 12px;
+      border-bottom: 1px solid #edf1fb;
+    }
+    th{
+      text-align: left;
+      background: #f4f6ff;
+      font-weight: 800;
+    }
+    tr:last-child td{ border-bottom: none; }
 
-    .tip{margin-top:8px;font-size:12px;color:#555;}
-    .footer-note{margin-top:20px;font-size:12px;color:#555;}
+    .tip{
+      margin-top: 8px;
+      font-size: 12px;
+      color: #555;
+    }
+    .footer-note{
+      margin-top: 18px;
+      font-size: 12px;
+      color: #555;
+    }
   </style>
 </head>
 
 <body>
-  <div class="nav">
-    <a href="/">PolyScribe</a> ·
-    <a href="/">Transcribir</a> ·
-    <a href="/history">Historial</a> ·
-    <span><strong>Precios</strong></span> ·
-    <a href="/ayuda">Ayuda</a>
-  </div>
+  <!-- NAV centrado -->
+  <header class="topnav">
+    <div class="inner">
+      <nav>
+        <a href="/">PolyScribe</a>
+        <a href="/">Transcribir</a>
+        <a href="/history">Historial</a>
+        <a class="active" href="/pricing" aria-current="page">Precios</a>
+        <a href="/ayuda">Ayuda</a>
+      </nav>
+    </div>
+  </header>
 
   <div class="page">
-    <h1>Planes y Precios</h1>
-    <p class="subtitle">Empieza gratis y escala sólo si necesitas más minutos o funciones avanzadas.</p>
+    <div class="head">
+      <div>
+        <h1>Planes y Precios</h1>
+        <p class="subtitle">Empieza gratis y escala sólo si necesitas más minutos o funciones avanzadas.</p>
+      </div>
 
-    <!-- (Opcional) botones como en tu captura -->
-    <div class="top-actions">
-      <a class="btn" href="/#demo">🎬 Ver demo</a>
-      <a class="btn" href="/history">🕘 Ver historial</a>
-      <a class="btn btn-primary" href="/">🚀 Ir a transcribir</a>
+      <!-- CTA ligera (sin demo aquí) -->
+      <div class="head-actions">
+        <a class="btn btn-secondary" href="/">← Volver</a>
+        <a class="btn" href="/">🎬 Ver demo en Home</a>
+      </div>
     </div>
 
     {% if paypal_enabled %}
-    <div class="banner banner-ok">
-      PayPal está configurado. Puedes comprar cualquier plan de pago y tu saldo de minutos se activará automáticamente después del pago.
-    </div>
+      <div class="banner banner-ok">
+        PayPal está configurado. Puedes comprar cualquier plan de pago y tu saldo de minutos se activará automáticamente después del pago.
+      </div>
     {% else %}
-    <div class="banner banner-warn">
-      PayPal no está configurado por el momento. Puedes continuar usando PolyScribe con el plan Free.
-    </div>
+      <div class="banner banner-warn">
+        PayPal no está configurado por el momento. Puedes continuar usando PolyScribe con el plan Free.
+      </div>
     {% endif %}
 
     <div id="pay-alert" class="banner banner-warn"></div>
-
-    <!-- ✅ DEMO LOCAL: adiós Rick Astley -->
-    <div class="demo-wrap" id="demo">
-      <div class="demo-head">
-        <div>
-          <div class="demo-title">🎬 Demo rápido (40s)</div>
-          <div class="demo-sub">Mira el flujo completo: subir → IA procesa → transcripción + resumen → exporta.</div>
-        </div>
-      </div>
-
-      <video
-        class="demo-video"
-        src="{{ url_for('static', filename='demo/polyscribe-demo.mp4') }}"
-        playsinline
-        muted
-        loop
-        controls
-        preload="metadata"
-      ></video>
-    </div>
 
     <div class="plans-grid">
       <!-- Free -->
@@ -353,6 +407,7 @@
           </tr>
         </tbody>
       </table>
+
       <p class="tip">
         Tip: convierte tus archivos WAV/estéreo a MP3 128&nbsp;kbps u Opus 24–32&nbsp;kbps para obtener más minutos con el mismo límite de tamaño.
       </p>
