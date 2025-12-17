@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 
-  <!-- Estilos globales -->
+  <!-- Estilos globales (NAV + tema + badge) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/nav.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/theme_light.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/badge.css') }}">
@@ -27,7 +27,6 @@
       --yellow:#fff7cc;
       --yellowBorder:#fde68a;
     }
-
     *{box-sizing:border-box}
     body{
       margin:0;
@@ -37,32 +36,18 @@
     }
 
     .container{
-      max-width:1160px;
-      margin:32px auto 44px;
+      max-width:1100px;
+      margin:34px auto 44px;
       padding:0 16px;
     }
 
-    h1{
-      margin:0 0 6px;
-      font-size:26px;
-      font-weight:800;
-    }
-
-    .sub{
-      margin:0 0 14px;
-      color:var(--muted);
-      font-weight:600;
-      font-size:14px;
-    }
+    h1{ margin:0 0 6px; font-size:26px; font-weight:800; }
+    .sub{ margin:0 0 14px; color:var(--muted); font-weight:600; font-size:14px; }
 
     .top-actions{
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      align-items:center;
+      display:flex; gap:10px; flex-wrap:wrap; align-items:center;
       margin:10px 0 12px;
     }
-
     .btn{
       background:var(--blue);
       border:1px solid #0a59c9;
@@ -120,7 +105,7 @@
       padding:14px 14px 12px;
       box-shadow:var(--shadow);
       position:relative;
-      min-height:260px;
+      min-height:270px;
     }
     .tag{
       position:absolute;
@@ -133,38 +118,14 @@
       padding:4px 8px;
       border-radius:999px;
     }
-    .plan{
-      font-weight:900;
-      font-size:14px;
-      margin:0;
-      color:#0b1424;
-    }
-    .price{
-      font-size:22px;
-      font-weight:900;
-      margin:6px 0 6px;
-    }
-    .small{
-      color:#13406f;
-      font-size:12px;
-      font-weight:700;
-      margin:0 0 10px;
-    }
-    ul{
-      margin:0;
-      padding-left:16px;
-      color:#0b1424;
-      font-size:13px;
-      line-height:1.45;
-      font-weight:700;
-    }
+    .plan{ font-weight:900; font-size:14px; margin:0; color:#0b1424; }
+    .price{ font-size:22px; font-weight:900; margin:6px 0 6px; }
+    .small{ color:#13406f; font-size:12px; font-weight:700; margin:0 0 10px; }
+
+    ul{ margin:0; padding-left:16px; color:#0b1424; font-size:13px; line-height:1.45; font-weight:700; }
     li{ margin:6px 0; }
 
-    .pp-wrap{
-      margin-top:12px;
-      display:grid;
-      gap:8px;
-    }
+    .pp-wrap{ margin-top:12px; display:grid; gap:8px; }
     .pp{
       border-radius:10px;
       overflow:hidden;
@@ -184,31 +145,11 @@
       padding:14px;
       box-shadow:0 10px 28px rgba(15,35,52,.12);
     }
-    .section h2{
-      margin:0 0 8px;
-      font-size:16px;
-      font-weight:900;
-    }
-    .section p{
-      margin:0;
-      color:#13406f;
-      font-weight:700;
-      font-size:13px;
-      line-height:1.5;
-    }
+    .section h2{ margin:0 0 8px; font-size:16px; font-weight:900; }
+    .section p{ margin:0; color:#13406f; font-weight:700; font-size:13px; line-height:1.5; }
 
-    table{
-      width:100%;
-      border-collapse:collapse;
-      font-size:13px;
-      font-weight:700;
-    }
-    th,td{
-      border-top:1px solid #e8f0ff;
-      padding:8px 8px;
-      text-align:left;
-      color:#0b1424;
-    }
+    table{ width:100%; border-collapse:collapse; font-size:13px; font-weight:700; }
+    th,td{ border-top:1px solid #e8f0ff; padding:8px 8px; text-align:left; color:#0b1424; }
     th{ color:#13406f; }
 
     .support{
@@ -220,26 +161,24 @@
       padding:12px;
       font-weight:800;
     }
-    .support a{
-      color:#0b62e0;
-      font-weight:900;
-      text-decoration:none;
-    }
+    .support a{ color:#0b62e0; font-weight:900; text-decoration:none; }
   </style>
 </head>
 
 <body>
 
-  <!-- NAV -->
+  <!-- NAV (igual a tus otras páginas) -->
   <header class="ps-nav">
     <div class="inner">
       <a class="brand" href="/">PolyScribe</a>
+
       <nav class="links ps-nav-links">
         <a href="/" data-path="/">Transcribir</a>
         <a href="/history" data-path="/history">Historial</a>
         <a href="/pricing" data-path="/pricing" class="active">Precios</a>
         <a href="/ayuda" data-path="/ayuda">Ayuda</a>
       </nav>
+
       <div class="right">
         <span id="usage-badge-nav" class="badge-usage">
           <span id="usage-text-nav">—/— min · libre —</span>
@@ -292,8 +231,8 @@
           <li>Resúmenes mejorados por IA</li>
         </ul>
         <div class="pp-wrap">
-          <!-- Aquí van tus botones/iframe PayPal reales (los que ya tienes funcionando) -->
-          <div class="pp">PayPal Button (Starter)</div>
+          <!-- PayPal containers -->
+          <div class="pp" id="paypal-starter"></div>
         </div>
       </div>
 
@@ -308,7 +247,7 @@
           <li>Funciones avanzadas de IA</li>
         </ul>
         <div class="pp-wrap">
-          <div class="pp">PayPal Button (Pro)</div>
+          <div class="pp" id="paypal-pro"></div>
         </div>
       </div>
 
@@ -323,12 +262,12 @@
           <li>Uso compartido dentro de tu equipo</li>
         </ul>
         <div class="pp-wrap">
-          <div class="pp">PayPal Button (Business)</div>
+          <div class="pp" id="paypal-business"></div>
         </div>
       </div>
     </div>
 
-    <div class="section" style="margin-top:16px;">
+    <div class="section">
       <h2>¿Cuánto rinden 100 MB?</h2>
       <table>
         <thead>
@@ -360,6 +299,10 @@
     </p>
   </div>
 
+  <!-- Mantiene el badge/nav en sync -->
   <script src="{{ url_for('static', filename='js/nav_auth.js') }}"></script>
+
+  <!-- Tu script real de PayPal (si ya lo tienes en otro lado, déjalo allá).
+       Si no, aquí es donde debes llamar a paypal.Buttons().render('#paypal-starter') etc. -->
 </body>
 </html>
