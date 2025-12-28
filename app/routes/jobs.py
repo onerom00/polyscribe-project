@@ -56,6 +56,34 @@ def _normalize_lang(code_or_name: Optional[str], default: str = "es") -> str:
         if p in _LANG_ALIASES:
             return _LANG_ALIASES[p]
     return _LANG_ALIASES.get(s[:2], default)
+def _get_allowance_seconds(user_id: str) -> int:
+    free_min = int(current_app.config.get("FREE_TIER_MINUTES", 10))
+
+    paid_min = 0
+    try:
+        from app.models_payment import Payment
+        q = db.session.query(Payment).filter(
+            Payment.user_id == user_id,
+            Payment.status == "captured",
+        )
+        paid_min = sum(int(p.minutes or 0) for p in q.all())
+    except Exception as e:
+        current_app.logger.error("allowance: error leyendo pagos: %s", e)
+
+    allowance_min = free_min + paid_min
+    return int(allowance_min * 60)
+
+
+def _get_used_seconds(user_id: str) -> int:
+    try:
+        qj = db.session.query(AudioJob).filter(
+            AudioJob.user_id == user_id,
+            AudioJob.status == "done",
+        )
+        return sum(int(j.duration_seconds or 0) for j in qj.all())
+    except Exception as e:
+        current_app.logger.error("used_seconds: error leyendo jobs: %s", e)
+        return 0
 
 def _get_user_id() -> str:
     raw = (
@@ -264,7 +292,24 @@ def create_job():
         file.save(tmp_path)
 
         dur = _duration_seconds(tmp_path)  # puede ser 0 si no hay ffprobe, pero igual funciona
+            # ✅ Bloqueo real por minutos (server-side)
+        if dur and dur > 0:
+            allowance_seconds = _get_allowance_seconds(uid)
+            used_seconds = _get_used_seconds(uid)
+            remain_seconds = max(0, allowance_seconds - used_seconds)
 
+            # margen mínimo 5s para evitar falsos negativos
+            required_seconds = int(math.ceil(dur))
+            if required_seconds > remain_seconds:
+                return jsonify({
+                    "error": "NO_CREDITS",
+                    "required_seconds": required_seconds,
+                    "remain_seconds": remain_seconds,
+                }), 402
+        else:
+            # si no podemos medir duración, mejor bloquear (para facturar serio)
+            return jsonify({"error": "NO_DURATION", "message": "No se pudo detectar la duración del audio."}), 400
+ 
         parts = _prepare_for_openai(tmp_path, OPENAI_FILE_HARD_LIMIT_MB)
         if not parts:
             return jsonify({"error": "No se pudo preparar el audio (falta ffmpeg/archivo muy grande)."}), 400

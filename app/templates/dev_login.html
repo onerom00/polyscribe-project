@@ -118,8 +118,10 @@
             const displayName = name || email.split('@')[0];
 
             // Guardamos en localStorage (como definimos en la arquitectura)
-            localStorage.setItem('ps_user_id', userId);
+            localStorage.setItem('user_id', userId);
             localStorage.setItem('ps_user_name', displayName);
+
+            
 
             // Redirección: volvemos a home o a lo que venga en ?next=
             const params = new URLSearchParams(window.location.search);

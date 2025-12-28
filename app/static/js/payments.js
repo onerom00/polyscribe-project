@@ -44,13 +44,14 @@
   }
 
   function ensureUser() {
-    let userId = localStorage.getItem("ps_user_id");
-    if (!userId) {
-      userId = "guest-" + Math.random().toString(36).slice(2);
-      localStorage.setItem("ps_user_id", userId);
-    }
-    return userId;
+  let userId = localStorage.getItem("user_id");
+  if (!userId) {
+    userId = "guest-" + Math.random().toString(36).slice(2);
+    localStorage.setItem("user_id", userId);
   }
+  return userId;
+}
+
 
   function renderButtons() {
     if (!window.paypal) {
