@@ -13,7 +13,7 @@ from typing import Optional, Dict, Any, List
 from flask import Blueprint, request, jsonify, current_app, session
 from app import db
 from app.models import AudioJob
-
+from app.services.credits import get_remaining_seconds
 try:
     from openai import OpenAI
 except Exception:
@@ -292,8 +292,21 @@ def create_job():
         file.save(tmp_path)
 
         dur = _duration_seconds(tmp_path)  # puede ser 0 si no hay ffprobe, pero igual funciona
+        # ✅ En producción: si no se puede medir duración, no procesamos
+if not dur or dur <= 0:
+    return jsonify({"error": "CANNOT_MEASURE_DURATION"}), 400
+
+remaining = get_remaining_seconds(uid)
+if dur > remaining:
+    return jsonify({
+        "error": "NO_CREDITS",
+        "needed_seconds": int(dur),
+        "remaining_seconds": int(remaining),
+    }), 402
+    
+            
             # ✅ Bloqueo real por minutos (server-side)
-        if dur and dur > 0:
+                if dur and dur > 0:
             allowance_seconds = _get_allowance_seconds(uid)
             used_seconds = _get_used_seconds(uid)
             remain_seconds = max(0, allowance_seconds - used_seconds)

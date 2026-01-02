@@ -1,5 +1,4 @@
 # app/models_user.py
-from app.models import db
 
 from datetime import datetime
 from app.extensions import db

@@ -1,10 +1,8 @@
 # app/__init__.py
 from __future__ import annotations
-
 import os
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
+from app.extensions import db, migrate   # <-- usar el mismo db
 
 # Extensiones globales
 db = SQLAlchemy()
@@ -17,7 +15,9 @@ def create_app() -> Flask:
         static_folder=os.getenv("FLASK_STATIC_FOLDER", "static"),
         template_folder=os.getenv("FLASK_TEMPLATES_FOLDER", "templates"),
     )
-
+    ...
+    db.init_app(app)
+    migrate.init_app(app, db)
     # -----------------------------------------------------------
     # CONFIG GENERAL
     # -----------------------------------------------------------
