@@ -4,20 +4,22 @@ from __future__ import annotations
 import os
 import re
 import math
-import uuid
 import tempfile
 import datetime as dt
 import subprocess
 from typing import Optional, Dict, Any, List
 
 from flask import Blueprint, request, jsonify, current_app, session
-from app import db
+
+from app.extensions import db
 from app.models import AudioJob
 from app.services.credits import get_remaining_seconds
+
 try:
     from openai import OpenAI
 except Exception:
     OpenAI = None  # type: ignore
+
 
 _client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", "")) if OpenAI else None
 ASR_MODEL = os.getenv("OPENAI_TRANSCRIBE_MODEL", "whisper-1")
@@ -45,6 +47,7 @@ _LANG_ALIASES: Dict[str, str] = {
     "ru": "ru", "rus": "ru", "russian": "ru",
 }
 
+
 def _normalize_lang(code_or_name: Optional[str], default: str = "es") -> str:
     if not code_or_name:
         return default
@@ -56,9 +59,10 @@ def _normalize_lang(code_or_name: Optional[str], default: str = "es") -> str:
         if p in _LANG_ALIASES:
             return _LANG_ALIASES[p]
     return _LANG_ALIASES.get(s[:2], default)
+
+
 def _get_allowance_seconds(user_id: str) -> int:
     free_min = int(current_app.config.get("FREE_TIER_MINUTES", 10))
-
     paid_min = 0
     try:
         from app.models_payment import Payment
@@ -85,6 +89,7 @@ def _get_used_seconds(user_id: str) -> int:
         current_app.logger.error("used_seconds: error leyendo jobs: %s", e)
         return 0
 
+
 def _get_user_id() -> str:
     raw = (
         session.get("user_id")
@@ -96,11 +101,14 @@ def _get_user_id() -> str:
     s = str(raw).strip() if raw else ""
     return s or "guest"
 
+
 def _ffmpeg() -> str:
     return os.getenv("FFMPEG_BIN", "ffmpeg")
 
+
 def _ffprobe() -> str:
     return os.getenv("FFPROBE_BIN", "ffprobe")
+
 
 def _have_ffmpeg() -> bool:
     try:
@@ -110,11 +118,13 @@ def _have_ffmpeg() -> bool:
     except Exception:
         return False
 
+
 def _file_size_mb(path: str) -> float:
     try:
         return os.path.getsize(path) / MB
     except Exception:
         return 0.0
+
 
 def _duration_seconds(path: str) -> float:
     try:
@@ -129,6 +139,7 @@ def _duration_seconds(path: str) -> float:
     except Exception:
         return 0.0
 
+
 def _compress_to_opus(src: str, dst: str, bitrate: str = "64k") -> bool:
     try:
         cmd = [
@@ -141,6 +152,7 @@ def _compress_to_opus(src: str, dst: str, bitrate: str = "64k") -> bool:
         return os.path.exists(dst) and _file_size_mb(dst) > 0
     except Exception:
         return False
+
 
 def _split_audio(src: str, out_dir: str, chunk_seconds: int) -> List[str]:
     dur = _duration_seconds(src)
@@ -166,6 +178,7 @@ def _split_audio(src: str, out_dir: str, chunk_seconds: int) -> List[str]:
         start += float(chunk_seconds)
     return parts or [src]
 
+
 def _prepare_for_openai(path: str, hard_limit_mb: int) -> List[str]:
     if _file_size_mb(path) <= hard_limit_mb:
         return [path]
@@ -179,6 +192,7 @@ def _prepare_for_openai(path: str, hard_limit_mb: int) -> List[str]:
         return [compressed]
     return _split_audio(compressed, tmpdir, MAX_CHUNK_SECONDS)
 
+
 def _dedupe_lines(txt: str) -> str:
     lines = [l.strip() for l in (txt or "").splitlines() if l and l.strip()]
     seen, out = set(), []
@@ -189,6 +203,7 @@ def _dedupe_lines(txt: str) -> str:
         seen.add(key)
         out.append(l)
     return "\n".join(out)
+
 
 def _fallback_extractive_summary(text: str, max_sents: int = 5) -> str:
     sents = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text or "") if s.strip()]
@@ -212,6 +227,7 @@ def _fallback_extractive_summary(text: str, max_sents: int = 5) -> str:
     top = sorted(ranked[:max_sents], key=lambda t: t[1])
     return "\n".join("• " + s.strip() for _, _, s in top)
 
+
 def _summarize_llm(clean_text: str, language_code: str = "es") -> str:
     if not _client:
         return ""
@@ -234,6 +250,7 @@ def _summarize_llm(clean_text: str, language_code: str = "es") -> str:
         out = "\n".join("• " + l for l in lines)
     return out
 
+
 def _summarize_robust(raw_text: str, language_code: str = "es") -> str:
     cleaned = _dedupe_lines(raw_text or "")
     if not cleaned:
@@ -243,6 +260,7 @@ def _summarize_robust(raw_text: str, language_code: str = "es") -> str:
         return out or _fallback_extractive_summary(cleaned, 5)
     except Exception:
         return _fallback_extractive_summary(cleaned, 5)
+
 
 def _transcribe_audio(path: str, language_code: Optional[str]) -> Dict[str, Any]:
     if not _client:
@@ -266,6 +284,7 @@ def _transcribe_audio(path: str, language_code: Optional[str]) -> Dict[str, Any]
         except Exception as e:
             current_app.logger.warning("ASR failed: %s", e)
             return {"transcript": "", "language_detected": _normalize_lang(lang or "es", "es")}
+
 
 @bp.route("/jobs", methods=["POST"])
 def create_job():
@@ -291,38 +310,34 @@ def create_job():
         tmp_path = os.path.join(tmpdir, file.filename)
         file.save(tmp_path)
 
-        dur = _duration_seconds(tmp_path)  # puede ser 0 si no hay ffprobe, pero igual funciona
-        # ✅ En producción: si no se puede medir duración, no procesamos
-if not dur or dur <= 0:
-    return jsonify({"error": "CANNOT_MEASURE_DURATION"}), 400
+        dur = _duration_seconds(tmp_path)
 
-remaining = get_remaining_seconds(uid)
-if dur > remaining:
-    return jsonify({
-        "error": "NO_CREDITS",
-        "needed_seconds": int(dur),
-        "remaining_seconds": int(remaining),
-    }), 402
-    
-            
-            # ✅ Bloqueo real por minutos (server-side)
-                if dur and dur > 0:
+        # En producción, si no podemos medir duración: bloqueamos (para no regalar minutos)
+        if not dur or dur <= 0:
+            return jsonify({"error": "CANNOT_MEASURE_DURATION"}), 400
+
+        required_seconds = int(math.ceil(dur))
+
+        # 1) Intentar sistema de créditos central (si existe)
+        remaining_seconds = None
+        try:
+            remaining_seconds = int(get_remaining_seconds(uid))
+        except Exception:
+            remaining_seconds = None
+
+        # 2) Fallback: FREE + pagos capturados - usados
+        if remaining_seconds is None:
             allowance_seconds = _get_allowance_seconds(uid)
             used_seconds = _get_used_seconds(uid)
-            remain_seconds = max(0, allowance_seconds - used_seconds)
+            remaining_seconds = max(0, allowance_seconds - used_seconds)
 
-            # margen mínimo 5s para evitar falsos negativos
-            required_seconds = int(math.ceil(dur))
-            if required_seconds > remain_seconds:
-                return jsonify({
-                    "error": "NO_CREDITS",
-                    "required_seconds": required_seconds,
-                    "remain_seconds": remain_seconds,
-                }), 402
-        else:
-            # si no podemos medir duración, mejor bloquear (para facturar serio)
-            return jsonify({"error": "NO_DURATION", "message": "No se pudo detectar la duración del audio."}), 400
- 
+        if required_seconds > int(remaining_seconds):
+            return jsonify({
+                "error": "NO_CREDITS",
+                "required_seconds": required_seconds,
+                "remaining_seconds": int(remaining_seconds),
+            }), 402
+
         parts = _prepare_for_openai(tmp_path, OPENAI_FILE_HARD_LIMIT_MB)
         if not parts:
             return jsonify({"error": "No se pudo preparar el audio (falta ffmpeg/archivo muy grande)."}), 400
@@ -350,25 +365,23 @@ if dur > remaining:
             error_message=None if transcript else "ASR_EMPTY",
             transcript=transcript,
             summary=summary,
-            duration_seconds=int(dur) if dur and dur > 0 else None,
+            duration_seconds=int(dur),
             created_at=now,
             updated_at=now,
         )
         db.session.add(job)
         db.session.commit()
 
-        return jsonify(
-            {
-                "id": job.id,
-                "job_id": job.id,
-                "status": job.status,
-                "filename": file.filename,
-                "language": language,
-                "language_detected": detected_lang,
-                "transcript": transcript,
-                "summary": summary,
-            }
-        ), 200
+        return jsonify({
+            "id": job.id,
+            "job_id": job.id,
+            "status": job.status,
+            "filename": file.filename,
+            "language": language,
+            "language_detected": detected_lang,
+            "transcript": transcript,
+            "summary": summary,
+        }), 200
 
     except Exception as e:
         current_app.logger.exception("create_job SERVER_ERROR: %s", e)
@@ -378,24 +391,27 @@ if dur > remaining:
 
 @bp.route("/jobs/<job_id>", methods=["GET"])
 def get_job(job_id: str):
-    job = db.session.get(AudioJob, job_id)
+    try:
+        jid = int(job_id)
+    except Exception:
+        return jsonify({"error": "ID inválido"}), 400
+
+    job = db.session.get(AudioJob, jid)
     if not job:
         return jsonify({"error": "No existe"}), 404
 
-    return jsonify(
-        {
-            "id": job.id,
-            "job_id": job.id,
-            "filename": job.filename,
-            "language": job.language,
-            "language_detected": job.language_detected,
-            "transcript": job.transcript or "",
-            "summary": job.summary or "",
-            "status": job.status,
-            "created_at": str(job.created_at),
-            "updated_at": str(job.updated_at),
-        }
-    ), 200
+    return jsonify({
+        "id": job.id,
+        "job_id": job.id,
+        "filename": job.filename,
+        "language": job.language,
+        "language_detected": job.language_detected,
+        "transcript": job.transcript or "",
+        "summary": job.summary or "",
+        "status": job.status,
+        "created_at": str(job.created_at),
+        "updated_at": str(job.updated_at),
+    }), 200
 
 
 @bp.route("/api/history", methods=["GET"])
@@ -411,16 +427,14 @@ def history_api():
     )
     items = []
     for r in q.all():
-        items.append(
-            {
-                "id": r.id,
-                "job_id": r.id,
-                "filename": r.filename or "",
-                "language": r.language or "",
-                "language_detected": r.language_detected or "",
-                "status": r.status or "done",
-                "created_at": str(r.created_at),
-                "updated_at": str(r.updated_at),
-            }
-        )
+        items.append({
+            "id": r.id,
+            "job_id": r.id,
+            "filename": r.filename or "",
+            "language": r.language or "",
+            "language_detected": r.language_detected or "",
+            "status": r.status or "done",
+            "created_at": str(r.created_at),
+            "updated_at": str(r.updated_at),
+        })
     return jsonify({"items": items}), 200
