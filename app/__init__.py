@@ -4,7 +4,6 @@ from __future__ import annotations
 import os
 from flask import Flask
 
-# ✅ Usar SIEMPRE el mismo db/migrate desde app/extensions.py
 from app.extensions import db, migrate
 
 
@@ -61,15 +60,14 @@ def create_app() -> Flask:
     app.config["FREE_TIER_MINUTES"] = int(os.getenv("FREE_TIER_MINUTES", "10"))
 
     # -----------------------------------------------------------
-    # INICIALIZACIÓN DE EXTENSIONES
+    # INICIALIZACIÓN EXTENSIONES
     # -----------------------------------------------------------
     db.init_app(app)
     migrate.init_app(app, db)
 
     # -----------------------------------------------------------
-    # IMPORTAR MODELOS (para que Alembic/SQLAlchemy los detecte)
+    # IMPORTAR MODELOS (para que Alembic/db.create_all los vea)
     # -----------------------------------------------------------
-    # OJO: evita tener 2 modelos User distintos en 2 archivos distintos.
     from app import models  # noqa: F401
     from app import models_payment  # noqa: F401
     from app import models_user  # noqa: F401
@@ -93,18 +91,17 @@ def create_app() -> Flask:
     app.register_blueprint(paypal_bp)
     app.register_blueprint(paypal_api_bp)
 
-    # ✅ Auth blueprint (si lo estás usando)
+    # OJO: NO dupliques /pricing en 2 blueprints distintos.
+    # Si usas pages.py para /pricing, elimina pricing_page.py o cambia su ruta.
+    # from app.routes.pricing_page import bp as pricing_page_bp
+    # app.register_blueprint(pricing_page_bp)
+
+    # Si tienes auth.py, regístralo:
     try:
         from app.routes.auth import bp as auth_bp
         app.register_blueprint(auth_bp)
     except Exception:
-        # si aún no lo tienes listo, no tumba el deploy
         pass
-
-    # ❌ IMPORTANTE: NO registres pricing_page.py si ya tienes /pricing en pages.py
-    # (dos rutas iguales /pricing te pueden causar problemas)
-    # from app.routes.pricing_page import bp as pricing_page_bp
-    # app.register_blueprint(pricing_page_bp)
 
     # -----------------------------------------------------------
     # HEALTHCHECK
@@ -113,7 +110,7 @@ def create_app() -> Flask:
     def healthz():
         return {"ok": True}
 
-    # Crear tablas (solo SQLite/dev). En prod ideal usar migrations.
+    # Crear tablas en SQLite (si no existen) – OK para dev/demo
     with app.app_context():
         db.create_all()
 
