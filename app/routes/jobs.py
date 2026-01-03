@@ -12,8 +12,6 @@ from typing import Optional, Dict, Any, List
 from flask import Blueprint, request, jsonify, current_app, session
 from app.extensions import db
 from app.models import AudioJob
-from app.models_user import User
-from app.services.credits import get_remaining_seconds
 
 try:
     from openai import OpenAI
@@ -58,6 +56,17 @@ def _normalize_lang(code_or_name: Optional[str], default: str = "es") -> str:
         if p in _LANG_ALIASES:
             return _LANG_ALIASES[p]
     return _LANG_ALIASES.get(s[:2], default)
+
+
+def _require_auth_user_id() -> str | None:
+    """
+    Auth PROD: el user_id real viene de la sesión.
+    Devuelve string del id (ej: "12") o None si no autenticado.
+    """
+    uid = session.get("user_id") or session.get("uid")
+    if not uid:
+        return None
+    return str(uid)
 
 
 def _ffmpeg() -> str:
@@ -244,25 +253,43 @@ def _transcribe_audio(path: str, language_code: Optional[str]) -> Dict[str, Any]
             return {"transcript": "", "language_detected": _normalize_lang(lang or "es", "es")}
 
 
-def _require_verified_user() -> User:
-    uid = session.get("uid") or session.get("user_id")
-    if not uid:
-        raise PermissionError("AUTH_REQUIRED")
-    u = db.session.get(User, int(uid))
-    if not u or not u.is_active:
-        raise PermissionError("AUTH_REQUIRED")
-    if not u.is_verified:
-        raise PermissionError("EMAIL_NOT_VERIFIED")
-    return u
+def _get_allowance_seconds(user_id: str) -> int:
+    free_min = int(current_app.config.get("FREE_TIER_MINUTES", 10))
+
+    paid_min = 0
+    try:
+        from app.models_payment import Payment
+        q = db.session.query(Payment).filter(
+            Payment.user_id == user_id,
+            Payment.status == "captured",
+        )
+        paid_min = sum(int(p.minutes or 0) for p in q.all())
+    except Exception as e:
+        current_app.logger.error("allowance: error leyendo pagos: %s", e)
+
+    allowance_min = free_min + paid_min
+    return int(allowance_min * 60)
+
+
+def _get_used_seconds(user_id: str) -> int:
+    try:
+        qj = db.session.query(AudioJob).filter(
+            AudioJob.user_id == user_id,
+            AudioJob.status == "done",
+        )
+        return sum(int(j.duration_seconds or 0) for j in qj.all())
+    except Exception as e:
+        current_app.logger.error("used_seconds: error leyendo jobs: %s", e)
+        return 0
 
 
 @bp.route("/jobs", methods=["POST"])
 def create_job():
-    try:
-        # ✅ PROD: exige usuario real verificado
-        u = _require_verified_user()
-        uid = str(u.id)
+    uid = _require_auth_user_id()
+    if not uid:
+        return jsonify({"error": "AUTH_REQUIRED"}), 401
 
+    try:
         file = request.files.get("file")
         if not file or not file.filename:
             return jsonify({"error": "Falta archivo"}), 400
@@ -282,18 +309,23 @@ def create_job():
         tmp_path = os.path.join(tmpdir, file.filename)
         file.save(tmp_path)
 
-        # ✅ duración obligatoria en PROD
         dur = _duration_seconds(tmp_path)
-        if not dur or dur <= 0:
-            return jsonify({"error": "CANNOT_MEASURE_DURATION", "message": "No se pudo medir duración (ffprobe)."}), 400
 
-        # ✅ bloqueo real por saldo
-        remaining = get_remaining_seconds(uid)
-        if float(dur) > float(remaining):
+        # En PROD: si no se puede medir, bloqueamos (para cobrar serio)
+        if not dur or dur <= 0:
+            return jsonify({"error": "CANNOT_MEASURE_DURATION"}), 400
+
+        # Bloqueo real por créditos
+        allowance_seconds = _get_allowance_seconds(uid)
+        used_seconds = _get_used_seconds(uid)
+        remain_seconds = max(0, allowance_seconds - used_seconds)
+
+        required_seconds = int(math.ceil(dur))
+        if required_seconds > remain_seconds:
             return jsonify({
                 "error": "NO_CREDITS",
-                "needed_seconds": int(math.ceil(dur)),
-                "remaining_seconds": int(remaining),
+                "required_seconds": required_seconds,
+                "remain_seconds": remain_seconds,
             }), 402
 
         parts = _prepare_for_openai(tmp_path, OPENAI_FILE_HARD_LIMIT_MB)
@@ -302,6 +334,7 @@ def create_job():
 
         transcripts: List[str] = []
         detected_first = ""
+
         for i, part in enumerate(parts, 1):
             asr = _transcribe_audio(part, language)
             if i == 1:
@@ -323,35 +356,84 @@ def create_job():
             error_message=None if transcript else "ASR_EMPTY",
             transcript=transcript,
             summary=summary,
-            duration_seconds=int(math.ceil(dur)),
+            duration_seconds=required_seconds,
             created_at=now,
             updated_at=now,
         )
         db.session.add(job)
         db.session.commit()
 
-        # OJO: aquí normalmente también “consumes” saldo.
-        # Si tu servicio credits lo hace por jobs (sumando durations), perfecto.
-        # Si NO, necesitas una función consume_seconds(uid, seconds).
-
-        return jsonify({
-            "id": job.id,
-            "job_id": job.id,
-            "status": job.status,
-            "filename": file.filename,
-            "language": language,
-            "language_detected": detected_lang,
-            "transcript": transcript,
-            "summary": summary,
-        }), 200
-
-    except PermissionError as pe:
-        code = str(pe)
-        if code == "EMAIL_NOT_VERIFIED":
-            return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Verifica tu correo para usar PolyScribe."}), 403
-        return jsonify({"error": "AUTH_REQUIRED", "message": "Debes iniciar sesión."}), 401
+        return jsonify(
+            {
+                "id": job.id,
+                "job_id": job.id,
+                "status": job.status,
+                "filename": file.filename,
+                "language": language,
+                "language_detected": detected_lang,
+                "transcript": transcript,
+                "summary": summary,
+            }
+        ), 200
 
     except Exception as e:
         current_app.logger.exception("create_job SERVER_ERROR: %s", e)
         db.session.rollback()
         return jsonify({"error": "SERVER_ERROR"}), 500
+
+
+@bp.route("/jobs/<job_id>", methods=["GET"])
+def get_job(job_id: str):
+    uid = _require_auth_user_id()
+    if not uid:
+        return jsonify({"error": "AUTH_REQUIRED"}), 401
+
+    job = db.session.get(AudioJob, job_id)
+    if not job or str(job.user_id) != str(uid):
+        return jsonify({"error": "No existe"}), 404
+
+    return jsonify(
+        {
+            "id": job.id,
+            "job_id": job.id,
+            "filename": job.filename,
+            "language": job.language,
+            "language_detected": job.language_detected,
+            "transcript": job.transcript or "",
+            "summary": job.summary or "",
+            "status": job.status,
+            "created_at": str(job.created_at),
+            "updated_at": str(job.updated_at),
+        }
+    ), 200
+
+
+@bp.route("/api/history", methods=["GET"])
+def history_api():
+    uid = _require_auth_user_id()
+    if not uid:
+        return jsonify({"error": "AUTH_REQUIRED"}), 401
+
+    limit = max(1, min(200, int(request.args.get("limit", "100"))))
+    q = (
+        db.session.query(AudioJob)
+        .filter(AudioJob.user_id == uid)
+        .order_by(AudioJob.created_at.desc())
+        .limit(limit)
+    )
+
+    items = []
+    for r in q.all():
+        items.append(
+            {
+                "id": r.id,
+                "job_id": r.id,
+                "filename": r.filename or "",
+                "language": r.language or "",
+                "language_detected": r.language_detected or "",
+                "status": r.status or "done",
+                "created_at": str(r.created_at),
+                "updated_at": str(r.updated_at),
+            }
+        )
+    return jsonify({"items": items}), 200
