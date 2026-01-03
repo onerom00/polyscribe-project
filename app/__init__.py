@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import os
 from flask import Flask
-
 from app.extensions import db, migrate
 
 
@@ -25,44 +24,41 @@ def create_app() -> Flask:
     )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-    # Cookies de sesión (recomendado en prod)
-    app.config["SESSION_COOKIE_HTTPONLY"] = True
-    app.config["SESSION_COOKIE_SAMESITE"] = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
-    # En producción con https, ponlo en True
-    app.config["SESSION_COOKIE_SECURE"] = os.getenv("SESSION_COOKIE_SECURE", "0") == "1"
-
-    # -----------------------------------------------------------
-    # CONFIG APP (URL base)
-    # -----------------------------------------------------------
+    # Base URL (IMPORTANTE para link de verificación)
     app.config["APP_BASE_URL"] = os.getenv(
         "APP_BASE_URL",
         "https://polyscribe-project.onrender.com",
     )
 
     # -----------------------------------------------------------
-    # CONFIG PAYPAL
+    # EMAIL (para verificación)
+    # -----------------------------------------------------------
+    app.config["MAIL_ENABLED"] = os.getenv("MAIL_ENABLED", "0") == "1"
+    app.config["MAIL_FROM"] = os.getenv("MAIL_FROM", "no-reply@getpolyscribe.com")
+
+    # SMTP (si usas Gmail con App Password)
+    app.config["SMTP_HOST"] = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    app.config["SMTP_PORT"] = int(os.getenv("SMTP_PORT", "587"))
+    app.config["SMTP_USER"] = os.getenv("SMTP_USER", "")
+    app.config["SMTP_PASS"] = os.getenv("SMTP_PASS", "")
+
+    # Token verify
+    app.config["EMAIL_VERIFY_SALT"] = os.getenv("EMAIL_VERIFY_SALT", "polyscribe-email-verify")
+    app.config["EMAIL_VERIFY_MAX_AGE"] = int(os.getenv("EMAIL_VERIFY_MAX_AGE", "86400"))  # 24h
+
+    # -----------------------------------------------------------
+    # PAYPAL
     # -----------------------------------------------------------
     app.config["PAYPAL_ENV"] = os.getenv("PAYPAL_ENV", "sandbox")
-    app.config["PAYPAL_BASE_URL"] = os.getenv(
-        "PAYPAL_BASE_URL",
-        "https://api-m.sandbox.paypal.com",
-    )
-
+    app.config["PAYPAL_BASE_URL"] = os.getenv("PAYPAL_BASE_URL", "https://api-m.sandbox.paypal.com")
     app.config["PAYPAL_CLIENT_ID"] = os.getenv("PAYPAL_CLIENT_ID")
     app.config["PAYPAL_CLIENT_SECRET"] = os.getenv("PAYPAL_CLIENT_SECRET")
     app.config["PAYPAL_CURRENCY"] = os.getenv("PAYPAL_CURRENCY", "USD")
-
-    app.config["PAYPAL_PLAN_STARTER_ID"] = os.getenv(
-        "PAYPAL_PLAN_STARTER_ID",
-        "P-9W9394623R721322BNEW7GUY",
-    )
-
     app.config["PAYPAL_WEBHOOK_ID"] = os.getenv("PAYPAL_WEBHOOK_ID")
 
-    app.config["PAYPAL_ENABLED"] = bool(
-        app.config.get("PAYPAL_CLIENT_ID") and app.config.get("PAYPAL_CLIENT_SECRET")
-    )
+    app.config["PAYPAL_ENABLED"] = bool(app.config["PAYPAL_CLIENT_ID"] and app.config["PAYPAL_CLIENT_SECRET"])
 
+    # Minutos gratis
     app.config["FREE_TIER_MINUTES"] = int(os.getenv("FREE_TIER_MINUTES", "10"))
 
     # -----------------------------------------------------------
@@ -71,9 +67,7 @@ def create_app() -> Flask:
     db.init_app(app)
     migrate.init_app(app, db)
 
-    # -----------------------------------------------------------
-    # IMPORTAR MODELOS (para que Alembic/SQLAlchemy los vea)
-    # -----------------------------------------------------------
+    # Importar modelos (para que Alembic/SQLAlchemy los registre)
     from app import models  # noqa: F401
     from app import models_payment  # noqa: F401
     from app import models_user  # noqa: F401
@@ -83,6 +77,9 @@ def create_app() -> Flask:
     # -----------------------------------------------------------
     from app.routes.pages import bp as pages_bp
     app.register_blueprint(pages_bp)
+
+    from app.routes.auth import bp as auth_bp
+    app.register_blueprint(auth_bp)
 
     from app.routes.jobs import bp as jobs_bp
     app.register_blueprint(jobs_bp)
@@ -97,19 +94,8 @@ def create_app() -> Flask:
     app.register_blueprint(paypal_bp)
     app.register_blueprint(paypal_api_bp)
 
-    # OJO: tienes 2 rutas para /pricing (pages.py y pricing_page.py).
-    # Te recomiendo QUITAR pricing_page.py o NO registrarlo para evitar conflicto.
-    # Si quieres mantener pages.py como fuente única de /pricing, comenta esto:
-    # from app.routes.pricing_page import bp as pricing_page_bp
-    # app.register_blueprint(pricing_page_bp)
-
-    # ✅ Auth real (si ya existe tu archivo app/routes/auth.py)
-    # Asegúrate de que no choque con otras rutas.
-    try:
-        from app.routes.auth import bp as auth_bp
-        app.register_blueprint(auth_bp)
-    except Exception:
-        pass
+    from app.routes.pricing_page import bp as pricing_page_bp
+    app.register_blueprint(pricing_page_bp)
 
     # -----------------------------------------------------------
     # HEALTHCHECK
@@ -118,7 +104,7 @@ def create_app() -> Flask:
     def healthz():
         return {"ok": True}
 
-    # Crear tablas si no existen (útil en SQLite simple)
+    # Crear tablas si no existen (ok en SQLite)
     with app.app_context():
         db.create_all()
 
