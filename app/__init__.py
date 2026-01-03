@@ -25,6 +25,12 @@ def create_app() -> Flask:
     )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
+    # Cookies de sesión (recomendado en prod)
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
+    # En producción con https, ponlo en True
+    app.config["SESSION_COOKIE_SECURE"] = os.getenv("SESSION_COOKIE_SECURE", "0") == "1"
+
     # -----------------------------------------------------------
     # CONFIG APP (URL base)
     # -----------------------------------------------------------
@@ -54,19 +60,19 @@ def create_app() -> Flask:
     app.config["PAYPAL_WEBHOOK_ID"] = os.getenv("PAYPAL_WEBHOOK_ID")
 
     app.config["PAYPAL_ENABLED"] = bool(
-        app.config["PAYPAL_CLIENT_ID"] and app.config["PAYPAL_CLIENT_SECRET"]
+        app.config.get("PAYPAL_CLIENT_ID") and app.config.get("PAYPAL_CLIENT_SECRET")
     )
 
     app.config["FREE_TIER_MINUTES"] = int(os.getenv("FREE_TIER_MINUTES", "10"))
 
     # -----------------------------------------------------------
-    # INICIALIZACIÓN EXTENSIONES
+    # INICIALIZACIÓN DE EXTENSIONES
     # -----------------------------------------------------------
     db.init_app(app)
     migrate.init_app(app, db)
 
     # -----------------------------------------------------------
-    # IMPORTAR MODELOS (para que Alembic/db.create_all los vea)
+    # IMPORTAR MODELOS (para que Alembic/SQLAlchemy los vea)
     # -----------------------------------------------------------
     from app import models  # noqa: F401
     from app import models_payment  # noqa: F401
@@ -91,12 +97,14 @@ def create_app() -> Flask:
     app.register_blueprint(paypal_bp)
     app.register_blueprint(paypal_api_bp)
 
-    # OJO: NO dupliques /pricing en 2 blueprints distintos.
-    # Si usas pages.py para /pricing, elimina pricing_page.py o cambia su ruta.
+    # OJO: tienes 2 rutas para /pricing (pages.py y pricing_page.py).
+    # Te recomiendo QUITAR pricing_page.py o NO registrarlo para evitar conflicto.
+    # Si quieres mantener pages.py como fuente única de /pricing, comenta esto:
     # from app.routes.pricing_page import bp as pricing_page_bp
     # app.register_blueprint(pricing_page_bp)
 
-    # Si tienes auth.py, regístralo:
+    # ✅ Auth real (si ya existe tu archivo app/routes/auth.py)
+    # Asegúrate de que no choque con otras rutas.
     try:
         from app.routes.auth import bp as auth_bp
         app.register_blueprint(auth_bp)
@@ -110,7 +118,7 @@ def create_app() -> Flask:
     def healthz():
         return {"ok": True}
 
-    # Crear tablas en SQLite (si no existen) – OK para dev/demo
+    # Crear tablas si no existen (útil en SQLite simple)
     with app.app_context():
         db.create_all()
 
