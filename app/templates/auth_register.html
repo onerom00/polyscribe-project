@@ -1,25 +1,72 @@
-<!doctype html>
+<!-- templates/auth_register.html -->
+<!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8">
-  <title>Crear cuenta • PolyScribe</title>
-  <link rel="stylesheet" href="/static/css/theme_light.css">
-  <link rel="stylesheet" href="/static/css/nav.css">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>body{max-width:600px;margin:40px auto;padding:0 16px}.card{border:1px solid #ddd;border-radius:12px;padding:20px}input,button{width:100%;padding:12px;margin-top:10px}</style>
+  <meta charset="UTF-8" />
+  <title>PolyScribe – Crear cuenta</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#e4f0ff;margin:0}
+    .wrap{max-width:420px;margin:60px auto;background:#fff;border-radius:16px;padding:24px 28px;box-shadow:0 12px 30px rgba(15,35,52,.18)}
+    h1{margin:0 0 8px;font-size:22px}
+    label{display:block;margin-top:14px;font-size:14px;font-weight:700}
+    input{width:100%;margin-top:6px;padding:10px;border-radius:10px;border:1px solid #c4d4f1;font-size:14px}
+    button{margin-top:18px;width:100%;padding:10px 12px;border-radius:999px;border:0;background:#0057d8;color:#fff;font-weight:800;cursor:pointer}
+    .msg{margin-top:12px;font-size:13px;color:#333}
+    .err{color:#b42318}
+    a{color:#0057d8;text-decoration:none}
+  </style>
 </head>
 <body>
-  <h1>Crear cuenta</h1>
-  <div class="card">
-    <form method="post" action="/auth/register">
+  <div class="wrap">
+    <h1>Crea tu cuenta</h1>
+    <div class="msg">Recibirás un email para verificar tu cuenta.</div>
+
+    <form id="f">
       <label>Email</label>
-      <input type="email" name="email" required>
-      <label>Contraseña</label>
-      <input type="password" name="password" required minlength="6">
-      <button type="submit">Registrarme</button>
+      <input name="email" type="email" required placeholder="tucorreo@ejemplo.com"/>
+
+      <label>Nombre (opcional)</label>
+      <input name="name" type="text" placeholder="Tu nombre"/>
+
+      <label>Password</label>
+      <input name="password" type="password" required placeholder="mínimo 8 caracteres"/>
+
+      <button type="submit">Crear cuenta</button>
     </form>
-    <p>Te enviaremos un enlace para verificar tu email (en desarrollo se imprime en la consola del servidor).</p>
-    <p><a href="/auth/login">Ya tengo cuenta</a></p>
+
+    <div id="out" class="msg"></div>
+    <div class="msg">¿Ya tienes cuenta? <a href="/auth/login">Inicia sesión</a></div>
   </div>
+
+  <script>
+    const f = document.getElementById("f");
+    const out = document.getElementById("out");
+
+    f.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      out.textContent = "";
+      out.classList.remove("err");
+
+      const form = new FormData(f);
+      const payload = Object.fromEntries(form.entries());
+
+      const r = await fetch("/auth/register", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify(payload),
+        credentials: "same-origin",
+      });
+
+      const j = await r.json().catch(()=>({}));
+      if (!r.ok || !j.ok) {
+        out.textContent = j.error || "No se pudo registrar.";
+        out.classList.add("err");
+        return;
+      }
+
+      out.textContent = "Cuenta creada. Revisa tu correo para verificar y luego inicia sesión.";
+    });
+  </script>
 </body>
 </html>
