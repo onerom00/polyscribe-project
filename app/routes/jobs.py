@@ -12,6 +12,7 @@ from typing import Optional, Dict, Any, List
 from flask import Blueprint, request, jsonify, current_app, session
 from app.extensions import db
 from app.models import AudioJob
+from app.models_user import User
 
 try:
     from openai import OpenAI
@@ -61,12 +62,26 @@ def _normalize_lang(code_or_name: Optional[str], default: str = "es") -> str:
 def _require_auth_user_id() -> str | None:
     """
     Auth PROD: el user_id real viene de la sesión.
-    Devuelve string del id (ej: "12") o None si no autenticado.
+    Si AUTH_REQUIRE_VERIFIED_EMAIL=1, también exige is_verified=True.
+    Devuelve string del id (ej: "12") o None si no autorizado.
     """
     uid = session.get("user_id") or session.get("uid")
     if not uid:
         return None
-    return str(uid)
+
+    try:
+        u = db.session.get(User, int(uid))
+    except Exception:
+        u = None
+
+    if not u or not getattr(u, "is_active", True):
+        return None
+
+    must_verify = bool(current_app.config.get("AUTH_REQUIRE_VERIFIED_EMAIL", True))
+    if must_verify and not getattr(u, "is_verified", False):
+        return None
+
+    return str(int(u.id))
 
 
 def _ffmpeg() -> str:
@@ -96,8 +111,16 @@ def _file_size_mb(path: str) -> float:
 def _duration_seconds(path: str) -> float:
     try:
         r = subprocess.run(
-            [_ffprobe(), "-v", "error", "-show_entries", "format=duration",
-             "-of", "default=nw=1:nk=1", path],
+            [
+                _ffprobe(),
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=nw=1:nk=1",
+                path,
+            ],
             capture_output=True,
             check=False,
         )
@@ -110,9 +133,18 @@ def _duration_seconds(path: str) -> float:
 def _compress_to_opus(src: str, dst: str, bitrate: str = "64k") -> bool:
     try:
         cmd = [
-            _ffmpeg(), "-y", "-i", src,
-            "-ac", "1", "-ar", "16000",
-            "-c:a", "libopus", "-b:a", bitrate,
+            _ffmpeg(),
+            "-y",
+            "-i",
+            src,
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "-c:a",
+            "libopus",
+            "-b:a",
+            bitrate,
             dst,
         ]
         subprocess.run(cmd, capture_output=True, check=False)
@@ -130,12 +162,22 @@ def _split_audio(src: str, out_dir: str, chunk_seconds: int) -> List[str]:
     while start < dur - 0.1:
         out = os.path.join(out_dir, f"part_{idx:03d}.ogg")
         cmd = [
-            _ffmpeg(), "-y",
-            "-ss", f"{start:.2f}",
-            "-i", src,
-            "-t", str(chunk_seconds),
-            "-ac", "1", "-ar", "16000",
-            "-c:a", "libopus", "-b:a", "64k",
+            _ffmpeg(),
+            "-y",
+            "-ss",
+            f"{start:.2f}",
+            "-i",
+            src,
+            "-t",
+            str(chunk_seconds),
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "-c:a",
+            "libopus",
+            "-b:a",
+            "64k",
             out,
         ]
         subprocess.run(cmd, capture_output=True, check=False)
@@ -259,6 +301,7 @@ def _get_allowance_seconds(user_id: str) -> int:
     paid_min = 0
     try:
         from app.models_payment import Payment
+
         q = db.session.query(Payment).filter(
             Payment.user_id == user_id,
             Payment.status == "captured",
@@ -287,6 +330,7 @@ def _get_used_seconds(user_id: str) -> int:
 def create_job():
     uid = _require_auth_user_id()
     if not uid:
+        # Si quieres distinguir NO_VERIFIED vs NO_AUTH, se puede.
         return jsonify({"error": "AUTH_REQUIRED"}), 401
 
     try:
@@ -322,11 +366,13 @@ def create_job():
 
         required_seconds = int(math.ceil(dur))
         if required_seconds > remain_seconds:
-            return jsonify({
-                "error": "NO_CREDITS",
-                "required_seconds": required_seconds,
-                "remain_seconds": remain_seconds,
-            }), 402
+            return jsonify(
+                {
+                    "error": "NO_CREDITS",
+                    "required_seconds": required_seconds,
+                    "remain_seconds": remain_seconds,
+                }
+            ), 402
 
         parts = _prepare_for_openai(tmp_path, OPENAI_FILE_HARD_LIMIT_MB)
         if not parts:
