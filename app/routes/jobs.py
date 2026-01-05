@@ -332,7 +332,11 @@ def create_job():
     if not uid:
         # Si quieres distinguir NO_VERIFIED vs NO_AUTH, se puede.
         return jsonify({"error": "AUTH_REQUIRED"}), 401
-
+        # ✅ si el sistema exige verificación, validamos aquí
+        if current_app.config.get("AUTH_REQUIRE_VERIFIED_EMAIL", False):
+            u = db.session.get(User, int(uid))
+            if not u or not u.is_verified:
+                return jsonify({"error": "EMAIL_NOT_VERIFIED"}), 403
     try:
         file = request.files.get("file")
         if not file or not file.filename:

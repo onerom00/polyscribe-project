@@ -1,4 +1,3 @@
-<!-- templates/auth_register.html -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -6,66 +5,86 @@
   <title>PolyScribe – Crear cuenta</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#e4f0ff;margin:0}
-    .wrap{max-width:420px;margin:60px auto;background:#fff;border-radius:16px;padding:24px 28px;box-shadow:0 12px 30px rgba(15,35,52,.18)}
-    h1{margin:0 0 8px;font-size:22px}
-    label{display:block;margin-top:14px;font-size:14px;font-weight:700}
-    input{width:100%;margin-top:6px;padding:10px;border-radius:10px;border:1px solid #c4d4f1;font-size:14px}
+    body{font-family:system-ui,Segoe UI,Arial;background:#e4f0ff;margin:0}
+    .nav{padding:12px 24px;font-size:14px}
+    .nav a{text-decoration:none;color:#0057d8;font-weight:700}
+    .wrap{max-width:440px;margin:56px auto;background:#fff;border-radius:16px;padding:24px 28px;box-shadow:0 12px 30px rgba(15,35,52,.18)}
+    h1{margin:0 0 6px;font-size:22px}
+    p{margin:0 0 14px;color:#444;font-size:14px}
+    label{display:block;margin-top:12px;font-weight:700;font-size:14px}
+    input{width:100%;margin-top:6px;padding:10px 10px;border-radius:10px;border:1px solid #c4d4f1;font-size:14px}
     button{margin-top:18px;width:100%;padding:10px 12px;border-radius:999px;border:0;background:#0057d8;color:#fff;font-weight:800;cursor:pointer}
-    .msg{margin-top:12px;font-size:13px;color:#333}
-    .err{color:#b42318}
-    a{color:#0057d8;text-decoration:none}
+    .hint{margin-top:12px;font-size:12px;color:#666}
+    .err{margin-top:12px;background:#ffe5e5;border:1px solid #ffb3b3;color:#7a0a0a;border-radius:12px;padding:10px 12px;display:none}
+    .ok{margin-top:12px;background:#e2f7e9;border:1px solid #8ad19d;color:#125325;border-radius:12px;padding:10px 12px;display:none}
+    .link{margin-top:12px;font-size:13px}
+    .link a{color:#0057d8;font-weight:800;text-decoration:none}
   </style>
 </head>
 <body>
+  <div class="nav"><a href="/">PolyScribe</a></div>
+
   <div class="wrap">
-    <h1>Crea tu cuenta</h1>
-    <div class="msg">Recibirás un email para verificar tu cuenta.</div>
+    <h1>Crear cuenta</h1>
+    <p>Crea tu cuenta para usar PolyScribe. Te enviaremos un correo para verificar tu email.</p>
+
+    <div id="err" class="err"></div>
+    <div id="ok" class="ok"></div>
 
     <form id="f">
       <label>Email</label>
-      <input name="email" type="email" required placeholder="tucorreo@ejemplo.com"/>
+      <input name="email" type="email" required placeholder="tucorreo@gmail.com" />
 
       <label>Nombre (opcional)</label>
-      <input name="name" type="text" placeholder="Tu nombre"/>
+      <input name="display_name" type="text" placeholder="Tu nombre" />
 
-      <label>Password</label>
-      <input name="password" type="password" required placeholder="mínimo 8 caracteres"/>
+      <label>Contraseña</label>
+      <input name="password" type="password" required placeholder="mínimo 8 caracteres" />
 
       <button type="submit">Crear cuenta</button>
-    </form>
 
-    <div id="out" class="msg"></div>
-    <div class="msg">¿Ya tienes cuenta? <a href="/auth/login">Inicia sesión</a></div>
+      <p class="hint">
+        Después de crear tu cuenta, revisa tu bandeja (y spam) para verificar el correo.
+      </p>
+
+      <p class="link">
+        ¿Ya tienes cuenta? <a href="/auth/login">Inicia sesión</a>
+      </p>
+    </form>
   </div>
 
   <script>
-    const f = document.getElementById("f");
-    const out = document.getElementById("out");
+    const f = document.getElementById('f');
+    const err = document.getElementById('err');
+    const ok = document.getElementById('ok');
 
-    f.addEventListener("submit", async (e) => {
+    function show(el, msg){
+      el.style.display = 'block';
+      el.textContent = msg;
+    }
+
+    f.addEventListener('submit', async (e) => {
       e.preventDefault();
-      out.textContent = "";
-      out.classList.remove("err");
+      err.style.display = 'none';
+      ok.style.display = 'none';
 
-      const form = new FormData(f);
-      const payload = Object.fromEntries(form.entries());
+      const fd = new FormData(f);
+      const payload = Object.fromEntries(fd.entries());
 
-      const r = await fetch("/auth/register", {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify(payload),
-        credentials: "same-origin",
+      const r = await fetch('/auth/register', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
       });
 
       const j = await r.json().catch(()=>({}));
-      if (!r.ok || !j.ok) {
-        out.textContent = j.error || "No se pudo registrar.";
-        out.classList.add("err");
+      if(!r.ok || !j.ok){
+        show(err, (j && j.error) ? j.error : 'No se pudo crear la cuenta.');
         return;
       }
 
-      out.textContent = "Cuenta creada. Revisa tu correo para verificar y luego inicia sesión.";
+      show(ok, 'Cuenta creada. Revisa tu correo para verificarla. Luego inicia sesión.');
+      setTimeout(()=>{ window.location.href='/auth/verify-sent'; }, 700);
     });
   </script>
 </body>
