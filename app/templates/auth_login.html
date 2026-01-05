@@ -1,117 +1,55 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <title>PolyScribe – Iniciar sesión</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>PolyScribe · Iniciar sesión</title>
   <style>
-    body{font-family:system-ui,Segoe UI,Arial;background:#e4f0ff;margin:0}
-    .nav{padding:12px 24px;font-size:14px}
-    .nav a{text-decoration:none;color:#0057d8;font-weight:700}
-    .wrap{max-width:440px;margin:56px auto;background:#fff;border-radius:16px;padding:24px 28px;box-shadow:0 12px 30px rgba(15,35,52,.18)}
-    h1{margin:0 0 6px;font-size:22px}
+    body{font-family:system-ui,-apple-system,Segoe UI,Arial;margin:0;background:#e9f2ff}
+    .wrap{max-width:420px;margin:60px auto;background:#fff;border-radius:16px;padding:24px 26px;box-shadow:0 12px 30px rgba(15,35,52,.18)}
+    h1{margin:0 0 8px;font-size:22px}
     p{margin:0 0 14px;color:#444;font-size:14px}
-    label{display:block;margin-top:12px;font-weight:700;font-size:14px}
-    input{width:100%;margin-top:6px;padding:10px 10px;border-radius:10px;border:1px solid #c4d4f1;font-size:14px}
-    button{margin-top:18px;width:100%;padding:10px 12px;border-radius:999px;border:0;background:#0057d8;color:#fff;font-weight:800;cursor:pointer}
-    .err{margin-top:12px;background:#ffe5e5;border:1px solid #ffb3b3;color:#7a0a0a;border-radius:12px;padding:10px 12px;display:none}
-    .hint{margin-top:12px;font-size:12px;color:#666}
-    .link{margin-top:12px;font-size:13px}
-    .link a{color:#0057d8;font-weight:800;text-decoration:none}
+    label{display:block;margin-top:12px;font-weight:600;font-size:14px}
+    input{width:100%;margin-top:6px;padding:10px 12px;border-radius:10px;border:1px solid #c4d4f1;font-size:14px}
+    button{margin-top:16px;width:100%;padding:10px 12px;border-radius:999px;border:0;background:#0057d8;color:#fff;font-weight:700;font-size:15px;cursor:pointer}
+    .row{margin-top:12px;font-size:13px;color:#333}
+    .row a{color:#0057d8;text-decoration:none;font-weight:700}
+    .err{margin-top:10px;color:#b00020;font-size:13px}
   </style>
 </head>
 <body>
-  <div class="nav"><a href="/">PolyScribe</a></div>
-
   <div class="wrap">
     <h1>Iniciar sesión</h1>
-    <p>Accede con tu correo y contraseña.</p>
-
-    <div id="err" class="err"></div>
+    <p>Accede a tu cuenta para transcribir y ver tu historial.</p>
 
     <form id="f">
       <label>Email</label>
-      <input name="email" type="email" required placeholder="tucorreo@gmail.com" />
-
+      <input name="email" type="email" required placeholder="tucorreo@ejemplo.com">
       <label>Contraseña</label>
-      <input name="password" type="password" required placeholder="Tu contraseña" />
-
-      <button type="submit">Entrar</button>
-
-      <p class="hint">
-        ¿No te llegó el correo de verificación? Abajo puedes reenviarlo.
-      </p>
-
-      <p class="link">
-        ¿No tienes cuenta? <a href="/auth/register">Crear cuenta</a>
-      </p>
-
-      <p class="link">
-        <a href="#" id="resend">Reenviar verificación</a>
-      </p>
+      <input name="password" type="password" required placeholder="••••••••">
+      <button>Entrar</button>
+      <div class="err" id="err"></div>
     </form>
+
+    <div class="row">¿No tienes cuenta? <a href="/auth/register">Crear cuenta</a></div>
   </div>
 
-  <script>
-    const f = document.getElementById('f');
-    const err = document.getElementById('err');
-    const resend = document.getElementById('resend');
-
-    function showErr(msg){
-      err.style.display = 'block';
-      err.textContent = msg;
-    }
-
-    f.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      err.style.display = 'none';
-
-      const fd = new FormData(f);
-      const payload = Object.fromEntries(fd.entries());
-
-      const r = await fetch('/auth/login', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(payload)
-      });
-
-      const j = await r.json().catch(()=>({}));
-      if(!r.ok || !j.ok){
-        if(j && j.error === 'EMAIL_NOT_VERIFIED'){
-          showErr('Tu correo no está verificado. Revisa tu email o reenvía verificación.');
-          return;
-        }
-        showErr((j && j.error) ? j.error : 'No se pudo iniciar sesión.');
-        return;
-      }
-
-      window.location.href = '/';
-    });
-
-    resend.addEventListener('click', async (e) => {
-      e.preventDefault();
-      err.style.display = 'none';
-
-      const email = (document.querySelector('input[name="email"]').value || '').trim();
-      if(!email){
-        showErr('Escribe tu email arriba para reenviar verificación.');
-        return;
-      }
-
-      const r = await fetch('/auth/resend', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({email})
-      });
-
-      const j = await r.json().catch(()=>({}));
-      if(!r.ok || !j.ok){
-        showErr((j && j.error) ? j.error : 'No se pudo reenviar.');
-        return;
-      }
-
-      window.location.href = '/auth/verify-sent';
-    });
-  </script>
+<script>
+const f = document.getElementById('f');
+const err = document.getElementById('err');
+f.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  err.textContent = "";
+  const form = new FormData(f);
+  const payload = Object.fromEntries(form.entries());
+  const r = await fetch("/auth/login", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)});
+  const j = await r.json().catch(()=> ({}));
+  if(!r.ok || !j.ok){
+    err.textContent = (j && j.error) ? j.error : "No se pudo iniciar sesión.";
+    return;
+  }
+  window.location.href = "/";
+});
+</script>
 </body>
 </html>
