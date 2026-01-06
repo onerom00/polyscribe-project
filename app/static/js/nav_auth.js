@@ -1,10 +1,10 @@
+// static/js/nav_auth.js
 document.addEventListener("DOMContentLoaded", () => {
   const login = document.getElementById("nav-login-link");
   const signup = document.getElementById("nav-signup-link");
 
   function go(path) {
-    const u = new URL(path, location.origin);
-    location.href = u.pathname + (u.search ? "?" + u.searchParams.toString() : "");
+    location.href = path;
   }
 
   if (login) {
@@ -13,6 +13,7 @@ document.addEventListener("DOMContentLoaded", () => {
       go("/auth/login");
     });
   }
+
   if (signup) {
     signup.addEventListener("click", (e) => {
       e.preventDefault();
