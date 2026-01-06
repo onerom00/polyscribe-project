@@ -1,241 +1,276 @@
 ﻿# app/routes/auth.py
 from __future__ import annotations
 
+import datetime as dt
 import secrets
-import smtplib
-from email.mime.text import MIMEText
-from datetime import datetime, timedelta
 
-from flask import Blueprint, request, session, jsonify, current_app, redirect, url_for, render_template
-from werkzeug.security import check_password_hash, generate_password_hash
+from flask import Blueprint, current_app, render_template, request, redirect, url_for, flash, session
+
+from werkzeug.security import generate_password_hash, check_password_hash
 
 from app.extensions import db
-from app.models_user import User
-
-bp = Blueprint("auth", __name__)
-from flask import Blueprint, render_template, request, flash, redirect, url_for
+from app.models_auth import User, EmailVerificationToken, PasswordResetToken
+from app.services.mailer import send_email
 
 bp = Blueprint("auth", __name__, url_prefix="/auth")
 
-@bp.get("/forgot")
-def forgot_password_page():
-    return render_template("auth/forgot.html")
 
-@bp.post("/forgot")
-def forgot_password_submit():
-    email = (request.form.get("email") or "").strip().lower()
-
-    # IMPORTANTE: responder siempre igual para no filtrar si existe el correo
-    # Aquí luego: generar token + guardar + enviar email si el user existe
-    flash("Si el correo existe, te enviamos un enlace para restablecer tu contraseña.", "success")
-    return redirect(url_for("auth.login_page"))
-
-
-# -------------------------
-# Helpers
-# -------------------------
-def _bool_env(name: str, default: bool = False) -> bool:
-    v = current_app.config.get(name, default)
-    if isinstance(v, bool):
-        return v
-    return str(v).strip() == "1"
-
-
-def _app_base_url() -> str:
-    base = (current_app.config.get("APP_BASE_URL") or "").strip()
-    return base.rstrip("/") if base else "https://www.getpolyscribe.com"
-
-
-def _send_email(to_email: str, subject: str, html: str) -> None:
-    host = current_app.config.get("SMTP_HOST", "smtp.gmail.com")
-    port = int(current_app.config.get("SMTP_PORT", 587))
-    user = (current_app.config.get("SMTP_USER") or "").strip()
-    pwd = (current_app.config.get("SMTP_PASS") or "").strip()
-    mail_from = (current_app.config.get("MAIL_FROM") or "PolyScribe <helppolyscribe@gmail.com>").strip()
-
-    if not user or not pwd:
-        raise RuntimeError("SMTP_USER/SMTP_PASS no configurados")
-
-    msg = MIMEText(html, "html", "utf-8")
-    msg["Subject"] = subject
-    msg["From"] = mail_from
-    msg["To"] = to_email
-
-    with smtplib.SMTP(host, port) as s:
-        s.ehlo()
-        s.starttls()
-        s.login(user, pwd)
-        s.sendmail(user, [to_email], msg.as_string())
-
-
-def _serialize_user(u: User) -> dict:
-    return {
-        "id": u.id,
-        "email": u.email,
-        "display_name": u.display_name,
-        "is_active": u.is_active,
-        "is_verified": u.is_verified,
-        "plan_tier": u.plan_tier,
-        "minute_quota": u.minute_quota,
-        "minutes_used": u.minutes_used,
-        "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
-    }
+def _base_url() -> str:
+    # ✅ IMPORTANTE: usa SIEMPRE www para evitar NXDOMAIN en links de correo
+    base = (current_app.config.get("APP_BASE_URL") or "").strip().rstrip("/")
+    if not base:
+        base = "https://www.getpolyscribe.com"
+    # Fuerza www
+    if base.startswith("https://getpolyscribe.com"):
+        base = base.replace("https://getpolyscribe.com", "https://www.getpolyscribe.com")
+    if base.startswith("http://getpolyscribe.com"):
+        base = base.replace("http://getpolyscribe.com", "https://www.getpolyscribe.com")
+    return base
 
 
 def _require_verified() -> bool:
-    return _bool_env("AUTH_REQUIRE_VERIFIED_EMAIL", True)
+    return bool(current_app.config.get("AUTH_REQUIRE_VERIFIED_EMAIL", True))
 
 
-# -------------------------
-# Pages
-# -------------------------
-@bp.get("/auth/login")
-def login_page():
-    return render_template("auth_login.html")
+def current_user_id() -> int | None:
+    uid = session.get("user_id")
+    try:
+        return int(uid) if uid is not None else None
+    except Exception:
+        return None
 
 
-@bp.get("/auth/register")
+def _login_user(user: User) -> None:
+    session["user_id"] = user.id
+    session["user_email"] = user.email
+
+
+def _logout_user() -> None:
+    session.pop("user_id", None)
+    session.pop("user_email", None)
+
+
+@bp.get("/register")
 def register_page():
-    return render_template("auth_register.html")
+    return render_template("auth/register.html")
 
 
-# ✅ IMPORTANTE: tu ruta real actual es /dev-login
-@bp.get("/dev-login")
-def dev_login_alias():
-    # En PROD, lo apagamos y mandamos a login real
-    if _bool_env("DISABLE_DEVLOGIN", True):
-        return redirect(url_for("auth.login_page"))
+@bp.post("/register")
+def register_submit():
+    email = (request.form.get("email") or "").strip().lower()
+    name = (request.form.get("name") or "").strip()
+    password = request.form.get("password") or ""
+    password2 = request.form.get("password2") or ""
 
-    # Si algún día lo reactivas en local, puedes renderizar tu template viejo aquí:
-    # return render_template("dev_login.html", is_signup=True)
-    return redirect(url_for("auth.login_page"))
+    if not email or "@" not in email:
+        flash("Correo inválido.", "error")
+        return redirect(url_for("auth.register_page"))
 
+    if len(password) < 8:
+        flash("La contraseña debe tener al menos 8 caracteres.", "error")
+        return redirect(url_for("auth.register_page"))
 
-@bp.get("/auth/verify")
-def verify_email():
-    token = (request.args.get("token") or "").strip()
-    if not token:
-        return render_template("auth_verify_result.html", ok=False, msg="Token inválido."), 400
-
-    u = db.session.query(User).filter(User.verify_token == token).first()
-    if not u:
-        return render_template("auth_verify_result.html", ok=False, msg="Token inválido o ya usado."), 400
-
-    if u.verify_expires_at and datetime.utcnow() > u.verify_expires_at:
-        return render_template("auth_verify_result.html", ok=False, msg="Token vencido. Regístrate de nuevo."), 400
-
-    u.is_verified = True
-    u.verify_token = None
-    u.verify_expires_at = None
-    db.session.commit()
-
-    return render_template("auth_verify_result.html", ok=True, msg="Correo verificado. Ya puedes iniciar sesión."), 200
-
-
-# -------------------------
-# API (JSON)
-# -------------------------
-@bp.get("/auth/ping")
-def ping():
-    return jsonify(ok=True, msg="pong")
-
-
-@bp.get("/auth/me")
-def me():
-    uid = session.get("user_id") or session.get("uid")
-    if not uid:
-        return jsonify(authenticated=False), 200
-
-    u = db.session.get(User, int(uid))
-    if not u:
-        return jsonify(authenticated=False), 200
-
-    return jsonify(authenticated=True, user=_serialize_user(u)), 200
-
-
-@bp.post("/auth/logout")
-@bp.get("/auth/logout")
-def logout():
-    session.clear()
-    return jsonify(ok=True), 200
-
-
-@bp.post("/auth/register")
-def register():
-    data = request.get_json(silent=True) or request.form or {}
-    email = (data.get("email") or "").strip().lower()
-    password = (data.get("password") or "").strip()
-    display_name = (data.get("display_name") or "").strip()
-
-    if not email or not password:
-        return jsonify(ok=False, error="email y password requeridos"), 400
-    if len(password) < 6:
-        return jsonify(ok=False, error="La contraseña debe tener al menos 6 caracteres."), 400
+    if password != password2:
+        flash("Las contraseñas no coinciden.", "error")
+        return redirect(url_for("auth.register_page"))
 
     existing = db.session.query(User).filter(User.email == email).first()
     if existing:
-        return jsonify(ok=False, error="Este correo ya está registrado."), 409
+        flash("Ese correo ya está registrado. Inicia sesión.", "error")
+        return redirect(url_for("auth.login_page"))
 
-    token = secrets.token_urlsafe(32)
-    u = User(
+    user = User(
         email=email,
-        display_name=display_name or email.split("@")[0],
+        name=name or None,
         password_hash=generate_password_hash(password),
-        is_active=True,
         is_verified=False,
-        verify_token=token,
-        verify_expires_at=datetime.utcnow() + timedelta(hours=24),
     )
-    db.session.add(u)
+    db.session.add(user)
     db.session.commit()
 
-    verify_url = f"{_app_base_url()}/auth/verify?token={token}"
+    # token verificación
+    token = secrets.token_urlsafe(32)
+    expires = dt.datetime.utcnow() + dt.timedelta(hours=24)
 
+    vt = EmailVerificationToken(
+        user_id=user.id,
+        token=token,
+        expires_at=expires,
+        used_at=None,
+    )
+    db.session.add(vt)
+    db.session.commit()
+
+    verify_link = f"{_base_url()}/auth/verify?token={token}"
+
+    subject = "PolyScribe · Verifica tu correo"
     html = f"""
-    <div style="font-family:system-ui,Segoe UI,Arial">
-      <h2>Verifica tu correo en PolyScribe</h2>
-      <p>Para activar tu cuenta, confirma tu correo haciendo clic aquí:</p>
-      <p><a href="{verify_url}">{verify_url}</a></p>
-      <p>Este enlace vence en 24 horas.</p>
+    <div style="font-family:Arial,sans-serif;line-height:1.6">
+      <h2>Verifica tu correo</h2>
+      <p>Hola{(" " + name) if name else ""},</p>
+      <p>Para activar tu cuenta, confirma tu email:</p>
+      <p><a href="{verify_link}" style="display:inline-block;padding:10px 14px;background:#0b62e0;color:#fff;border-radius:10px;text-decoration:none;font-weight:700">Verificar correo</a></p>
+      <p style="color:#555;font-size:13px">Si no solicitaste esto, ignora este email.</p>
+      <p style="color:#555;font-size:13px">Enlace directo: {verify_link}</p>
     </div>
     """
+    send_email(email, subject, html)
 
-    try:
-        _send_email(email, "PolyScribe · Verifica tu correo", html)
-    except Exception as e:
-        current_app.logger.exception("SMTP send failed: %s", e)
-        # Si falla el correo, dejamos la cuenta pero avisamos
-        return jsonify(ok=False, error="No se pudo enviar el correo de verificación. Revisa SMTP en Render."), 500
-
-    return jsonify(ok=True, msg="VERIFY_SENT"), 200
+    flash("Te enviamos un correo de verificación. Revisa tu bandeja (y spam).", "success")
+    return redirect(url_for("auth.login_page"))
 
 
-@bp.post("/auth/login")
-def login():
-    data = request.get_json(silent=True) or request.form or {}
-    email = (data.get("email") or "").strip().lower()
-    password = (data.get("password") or "").strip()
+@bp.get("/verify")
+def verify_email():
+    token = (request.args.get("token") or "").strip()
+    if not token:
+        return render_template("auth/verify_result.html", ok=False, message="Token inválido.")
 
-    if not email or not password:
-        return jsonify(ok=False, error="email y password requeridos"), 400
+    vt = db.session.query(EmailVerificationToken).filter(EmailVerificationToken.token == token).first()
+    if not vt:
+        return render_template("auth/verify_result.html", ok=False, message="Token no encontrado.")
 
-    u = db.session.query(User).filter(User.email == email).first()
-    if not u:
-        return jsonify(ok=False, error="Credenciales inválidas"), 401
+    if vt.used_at is not None:
+        return render_template("auth/verify_result.html", ok=True, message="Tu correo ya estaba verificado. Ya puedes iniciar sesión.")
 
-    if not u.is_active:
-        return jsonify(ok=False, error="Cuenta deshabilitada"), 403
+    if dt.datetime.utcnow() > vt.expires_at:
+        return render_template("auth/verify_result.html", ok=False, message="Token expirado. Regístrate nuevamente o solicita otro enlace.")
 
-    if _require_verified() and not u.is_verified:
-        return jsonify(ok=False, error="EMAIL_NOT_VERIFIED"), 403
+    user = db.session.get(User, vt.user_id)
+    if not user:
+        return render_template("auth/verify_result.html", ok=False, message="Usuario no encontrado.")
 
-    if not u.password_hash or not check_password_hash(u.password_hash, password):
-        return jsonify(ok=False, error="Credenciales inválidas"), 401
-
-    u.last_login_at = datetime.utcnow()
+    user.is_verified = True
+    vt.used_at = dt.datetime.utcnow()
     db.session.commit()
 
-    session["user_id"] = int(u.id)
-    session["uid"] = int(u.id)
+    return render_template("auth/verify_result.html", ok=True, message="✅ Verificación exitosa. Ya puedes iniciar sesión.")
 
-    return jsonify(ok=True, user=_serialize_user(u)), 200
+
+@bp.get("/login")
+def login_page():
+    return render_template("auth/login.html")
+
+
+@bp.post("/login")
+def login_submit():
+    email = (request.form.get("email") or "").strip().lower()
+    password = request.form.get("password") or ""
+
+    user = db.session.query(User).filter(User.email == email).first()
+    if not user or not check_password_hash(user.password_hash, password):
+        flash("Correo o contraseña incorrectos.", "error")
+        return redirect(url_for("auth.login_page"))
+
+    if _require_verified() and not user.is_verified:
+        flash("Debes verificar tu correo antes de iniciar sesión.", "error")
+        return redirect(url_for("auth.login_page"))
+
+    _login_user(user)
+    return redirect(url_for("pages.index"))  # Ajusta si tu endpoint raíz es distinto
+
+
+@bp.get("/logout")
+def logout():
+    _logout_user()
+    flash("Sesión cerrada.", "success")
+    return redirect(url_for("auth.login_page"))
+
+
+# =========================
+# RESET PASSWORD (PROD)
+# =========================
+
+@bp.get("/forgot")
+def forgot_page():
+    return render_template("auth/forgot.html")
+
+
+@bp.post("/forgot")
+def forgot_submit():
+    email = (request.form.get("email") or "").strip().lower()
+
+    # Mensaje neutro SIEMPRE
+    neutral_msg = "Si el correo existe, te enviamos un enlace para restablecer tu contraseña."
+
+    if not email or "@" not in email:
+        flash(neutral_msg, "success")
+        return redirect(url_for("auth.forgot_page"))
+
+    user = db.session.query(User).filter(User.email == email).first()
+    if user:
+        token = secrets.token_urlsafe(32)
+        expires = dt.datetime.utcnow() + dt.timedelta(minutes=30)
+
+        rt = PasswordResetToken(
+            user_id=user.id,
+            token=token,
+            expires_at=expires,
+            used_at=None,
+        )
+        db.session.add(rt)
+        db.session.commit()
+
+        reset_link = f"{_base_url()}/auth/reset?token={token}"
+
+        subject = "PolyScribe · Restablecer contraseña"
+        html = f"""
+        <div style="font-family:Arial,sans-serif;line-height:1.6">
+          <h2>Restablecer contraseña</h2>
+          <p>Recibimos una solicitud para cambiar tu contraseña.</p>
+          <p><a href="{reset_link}" style="display:inline-block;padding:10px 14px;background:#22c55e;color:#0b111d;border-radius:10px;text-decoration:none;font-weight:800">Crear nueva contraseña</a></p>
+          <p style="color:#555;font-size:13px">Este enlace expira en 30 minutos.</p>
+          <p style="color:#555;font-size:13px">Enlace directo: {reset_link}</p>
+        </div>
+        """
+        send_email(email, subject, html)
+
+    flash(neutral_msg, "success")
+    return redirect(url_for("auth.login_page"))
+
+
+@bp.get("/reset")
+def reset_page():
+    token = (request.args.get("token") or "").strip()
+    if not token:
+        return render_template("auth/reset.html", ok=False, token="", message="Token inválido.")
+
+    rt = db.session.query(PasswordResetToken).filter(PasswordResetToken.token == token).first()
+    if not rt:
+        return render_template("auth/reset.html", ok=False, token="", message="Token no encontrado.")
+
+    if rt.used_at is not None:
+        return render_template("auth/reset.html", ok=False, token="", message="Este enlace ya fue usado. Solicita uno nuevo.")
+
+    if dt.datetime.utcnow() > rt.expires_at:
+        return render_template("auth/reset.html", ok=False, token="", message="Enlace expirado. Solicita uno nuevo.")
+
+    return render_template("auth/reset.html", ok=True, token=token, message="")
+
+
+@bp.post("/reset")
+def reset_submit():
+    token = (request.form.get("token") or "").strip()
+    password = request.form.get("password") or ""
+    password2 = request.form.get("password2") or ""
+
+    if len(password) < 8:
+        return render_template("auth/reset.html", ok=True, token=token, message="La contraseña debe tener al menos 8 caracteres.")
+
+    if password != password2:
+        return render_template("auth/reset.html", ok=True, token=token, message="Las contraseñas no coinciden.")
+
+    rt = db.session.query(PasswordResetToken).filter(PasswordResetToken.token == token).first()
+    if not rt or rt.used_at is not None or dt.datetime.utcnow() > rt.expires_at:
+        return render_template("auth/reset.html", ok=False, token="", message="Token inválido o expirado.")
+
+    user = db.session.get(User, rt.user_id)
+    if not user:
+        return render_template("auth/reset.html", ok=False, token="", message="Usuario no encontrado.")
+
+    user.password_hash = generate_password_hash(password)
+    rt.used_at = dt.datetime.utcnow()
+    db.session.commit()
+
+    flash("✅ Contraseña actualizada. Ya puedes iniciar sesión.", "success")
+    return redirect(url_for("auth.login_page"))
