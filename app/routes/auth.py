@@ -13,8 +13,7 @@ from flask import (
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from app.extensions import db
-from app.models import User
-from app.models_auth import EmailVerificationToken, PasswordResetToken
+from app.models_auth import User, EmailVerificationToken, PasswordResetToken
 
 bp = Blueprint("auth", __name__, url_prefix="/auth")
 
@@ -29,11 +28,14 @@ def _send_email(to_email: str, subject: str, html_body: str) -> None:
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
 
-    host = os.getenv("SMTP_HOST", "smtp.gmail.com")
-    port = int(os.getenv("SMTP_PORT", "587"))
-    user = os.getenv("SMTP_USER", "")
-    pw = os.getenv("SMTP_PASS", "")
-    from_addr = os.getenv("SMTP_FROM", f"PolyScribe <{user}>")
+    host = (current_app.config.get("SMTP_HOST") or os.getenv("SMTP_HOST") or "smtp.gmail.com").strip()
+    port = int(current_app.config.get("SMTP_PORT") or os.getenv("SMTP_PORT") or "587")
+    user = (current_app.config.get("SMTP_USER") or os.getenv("SMTP_USER") or "").strip()
+    pw = (current_app.config.get("SMTP_PASS") or os.getenv("SMTP_PASS") or "").strip()
+
+    from_addr = (current_app.config.get("MAIL_FROM") or os.getenv("MAIL_FROM") or "").strip()
+    if not from_addr:
+        from_addr = f"PolyScribe <{user}>" if user else "PolyScribe <no-reply@getpolyscribe.com>"
 
     if not user or not pw:
         current_app.logger.warning("SMTP not configured. Skipping email to=%s subject=%s", to_email, subject)
@@ -69,6 +71,7 @@ def register_page():
 @bp.post("/register")
 def register_post():
     email = (request.form.get("email") or "").strip().lower()
+    name = (request.form.get("name") or "").strip()
     password = request.form.get("password") or ""
     password2 = request.form.get("password2") or ""
 
@@ -91,8 +94,10 @@ def register_post():
 
     user = User(
         email=email,
+        display_name=name or None,
         password_hash=generate_password_hash(password),
         is_verified=False,
+        is_active=True,
         created_at=dt.datetime.utcnow(),
         updated_at=dt.datetime.utcnow(),
     )
@@ -173,13 +178,21 @@ def login_post():
         flash("Credenciales inválidas.", "error")
         return redirect(url_for("auth.login_page"))
 
-    if not getattr(user, "is_verified", False):
+    if not getattr(user, "is_active", True):
+        flash("Tu cuenta está desactivada.", "error")
+        return redirect(url_for("auth.login_page"))
+
+    if current_app.config.get("AUTH_REQUIRE_VERIFIED_EMAIL", True) and not getattr(user, "is_verified", False):
         flash("Debes verificar tu correo antes de entrar.", "error")
         return redirect(url_for("auth.login_page"))
 
     if not user.password_hash or not check_password_hash(user.password_hash, password):
         flash("Credenciales inválidas.", "error")
         return redirect(url_for("auth.login_page"))
+
+    user.last_login_at = dt.datetime.utcnow()
+    user.updated_at = dt.datetime.utcnow()
+    db.session.commit()
 
     _login_user(user)
     return redirect("/")
