@@ -8,8 +8,13 @@
 <body style="font-family:Inter,system-ui,Arial; background:#eef6ff; margin:0;">
   <div style="max-width:520px; margin:80px auto; background:#fff; border:1px solid #d9e4f7; border-radius:16px; padding:18px 18px 20px;">
     <h2 style="margin:0 0 10px;">Verificación de correo</h2>
-    <div style="padding:12px;border-radius:14px;border:1px solid #c6d3ec;background:#f1f7ff;font-weight:800;">
-      {{ message }}
+
+    <div style="padding:12px;border-radius:12px;
+      border:1px solid {{ '#94e2c1' if ok else '#f3abab' }};
+      background:{{ '#d1f7e7' if ok else '#fde2e2' }};
+      color:{{ '#0f5132' if ok else '#8a1c1c' }};
+      font-weight:900;">
+      {{ msg }}
     </div>
 
     <div style="margin-top:14px; text-align:center;">
