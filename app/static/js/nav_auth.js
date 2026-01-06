@@ -4,7 +4,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const signup = document.getElementById("nav-signup-link");
 
   function go(path) {
-    location.href = path;
+    const u = new URL(path, location.origin);
+    location.href = u.pathname + (u.search ? "?" + u.searchParams.toString() : "");
   }
 
   if (login) {
