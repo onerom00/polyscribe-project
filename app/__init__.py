@@ -24,6 +24,7 @@ def create_app() -> Flask:
         "sqlite:///polyscribe3.db",
     )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    app.config["AUTH_REQUIRE_VERIFIED_EMAIL"] = bool(int(os.getenv("AUTH_REQUIRE_VERIFIED_EMAIL", "1")))
 
     # -----------------------------------------------------------
     # URL base (IMPORTANTE: usa www)
