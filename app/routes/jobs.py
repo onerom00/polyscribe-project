@@ -12,7 +12,8 @@ from typing import Optional, Dict, Any, List
 from flask import Blueprint, request, jsonify, current_app, session
 from app.extensions import db
 from app.models import AudioJob
-from app.models_user import User
+from app.models_auth import User
+
 
 try:
     from openai import OpenAI
