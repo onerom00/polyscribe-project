@@ -14,40 +14,24 @@ def create_app() -> Flask:
         template_folder=os.getenv("FLASK_TEMPLATES_FOLDER", "templates"),
     )
 
-    # -----------------------------------------------------------
-    # CONFIG GENERAL
-    # -----------------------------------------------------------
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
 
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
-        "DATABASE_URL",
-        "sqlite:///polyscribe3.db",
-    )
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "sqlite:///polyscribe3.db")
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-    # -----------------------------------------------------------
-    # URL base (IMPORTANTE: usa www)
-    # -----------------------------------------------------------
     app.config["APP_BASE_URL"] = os.getenv("APP_BASE_URL", "https://www.getpolyscribe.com")
 
-    # -----------------------------------------------------------
-    # FLAGS AUTH
-    # -----------------------------------------------------------
     app.config["AUTH_REQUIRE_VERIFIED_EMAIL"] = os.getenv("AUTH_REQUIRE_VERIFIED_EMAIL", "1") == "1"
     app.config["DISABLE_DEVLOGIN"] = os.getenv("DISABLE_DEVLOGIN", "1") == "1"
 
-    # -----------------------------------------------------------
-    # SMTP (Gmail app password)
-    # -----------------------------------------------------------
+    # SMTP
     app.config["SMTP_HOST"] = os.getenv("SMTP_HOST", "smtp.gmail.com")
     app.config["SMTP_PORT"] = int(os.getenv("SMTP_PORT", "587"))
     app.config["SMTP_USER"] = os.getenv("SMTP_USER", "")
     app.config["SMTP_PASS"] = os.getenv("SMTP_PASS", "")
     app.config["MAIL_FROM"] = os.getenv("MAIL_FROM", "PolyScribe <helppolyscribe@gmail.com>")
 
-    # -----------------------------------------------------------
-    # PAYPAL
-    # -----------------------------------------------------------
+    # PayPal
     app.config["PAYPAL_ENV"] = os.getenv("PAYPAL_ENV", "sandbox")
     app.config["PAYPAL_BASE_URL"] = os.getenv("PAYPAL_BASE_URL", "https://api-m.sandbox.paypal.com")
     app.config["PAYPAL_CLIENT_ID"] = os.getenv("PAYPAL_CLIENT_ID")
@@ -59,26 +43,16 @@ def create_app() -> Flask:
 
     app.config["FREE_TIER_MINUTES"] = int(os.getenv("FREE_TIER_MINUTES", "10"))
 
-    # -----------------------------------------------------------
-    # EXTENSIONS
-    # -----------------------------------------------------------
+    # Extensions
     db.init_app(app)
     migrate.init_app(app, db)
 
-    # -----------------------------------------------------------
-    # MODELS (IMPORTANTÍSIMO)
-    # -----------------------------------------------------------
-    # ✅ Un solo User: vive en app/models.py
+    # ✅ Importar modelos (sin duplicar users)
     from app import models  # noqa: F401
     from app import models_auth  # noqa: F401
     from app import models_payment  # noqa: F401
 
-    # ❌ NO importar models_user si también define users/User
-    # from app import models_user  # noqa: F401  <-- ELIMINAR
-
-    # -----------------------------------------------------------
-    # BLUEPRINTS
-    # -----------------------------------------------------------
+    # Blueprints
     from app.routes.pages import bp as pages_bp
     app.register_blueprint(pages_bp)
 
@@ -105,12 +79,7 @@ def create_app() -> Flask:
     def healthz():
         return {"ok": True}
 
-    # -----------------------------------------------------------
-    # DB bootstrap (solo DEV)
-    # -----------------------------------------------------------
-    # En PROD lo correcto es usar migraciones (Flask-Migrate).
-    # Si quieres mantenerlo, déjalo apagado en Render:
-    # AUTO_CREATE_DB=0
+    # Recomendado: NO create_all en PROD (usa migraciones)
     auto_create = os.getenv("AUTO_CREATE_DB", "0") == "1"
     if auto_create:
         with app.app_context():
