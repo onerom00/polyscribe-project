@@ -4,7 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import uuid
 
-from app.extensions import db  # ✅ UNA sola instancia
+from app.extensions import db
 
 
 def utcnow():
@@ -16,30 +16,7 @@ def gen_job_id() -> str:
 
 
 # ---------------------------------------------------------
-# USERS (AUTH PROD)
-# ---------------------------------------------------------
-class User(db.Model):
-    __tablename__ = "users"
-
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    email = db.Column(db.String(255), unique=True, nullable=False, index=True)
-
-    password_hash = db.Column(db.String(255), nullable=True)
-
-    # ✅ necesario para verificación email en PROD
-    is_verified = db.Column(db.Boolean, nullable=False, default=False)
-
-    is_admin = db.Column(db.Boolean, nullable=False, default=False)
-
-    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
-
-    def __repr__(self) -> str:
-        return f"<User id={self.id} email={self.email}>"
-
-
-# ---------------------------------------------------------
-# JOBS
+# JOBS DE TRANSCRIPCIÓN
 # ---------------------------------------------------------
 class AudioJob(db.Model):
     __tablename__ = "audio_jobs"
