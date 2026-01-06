@@ -13,6 +13,22 @@ from app.extensions import db
 from app.models_user import User
 
 bp = Blueprint("auth", __name__)
+from flask import Blueprint, render_template, request, flash, redirect, url_for
+
+bp = Blueprint("auth", __name__, url_prefix="/auth")
+
+@bp.get("/forgot")
+def forgot_password_page():
+    return render_template("auth/forgot.html")
+
+@bp.post("/forgot")
+def forgot_password_submit():
+    email = (request.form.get("email") or "").strip().lower()
+
+    # IMPORTANTE: responder siempre igual para no filtrar si existe el correo
+    # Aquí luego: generar token + guardar + enviar email si el user existe
+    flash("Si el correo existe, te enviamos un enlace para restablecer tu contraseña.", "success")
+    return redirect(url_for("auth.login_page"))
 
 
 # -------------------------
