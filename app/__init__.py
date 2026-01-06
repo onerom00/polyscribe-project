@@ -24,15 +24,11 @@ def create_app() -> Flask:
         "sqlite:///polyscribe3.db",
     )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    app.config["AUTH_REQUIRE_VERIFIED_EMAIL"] = bool(int(os.getenv("AUTH_REQUIRE_VERIFIED_EMAIL", "1")))
 
     # -----------------------------------------------------------
     # URL base (IMPORTANTE: usa www)
     # -----------------------------------------------------------
-    app.config["APP_BASE_URL"] = os.getenv(
-        "APP_BASE_URL",
-        "https://www.getpolyscribe.com",
-    )
+    app.config["APP_BASE_URL"] = os.getenv("APP_BASE_URL", "https://www.getpolyscribe.com")
 
     # -----------------------------------------------------------
     # FLAGS AUTH
@@ -50,7 +46,7 @@ def create_app() -> Flask:
     app.config["MAIL_FROM"] = os.getenv("MAIL_FROM", "PolyScribe <helppolyscribe@gmail.com>")
 
     # -----------------------------------------------------------
-    # PAYPAL (como ya lo tenías)
+    # PAYPAL
     # -----------------------------------------------------------
     app.config["PAYPAL_ENV"] = os.getenv("PAYPAL_ENV", "sandbox")
     app.config["PAYPAL_BASE_URL"] = os.getenv("PAYPAL_BASE_URL", "https://api-m.sandbox.paypal.com")
@@ -69,10 +65,16 @@ def create_app() -> Flask:
     db.init_app(app)
     migrate.init_app(app, db)
 
-    # Importar modelos (asegura tablas/migraciones)
+    # -----------------------------------------------------------
+    # MODELS (IMPORTANTÍSIMO)
+    # -----------------------------------------------------------
+    # ✅ Un solo User: vive en app/models.py
     from app import models  # noqa: F401
+    from app import models_auth  # noqa: F401
     from app import models_payment  # noqa: F401
-    from app import models_user  # noqa: F401  <-- IMPORTANTE
+
+    # ❌ NO importar models_user si también define users/User
+    # from app import models_user  # noqa: F401  <-- ELIMINAR
 
     # -----------------------------------------------------------
     # BLUEPRINTS
@@ -103,7 +105,15 @@ def create_app() -> Flask:
     def healthz():
         return {"ok": True}
 
-    with app.app_context():
-        db.create_all()
+    # -----------------------------------------------------------
+    # DB bootstrap (solo DEV)
+    # -----------------------------------------------------------
+    # En PROD lo correcto es usar migraciones (Flask-Migrate).
+    # Si quieres mantenerlo, déjalo apagado en Render:
+    # AUTO_CREATE_DB=0
+    auto_create = os.getenv("AUTO_CREATE_DB", "0") == "1"
+    if auto_create:
+        with app.app_context():
+            db.create_all()
 
     return app
