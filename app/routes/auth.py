@@ -13,30 +13,18 @@ from flask import (
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from app.extensions import db
-from app.models import User  # ✅ User real (evita choque "users")
+from app.models import User
 from app.models_auth import EmailVerificationToken, PasswordResetToken
 
 bp = Blueprint("auth", __name__, url_prefix="/auth")
 
 
-# -----------------------------
-# Helpers
-# -----------------------------
 def _base_url() -> str:
-    # ejemplo: https://www.getpolyscribe.com
-    return (current_app.config.get("APP_BASE_URL") or "").rstrip("/") + "/"
+    base = (current_app.config.get("APP_BASE_URL") or os.getenv("APP_BASE_URL") or "").strip()
+    return base.rstrip("/") + "/"
 
 
 def _send_email(to_email: str, subject: str, html_body: str) -> None:
-    """
-    En PROD usamos Gmail SMTP con App Password.
-    Requiere env vars:
-      SMTP_HOST=smtp.gmail.com
-      SMTP_PORT=587
-      SMTP_USER=helppolyscribe@gmail.com
-      SMTP_PASS=xxxx xxxx xxxx xxxx  (app password)
-      SMTP_FROM=PolyScribe <helppolyscribe@gmail.com>
-    """
     import smtplib
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
@@ -48,7 +36,7 @@ def _send_email(to_email: str, subject: str, html_body: str) -> None:
     from_addr = os.getenv("SMTP_FROM", f"PolyScribe <{user}>")
 
     if not user or not pw:
-        current_app.logger.warning("SMTP not configured. Skipping email to=%s subj=%s", to_email, subject)
+        current_app.logger.warning("SMTP not configured. Skipping email to=%s subject=%s", to_email, subject)
         return
 
     msg = MIMEMultipart("alternative")
@@ -73,16 +61,6 @@ def _logout_user() -> None:
     session.pop("uid", None)
 
 
-def _current_user() -> User | None:
-    uid = session.get("user_id") or session.get("uid")
-    if not uid:
-        return None
-    return db.session.get(User, int(uid))
-
-
-# -----------------------------
-# Pages
-# -----------------------------
 @bp.get("/register")
 def register_page():
     return render_template("auth/register.html")
@@ -92,6 +70,7 @@ def register_page():
 def register_post():
     email = (request.form.get("email") or "").strip().lower()
     password = request.form.get("password") or ""
+    password2 = request.form.get("password2") or ""
 
     if not email or "@" not in email:
         flash("Email inválido.", "error")
@@ -99,6 +78,10 @@ def register_post():
 
     if len(password) < 8:
         flash("La contraseña debe tener al menos 8 caracteres.", "error")
+        return redirect(url_for("auth.register_page"))
+
+    if password != password2:
+        flash("Las contraseñas no coinciden.", "error")
         return redirect(url_for("auth.register_page"))
 
     exists = db.session.query(User).filter(User.email == email).first()
@@ -116,7 +99,6 @@ def register_post():
     db.session.add(user)
     db.session.commit()
 
-    # crear token verificación
     token = secrets.token_urlsafe(32)
     expires = dt.datetime.utcnow() + dt.timedelta(hours=24)
 
@@ -135,17 +117,16 @@ def register_post():
     html = f"""
     <div style="font-family:Arial,sans-serif;max-width:560px">
       <h2>Verifica tu correo para activar PolyScribe</h2>
-      <p>Haz clic en el botón:</p>
-      <p><a href="{verify_link}" style="background:#0b62e0;color:white;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:700">Verificar correo</a></p>
-      <p>Si el botón no abre, copia y pega este enlace:</p>
+      <p>Haz clic aquí:</p>
+      <p><a href="{verify_link}" style="background:#0b62e0;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:800">Verificar correo</a></p>
+      <p>Si no abre, copia y pega:</p>
       <p><a href="{verify_link}">{verify_link}</a></p>
-      <p style="color:#6b7280;font-size:12px">Este enlace expira en 24 horas.</p>
+      <p style="color:#6b7280;font-size:12px">Expira en 24 horas.</p>
     </div>
     """
-
     _send_email(email, "Verifica tu correo - PolyScribe", html)
 
-    flash("Cuenta creada. Te enviamos un email para verificar tu correo.", "success")
+    flash("Cuenta creada. Revisa tu correo para verificar y luego inicia sesión.", "success")
     return redirect(url_for("auth.login_page"))
 
 
@@ -196,12 +177,12 @@ def login_post():
         flash("Debes verificar tu correo antes de entrar.", "error")
         return redirect(url_for("auth.login_page"))
 
-    if not check_password_hash(user.password_hash, password):
+    if not user.password_hash or not check_password_hash(user.password_hash, password):
         flash("Credenciales inválidas.", "error")
         return redirect(url_for("auth.login_page"))
 
     _login_user(user)
-    return redirect(url_for("pages.index"))
+    return redirect("/")
 
 
 @bp.get("/logout")
@@ -210,9 +191,6 @@ def logout():
     return redirect(url_for("auth.login_page"))
 
 
-# -----------------------------
-# Forgot / Reset password
-# -----------------------------
 @bp.get("/forgot")
 def forgot_page():
     return render_template("auth/forgot.html")
@@ -221,7 +199,6 @@ def forgot_page():
 @bp.post("/forgot")
 def forgot_post():
     email = (request.form.get("email") or "").strip().lower()
-    # Siempre respondemos igual (seguridad)
     generic_ok = "Si el email existe, enviaremos un enlace para restablecer la contraseña."
 
     if not email or "@" not in email:
@@ -251,11 +228,11 @@ def forgot_post():
     html = f"""
     <div style="font-family:Arial,sans-serif;max-width:560px">
       <h2>Restablecer contraseña</h2>
-      <p>Haz clic en el botón para crear una nueva contraseña:</p>
-      <p><a href="{reset_link}" style="background:#22c55e;color:#0b111d;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:800">Crear nueva contraseña</a></p>
-      <p>Si el botón no abre, copia y pega este enlace:</p>
+      <p>Haz clic para crear una nueva contraseña:</p>
+      <p><a href="{reset_link}" style="background:#22c55e;color:#0b111d;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:900">Crear nueva contraseña</a></p>
+      <p>Si no abre, copia y pega:</p>
       <p><a href="{reset_link}">{reset_link}</a></p>
-      <p style="color:#6b7280;font-size:12px">Este enlace expira en 30 minutos.</p>
+      <p style="color:#6b7280;font-size:12px">Expira en 30 minutos.</p>
     </div>
     """
     _send_email(email, "Restablecer contraseña - PolyScribe", html)
@@ -275,10 +252,10 @@ def reset_page():
         return render_template("auth/reset_result.html", ok=False, msg="Token inválido.")
 
     if pr.used_at is not None:
-        return render_template("auth/reset_result.html", ok=False, msg="Este token ya fue usado.")
+        return render_template("auth/reset_result.html", ok=False, msg="Este enlace ya fue usado.")
 
     if dt.datetime.utcnow() > pr.expires_at:
-        return render_template("auth/reset_result.html", ok=False, msg="Token expirado. Solicita otro.")
+        return render_template("auth/reset_result.html", ok=False, msg="Enlace expirado. Solicita otro.")
 
     return render_template("auth/reset_form.html", token=token)
 
@@ -287,9 +264,14 @@ def reset_page():
 def reset_post():
     token = (request.form.get("token") or "").strip()
     password = request.form.get("password") or ""
+    password2 = request.form.get("password2") or ""
 
     if len(password) < 8:
         flash("La contraseña debe tener al menos 8 caracteres.", "error")
+        return redirect(url_for("auth.reset_page", token=token))
+
+    if password != password2:
+        flash("Las contraseñas no coinciden.", "error")
         return redirect(url_for("auth.reset_page", token=token))
 
     pr = db.session.query(PasswordResetToken).filter(PasswordResetToken.token == token).first()
@@ -297,10 +279,10 @@ def reset_post():
         return render_template("auth/reset_result.html", ok=False, msg="Token inválido.")
 
     if pr.used_at is not None:
-        return render_template("auth/reset_result.html", ok=False, msg="Este token ya fue usado.")
+        return render_template("auth/reset_result.html", ok=False, msg="Este enlace ya fue usado.")
 
     if dt.datetime.utcnow() > pr.expires_at:
-        return render_template("auth/reset_result.html", ok=False, msg="Token expirado. Solicita otro.")
+        return render_template("auth/reset_result.html", ok=False, msg="Enlace expirado. Solicita otro.")
 
     user = db.session.get(User, int(pr.user_id))
     if not user:
