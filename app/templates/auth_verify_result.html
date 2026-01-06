@@ -1,22 +1,22 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>PolyScribe · Verificación</title>
-  <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Arial;margin:0;background:#e9f2ff}
-    .wrap{max-width:520px;margin:60px auto;background:#fff;border-radius:16px;padding:24px 26px;box-shadow:0 12px 30px rgba(15,35,52,.18)}
-    h1{margin:0 0 8px;font-size:22px}
-    p{margin:0;color:#444;font-size:14px}
-    a{display:inline-block;margin-top:14px;color:#0057d8;text-decoration:none;font-weight:800}
-  </style>
+  <title>Verificación · PolyScribe</title>
 </head>
-<body>
-  <div class="wrap">
-    <h1>{% if ok %}✅ Verificación exitosa{% else %}❌ Verificación fallida{% endif %}</h1>
-    <p>{{ msg }}</p>
-    <a href="/auth/login">Ir a iniciar sesión</a>
+<body style="font-family:Inter,system-ui,Arial; background:#eef6ff; margin:0;">
+  <div style="max-width:520px; margin:80px auto; background:#fff; border:1px solid #d9e4f7; border-radius:16px; padding:18px 18px 20px;">
+    <h2 style="margin:0 0 10px;">Verificación de correo</h2>
+    <div style="padding:12px;border-radius:14px;border:1px solid #c6d3ec;background:#f1f7ff;font-weight:800;">
+      {{ message }}
+    </div>
+
+    <div style="margin-top:14px; text-align:center;">
+      <a href="/auth/login" style="font-weight:900; color:#0b62e0; text-decoration:none;">
+        Ir a iniciar sesión
+      </a>
+    </div>
   </div>
 </body>
 </html>
