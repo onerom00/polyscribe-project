@@ -13,7 +13,7 @@ from flask import (
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from app.extensions import db
-from app.models_user import User
+from app.models_user import User  # ✅ AQUÍ está el User único
 from app.models_auth import EmailVerificationToken, PasswordResetToken
 
 bp = Blueprint("auth", __name__, url_prefix="/auth")
@@ -29,11 +29,11 @@ def _send_email(to_email: str, subject: str, html_body: str) -> None:
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
 
-    host = current_app.config.get("SMTP_HOST", os.getenv("SMTP_HOST", "smtp.gmail.com"))
-    port = int(current_app.config.get("SMTP_PORT", os.getenv("SMTP_PORT", "587")))
-    user = current_app.config.get("SMTP_USER", os.getenv("SMTP_USER", ""))
-    pw = current_app.config.get("SMTP_PASS", os.getenv("SMTP_PASS", ""))
-    from_addr = current_app.config.get("MAIL_FROM", os.getenv("MAIL_FROM", f"PolyScribe <{user}>"))
+    host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    port = int(os.getenv("SMTP_PORT", "587"))
+    user = os.getenv("SMTP_USER", "")
+    pw = os.getenv("SMTP_PASS", "")
+    from_addr = os.getenv("SMTP_FROM", f"PolyScribe <{user}>")
 
     if not user or not pw:
         current_app.logger.warning("SMTP not configured. Skipping email to=%s subject=%s", to_email, subject)
@@ -58,16 +58,7 @@ def _login_user(user: User) -> None:
 
 def _logout_user() -> None:
     session.pop("user_id", None)
-
-
-def current_user_id() -> int | None:
-    v = session.get("user_id")
-    if not v:
-        return None
-    try:
-        return int(v)
-    except Exception:
-        return None
+    session.pop("uid", None)
 
 
 @bp.get("/register")
@@ -78,7 +69,6 @@ def register_page():
 @bp.post("/register")
 def register_post():
     email = (request.form.get("email") or "").strip().lower()
-    name = (request.form.get("name") or "").strip()
     password = request.form.get("password") or ""
     password2 = request.form.get("password2") or ""
 
@@ -101,10 +91,8 @@ def register_post():
 
     user = User(
         email=email,
-        display_name=name or None,
         password_hash=generate_password_hash(password),
         is_verified=False,
-        is_active=True,
         created_at=dt.datetime.utcnow(),
         updated_at=dt.datetime.utcnow(),
     )
@@ -185,16 +173,13 @@ def login_post():
         flash("Credenciales inválidas.", "error")
         return redirect(url_for("auth.login_page"))
 
-    if current_app.config.get("AUTH_REQUIRE_VERIFIED_EMAIL", True) and not user.is_verified:
+    if not getattr(user, "is_verified", False):
         flash("Debes verificar tu correo antes de entrar.", "error")
         return redirect(url_for("auth.login_page"))
 
     if not user.password_hash or not check_password_hash(user.password_hash, password):
         flash("Credenciales inválidas.", "error")
         return redirect(url_for("auth.login_page"))
-
-    user.last_login_at = dt.datetime.utcnow()
-    db.session.commit()
 
     _login_user(user)
     return redirect("/")
@@ -205,10 +190,6 @@ def logout():
     _logout_user()
     return redirect(url_for("auth.login_page"))
 
-
-# =========================
-# OLVIDÉ MI CONTRASEÑA
-# =========================
 
 @bp.get("/forgot")
 def forgot_page():

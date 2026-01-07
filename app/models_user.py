@@ -1,12 +1,8 @@
 # app/models_user.py
 from __future__ import annotations
 
-import datetime as dt
+from datetime import datetime
 from app.extensions import db
-
-
-def utcnow():
-    return dt.datetime.utcnow()
 
 
 class User(db.Model):
@@ -15,27 +11,24 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
-    display_name = db.Column(db.String(255), nullable=True)
-
-    password_hash = db.Column(db.String(255), nullable=False)
+    display_name = db.Column(db.String(255))
+    password_hash = db.Column(db.String(255))
 
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     is_verified = db.Column(db.Boolean, nullable=False, default=False)
 
-    plan_tier = db.Column(db.String(32), nullable=False, default="free")
+    verify_token = db.Column(db.String(128), index=True)
+    verify_expires_at = db.Column(db.DateTime)
 
-    # si luego quieres cuotas por user directo (opcional)
+    plan_tier = db.Column(db.String(32), nullable=False, default="free")
     minute_quota = db.Column(db.Integer, nullable=False, default=600)
     minutes_used = db.Column(db.Integer, nullable=False, default=0)
 
-    paypal_subscription_id = db.Column(db.String(128), nullable=True)
+    paypal_subscription_id = db.Column(db.String(128))
 
-    last_login_at = db.Column(db.DateTime, nullable=True)
-    cycle_start = db.Column(db.DateTime, nullable=True)
-    cycle_end = db.Column(db.DateTime, nullable=True)
+    last_login_at = db.Column(db.DateTime)
+    cycle_start = db.Column(db.DateTime)
+    cycle_end = db.Column(db.DateTime)
 
-    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
-
-    def __repr__(self) -> str:
-        return f"<User id={self.id} email={self.email} verified={self.is_verified}>"
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

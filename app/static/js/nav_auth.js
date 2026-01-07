@@ -1,7 +1,14 @@
 // static/js/nav_auth.js
 document.addEventListener("DOMContentLoaded", () => {
-  const login = document.getElementById("nav-login-link");
-  const signup = document.getElementById("nav-signup-link");
+  const login =
+    document.getElementById("nav-login-link") ||
+    document.querySelector('a[href="/auth/login"]') ||
+    document.querySelector('a[href="/dev-login"]');
+
+  const signup =
+    document.getElementById("nav-signup-link") ||
+    document.querySelector('a[href="/auth/register"]') ||
+    document.querySelector('a[href*="signup=1"]');
 
   function go(path) {
     const u = new URL(path, location.origin);

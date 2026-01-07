@@ -4,7 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import uuid
 
-from app.extensions import db
+from app.extensions import db  # ✅ SIEMPRE usa extensions.db
 
 
 def utcnow():
@@ -12,6 +12,7 @@ def utcnow():
 
 
 def gen_job_id() -> str:
+    """Genera un ID único de 32 caracteres hex para los jobs."""
     return uuid.uuid4().hex
 
 
@@ -21,13 +22,17 @@ def gen_job_id() -> str:
 class AudioJob(db.Model):
     __tablename__ = "audio_jobs"
 
-    id = db.Column(db.String(64), primary_key=True, nullable=False, default=gen_job_id)
+    id = db.Column(
+        db.String(64),
+        primary_key=True,
+        nullable=False,
+        default=gen_job_id,
+    )
 
     user_id = db.Column(db.String(255), nullable=True, index=True)
 
     filename = db.Column(db.String(255), nullable=True)
     original_filename = db.Column(db.String(255), nullable=True)
-
     audio_s3_key = db.Column(db.String(512), nullable=True, default="")
     local_path = db.Column(db.String(1024), nullable=True)
     mime_type = db.Column(db.String(120), nullable=True)
@@ -49,7 +54,12 @@ class AudioJob(db.Model):
     cost_cents = db.Column(db.Integer, nullable=True)
 
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=utcnow,
+        onupdate=utcnow,
+    )
 
     def __repr__(self) -> str:
         return f"<AudioJob id={self.id} user={self.user_id} status={self.status}>"
