@@ -10,9 +10,10 @@ import subprocess
 from typing import Optional, Dict, Any, List
 
 from flask import Blueprint, request, jsonify, current_app, session
+
 from app.extensions import db
 from app.models import AudioJob
-from app.models_user import User
+from app.models_user import User  # ✅ ÚNICA fuente de User (NO models_auth)
 
 
 try:
@@ -29,7 +30,8 @@ MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "100") or 100)
 OPENAI_FILE_HARD_LIMIT_MB = int(os.getenv("OPENAI_FILE_LIMIT_MB", "25"))
 MAX_CHUNK_SECONDS = int(os.getenv("MAX_CHUNK_SECONDS", "600"))
 
-bp = Blueprint("jobs", __name__)
+bp = Blueprint("jobs", __name__)  # ✅ sin url_prefix: tus rutas ya están completas
+
 
 _LANG_ALIASES: Dict[str, str] = {
     "es": "es", "spa": "es", "spanish": "es", "es-es": "es",
@@ -331,13 +333,11 @@ def _get_used_seconds(user_id: str) -> int:
 def create_job():
     uid = _require_auth_user_id()
     if not uid:
-        # Si quieres distinguir NO_VERIFIED vs NO_AUTH, se puede.
         return jsonify({"error": "AUTH_REQUIRED"}), 401
-        # ✅ si el sistema exige verificación, validamos aquí
-        if current_app.config.get("AUTH_REQUIRE_VERIFIED_EMAIL", False):
-            u = db.session.get(User, int(uid))
-            if not u or not u.is_verified:
-                return jsonify({"error": "EMAIL_NOT_VERIFIED"}), 403
+
+    # ✅ Nota: la verificación ya está aplicada en _require_auth_user_id()
+    # si AUTH_REQUIRE_VERIFIED_EMAIL=True
+
     try:
         file = request.files.get("file")
         if not file or not file.filename:
