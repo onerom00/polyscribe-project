@@ -13,7 +13,7 @@ from flask import (
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from app.extensions import db
-from app.models_user import User  # ✅ USER ÚNICO
+from app.models_user import User  # ✅ USER OFICIAL
 from app.models_auth import EmailVerificationToken, PasswordResetToken
 
 bp = Blueprint("auth", __name__, url_prefix="/auth")
@@ -69,7 +69,6 @@ def register_page():
 @bp.post("/register")
 def register_post():
     email = (request.form.get("email") or "").strip().lower()
-    display_name = (request.form.get("name") or "").strip()  # opcional
     password = request.form.get("password") or ""
     password2 = request.form.get("password2") or ""
 
@@ -92,10 +91,8 @@ def register_post():
 
     user = User(
         email=email,
-        display_name=display_name or None,
         password_hash=generate_password_hash(password),
         is_verified=False,
-        is_active=True,
         created_at=dt.datetime.utcnow(),
         updated_at=dt.datetime.utcnow(),
     )
@@ -169,7 +166,7 @@ def login_page():
 @bp.post("/login")
 def login_post():
     email = (request.form.get("email") or "").strip().lower()
-    password = request.form.get("password") or ""
+    password = (request.form.get("password") or "").strip()
 
     user = db.session.query(User).filter(User.email == email).first()
     if not user:
