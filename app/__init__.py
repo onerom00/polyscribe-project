@@ -7,6 +7,16 @@ from flask import Flask
 from app.extensions import db, migrate
 
 
+def _fix_database_url(url: str) -> str:
+    """
+    Render a veces entrega DATABASE_URL con esquema 'postgres://'
+    SQLAlchemy prefiere 'postgresql://'
+    """
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql://", 1)
+    return url
+
+
 def create_app() -> Flask:
     app = Flask(
         __name__,
@@ -16,7 +26,8 @@ def create_app() -> Flask:
 
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
 
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "sqlite:///polyscribe3.db")
+    db_url = os.getenv("DATABASE_URL", "sqlite:///polyscribe.db")
+    app.config["SQLALCHEMY_DATABASE_URI"] = _fix_database_url(db_url)
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
     app.config["APP_BASE_URL"] = os.getenv("APP_BASE_URL", "https://www.getpolyscribe.com")
@@ -47,10 +58,15 @@ def create_app() -> Flask:
     db.init_app(app)
     migrate.init_app(app, db)
 
-    # ✅ Importar modelos (sin duplicar users)
+    # Importar modelos (para que Alembic los vea)
     from app import models  # noqa: F401
     from app import models_auth  # noqa: F401
     from app import models_payment  # noqa: F401
+    # Si tu User real está en models_user.py, también:
+    try:
+        from app import models_user  # noqa: F401
+    except Exception:
+        pass
 
     # Blueprints
     from app.routes.pages import bp as pages_bp
@@ -78,11 +94,5 @@ def create_app() -> Flask:
     @app.get("/healthz")
     def healthz():
         return {"ok": True}
-
-    # Recomendado: NO create_all en PROD (usa migraciones)
-    auto_create = os.getenv("AUTO_CREATE_DB", "0") == "1"
-    if auto_create:
-        with app.app_context():
-            db.create_all()
 
     return app
