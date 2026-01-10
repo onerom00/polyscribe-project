@@ -1,52 +1,7 @@
 services:
   - type: web
-    name: polyscribe
+    name: polyscribe-project
     env: python
-    plan: starter
-    region: oregon
-
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn run_auth_wrapper:app --log-file=-
-
-    envVars:
-      - key: FLASK_ENV
-        value: production
-
-      - key: SECRET_KEY
-        generateValue: true
-
-      - key: SQLALCHEMY_DATABASE_URI
-        value: sqlite:///polyscribe.db
-
-      - key: OPENAI_API_KEY
-        sync: false
-
-      - key: PAYPAL_CLIENT_ID
-        sync: false
-
-      - key: PAYPAL_CLIENT_SECRET
-        sync: false
-
-      - key: APP_BASE_URL
-        value: https://polyscribe.onrender.com
-
-      - key: PAYPAL_BASE_URL
-        value: https://api-m.sandbox.paypal.com
-
-      - key: PAYPAL_ENABLED
-        value: "1"
-
-      - key: PAYPAL_SKIP_VERIFY
-        value: "1"
-
-      - key: FREE_TIER_MINUTES
-        value: "10"
-
-      - key: MAX_UPLOAD_MB
-        value: "100"
-
-      - key: OPENAI_FILE_LIMIT_MB
-        value: "25"
-
-      - key: MAX_CHUNK_SECONDS
-        value: "600"
+    startCommand: gunicorn run_auth_wrapper:app --bind 0.0.0.0:$PORT --workers 2 --timeout 900
+    postDeployCommand: flask db upgrade
