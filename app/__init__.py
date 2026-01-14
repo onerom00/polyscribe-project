@@ -98,9 +98,9 @@ def create_app() -> Flask:
     from app.routes.usage import bp as usage_bp
     app.register_blueprint(usage_bp)
 
-    from app.routes.paypal import bp as paypal_bp, api_bp as paypal_api_bp
+    from app.routes.paypal import bp as paypal_bp
     app.register_blueprint(paypal_bp)
-    app.register_blueprint(paypal_api_bp)
+
 
     from app.routes.pricing_page import bp as pricing_page_bp
     app.register_blueprint(pricing_page_bp)
