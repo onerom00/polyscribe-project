@@ -44,14 +44,42 @@
   }
 
   function ensureUser() {
-  let userId = localStorage.getItem("user_id");
-  if (!userId) {
-    userId = "guest-" + Math.random().toString(36).slice(2);
-    localStorage.setItem("user_id", userId);
+    // Si tu backend usa sesión real, igual funciona porque el server dará prioridad a session.
+    // Esto sirve para custom_id y para modo dev.
+    let userId = localStorage.getItem("user_id");
+    if (!userId) {
+      userId = "guest-" + Math.random().toString(36).slice(2);
+      localStorage.setItem("user_id", userId);
+    }
+    return userId;
   }
-  return userId;
-}
 
+  async function postCapture({ userId, orderId, sku, minutes, amount }) {
+    const r = await fetch("/api/paypal/capture", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-User-Id": userId, // útil en dev; en prod el server prioriza session si existe
+      },
+      credentials: "same-origin",
+      body: JSON.stringify({
+        order_id: orderId,
+        sku,
+        minutes,
+        amount,
+        user_id: userId,
+      }),
+    });
+
+    let data = null;
+    try { data = await r.json(); } catch (_) {}
+
+    if (!r.ok) {
+      const msg = (data && data.error) ? data.error : ("HTTP " + r.status);
+      throw new Error(msg);
+    }
+    return data;
+  }
 
   function renderButtons() {
     if (!window.paypal) {
@@ -74,7 +102,12 @@
             return actions.order.create({
               purchase_units: [
                 {
+                  // ✅ reference_id lo usamos como sku
                   reference_id: plan.sku,
+
+                  // ✅ custom_id lo usamos para mapear user en webhook y server
+                  custom_id: userId,
+
                   description: plan.minutes + " minutos PolyScribe (prepago)",
                   amount: { currency_code: "USD", value: plan.price },
                 },
@@ -83,24 +116,23 @@
           },
 
           onApprove: function (data, actions) {
-            return actions.order.capture().then(function (details) {
-              fetch("/api/paypal/capture", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "X-User-Id": userId,
-                },
-                credentials: "same-origin",
-                body: JSON.stringify({
-                  order_id: details.id,
+            return actions.order.capture().then(async function (details) {
+              try {
+                await postCapture({
+                  userId,
+                  orderId: details.id,
                   sku: plan.sku,
                   minutes: plan.minutes,
                   amount: plan.price,
-                  user_id: userId,
-                }),
-              }).catch(() => {});
+                });
 
-              alert("Pago aprobado. ¡Gracias! Los minutos se abonarán en tu cuenta.");
+                alert("Pago aprobado. ¡Gracias! Los minutos se abonaron a tu cuenta.");
+                // Recargar para refrescar balance/minutos en pantalla
+                location.reload();
+              } catch (err) {
+                console.error("Capture backend error:", err);
+                showAlert("Pago aprobado, pero falló el registro de minutos: " + err.message);
+              }
             });
           },
 

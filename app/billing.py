@@ -1,36 +1,23 @@
 # app/billing.py
+from __future__ import annotations
+
 from datetime import datetime, timedelta, timezone
-from typing import Optional
-from .models import User, UsageLedger, UsageReason
 
 UTC = timezone.utc
 
-def now_utc() -> datetime:
-    return datetime.now(tz=UTC).replace(tzinfo=None)  # SQLite sin TZ
 
-def grant_cycle(user: User, plan_tier: str, quota_minutes: int, days: int = 31, note: str = "") -> None:
+def now_utc_naive() -> datetime:
     """
-    Asigna/renueva ciclo: setea tier, cuota total y resetea el consumo.
-    Registra un evento 'grant_cycle' (solo auditoría; no descuenta minutos).
+    Devuelve UTC naive (sin tzinfo) para compatibilidad con SQLite/Postgres
     """
-    start = now_utc()
-    end = start + timedelta(days=days)
+    return datetime.now(tz=UTC).replace(tzinfo=None)
 
-    user.plan_tier = plan_tier
-    user.cycle_start = start
-    user.cycle_end = end
-    user.minute_quota = int(quota_minutes or 0)
-    user.minutes_used = 0
-    user.is_active = True
 
-    ev = UsageLedger(
-        user_id=user.id,
-        job_id=None,
-        minutes_delta=0,
-        reason=UsageReason.grant_cycle,
-        note=note or f"{plan_tier} {quota_minutes}m {days}d"
-    )
-    return ev  # recuerda hacer db.add(ev)
-
-def charge_minutes(user: User, minutes: int) -> None:
-    user.minutes_used = max(0, int(user.minutes_used or 0) + int(minutes or 0))
+def compute_cycle_window(days: int = 31) -> tuple[datetime, datetime]:
+    """
+    Utilidad para calcular ciclo (start, end).
+    No toca DB ni modelos, así evitamos duplicidad.
+    """
+    start = now_utc_naive()
+    end = start + timedelta(days=int(days or 31))
+    return start, end
