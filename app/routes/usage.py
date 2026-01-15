@@ -5,7 +5,7 @@ import os
 
 from flask import Blueprint, current_app, jsonify, request, session
 
-from app import db
+from app.extensions import db
 from app.models import AudioJob
 from app.models_payment import Payment
 
@@ -32,19 +32,19 @@ def usage_balance():
     user_id = _get_user_id()
     free_min = int(current_app.config.get("FREE_TIER_MINUTES", 10))
 
-    # Minutos pagados (captured)
+    # Minutos pagados
     paid_min = 0
     try:
         q = db.session.query(Payment).filter(
             Payment.user_id == user_id,
-            Payment.status == "captured",
+            Payment.status.in_(["captured", "completed"]),  # compatibilidad
         )
         paid_min = sum(int(p.minutes or 0) for p in q.all())
     except Exception as e:
         current_app.logger.error("usage_balance: error leyendo pagos: %s", e)
         paid_min = 0
 
-    # Segundos usados (sumando duration_seconds de jobs por user)
+    # Segundos usados
     used_seconds = 0
     try:
         qj = db.session.query(AudioJob).filter(AudioJob.user_id == user_id)
