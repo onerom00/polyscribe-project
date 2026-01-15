@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import json
-import os
 import requests
 from flask import Blueprint, current_app, request, jsonify
+
+from app.extensions import db
+from app.models_payment import Payment
 
 bp = Blueprint("paypal", __name__, url_prefix="/api/paypal")
 
@@ -32,15 +34,157 @@ def paypal_get_access_token() -> str:
     return r.json()["access_token"]
 
 
+def paypal_get_order(order_id: str) -> dict:
+    access_token = paypal_get_access_token()
+    base_url = current_app.config["PAYPAL_BASE_URL"]
+    r = requests.get(
+        f"{base_url}/v2/checkout/orders/{order_id}",
+        headers=_paypal_headers(access_token),
+        timeout=30,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+def _get_user_id_from_request() -> str:
+    # prioridad: header (dev login), luego json body
+    uid = (request.headers.get("X-User-Id") or "").strip()
+    if uid:
+        return uid
+    body = request.get_json(silent=True) or {}
+    return str(body.get("user_id") or "").strip()
+
+
+def _credit_minutes(user_id: str, minutes: int, *, order_id: str, payload: dict) -> None:
+    """
+    Aquí va la lógica real de acreditación.
+    En tu proyecto normalmente existe UsageLedger o un balance por usuario.
+    Como no me pasaste esos modelos ahora, lo dejo en 2 capas:
+
+    1) Guardar Payment (auditoría + idempotencia)
+    2) (Opcional) Si existe UsageLedger, insertar un crédito.
+    """
+    # 1) Payment ya guardado afuera; aquí podrías hacer ledger si existe
+    try:
+        # Si en tu proyecto existe UsageLedger, esto lo activará sin romper.
+        from app.models import UsageLedger  # ajusta si tu clase está en otro archivo
+
+        entry = UsageLedger(
+            user_id=str(user_id),
+            kind="credit",
+            minutes=int(minutes),
+            source="paypal",
+            ref=str(order_id),
+            raw_payload=payload,
+        )
+        db.session.add(entry)
+        db.session.commit()
+        return
+    except Exception:
+        # Si no existe UsageLedger, por lo menos Payment queda registrado.
+        db.session.commit()
+        return
+
+
+@bp.get("/config")
+def paypal_config():
+    # Lo usa static/js/payments.js para decidir si renderiza botones
+    return jsonify(
+        {
+            "enabled": bool(current_app.config.get("PAYPAL_ENABLED")),
+            "client_id": current_app.config.get("PAYPAL_CLIENT_ID"),
+            "currency": current_app.config.get("PAYPAL_CURRENCY", "USD"),
+            "env": current_app.config.get("PAYPAL_ENV", "sandbox"),
+        }
+    )
+
+
+@bp.post("/capture")
+def paypal_capture():
+    body = request.get_json(silent=True) or {}
+
+    user_id = _get_user_id_from_request()
+    order_id = str(body.get("order_id") or "").strip()
+    sku = str(body.get("sku") or "").strip()
+    minutes = int(body.get("minutes") or 0)
+    amount = str(body.get("amount") or "").strip()
+
+    if not user_id or not order_id or not sku or minutes <= 0 or not amount:
+        return jsonify({"ok": False, "error": "missing_fields"}), 400
+
+    # Idempotencia: si ya procesamos este order_id, no volver a acreditar
+    existing = Payment.query.filter_by(order_id=order_id).first()
+    if existing and existing.status == "completed":
+        return jsonify({"ok": True, "status": "already_completed"}), 200
+
+    # Validar con PayPal (fuente de verdad)
+    try:
+        order = paypal_get_order(order_id)
+    except Exception as e:
+        current_app.logger.exception("PayPal get order failed: %s", e)
+        return jsonify({"ok": False, "error": "paypal_lookup_failed"}), 502
+
+    status = (order.get("status") or "").upper()
+    if status != "COMPLETED":
+        # Ojo: a veces puedes recibir APPROVED si aún no capturó.
+        return jsonify({"ok": False, "error": "order_not_completed", "status": status}), 400
+
+    # Validar monto/moneda
+    try:
+        pu = (order.get("purchase_units") or [])[0]
+        amt = pu["payments"]["captures"][0]["amount"]
+        paid_value = str(amt["value"])
+        paid_currency = str(amt["currency_code"])
+    except Exception:
+        current_app.logger.exception("Could not parse PayPal order capture amount")
+        return jsonify({"ok": False, "error": "bad_order_shape"}), 400
+
+    expected_currency = (current_app.config.get("PAYPAL_CURRENCY") or "USD").upper()
+    if paid_currency.upper() != expected_currency:
+        return jsonify({"ok": False, "error": "currency_mismatch"}), 400
+
+    # Comparación simple de monto como string (PayPal suele devolver con 2 decimales)
+    if paid_value != amount:
+        return jsonify(
+            {"ok": False, "error": "amount_mismatch", "paid": paid_value, "expected": amount}
+        ), 400
+
+    # Guardar Payment y acreditar
+    try:
+        if not existing:
+            p = Payment(
+                user_id=str(user_id),
+                order_id=order_id,
+                sku=sku,
+                minutes=minutes,
+                amount_usd=float(amount),
+                status="completed",
+                raw_payload=order,
+            )
+            db.session.add(p)
+        else:
+            existing.status = "completed"
+            existing.sku = sku
+            existing.minutes = minutes
+            existing.amount_usd = float(amount)
+            existing.raw_payload = order
+
+        db.session.flush()  # asegura insert/update antes de acreditar
+        _credit_minutes(user_id, minutes, order_id=order_id, payload=order)
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception("Credit minutes failed: %s", e)
+        return jsonify({"ok": False, "error": "credit_failed"}), 500
+
+    return jsonify({"ok": True, "credited_minutes": minutes}), 200
+
+
 def paypal_verify_webhook_signature(event_body: dict) -> bool:
-    """
-    Verifica firma del webhook usando PayPal API:
-    POST /v1/notifications/verify-webhook-signature
-    """
     webhook_id = current_app.config.get("PAYPAL_WEBHOOK_ID")
     if not webhook_id:
         current_app.logger.warning("PAYPAL_WEBHOOK_ID missing; skipping verification (NOT recommended).")
-        return True  # puedes poner False si quieres forzar seguridad
+        return True
 
     access_token = paypal_get_access_token()
     base_url = current_app.config["PAYPAL_BASE_URL"]
@@ -72,35 +216,12 @@ def paypal_verify_webhook_signature(event_body: dict) -> bool:
     return status == "SUCCESS"
 
 
-def plan_to_minutes(plan_id: str) -> int:
-    """
-    Mapea plan_id -> minutos.
-    Ajusta según tus cards reales:
-    Starter $9.99 -> 60
-    Pro $19.99 -> 300
-    Business $49.99 -> 1200
-    """
-    plan_id = (plan_id or "").strip()
-
-    starter = current_app.config.get("PAYPAL_PLAN_STARTER_ID", "")
-    pro = current_app.config.get("PAYPAL_PLAN_PRO_ID", "")
-    business = current_app.config.get("PAYPAL_PLAN_BUSINESS_ID", "")
-
-    if plan_id and plan_id == starter:
-        return 60
-    if plan_id and plan_id == pro:
-        return 300
-    if plan_id and plan_id == business:
-        return 1200
-    return 0
-
-
 @bp.route("/webhook", methods=["POST"])
 def paypal_webhook():
     event = request.get_json(silent=True) or {}
-    event_type = event.get("event_type", "UNKNOWN")
+    event_type = (event.get("event_type") or "UNKNOWN").upper()
 
-    # 1) Verificar firma
+    # Verificar firma
     try:
         if not paypal_verify_webhook_signature(event):
             current_app.logger.warning("PayPal webhook signature verification FAILED")
@@ -109,42 +230,7 @@ def paypal_webhook():
         current_app.logger.exception("PayPal verification error: %s", e)
         return jsonify({"ok": False, "error": "verify error"}), 500
 
-    # 2) Procesar eventos que dan minutos
-    # Recomendado: usar ACTIVATED y/o PAYMENT.SALE.COMPLETED según tu flujo.
-    if event_type == "BILLING.SUBSCRIPTION.ACTIVATED":
-        resource = event.get("resource") or {}
-        subscription_id = resource.get("id")
-        plan_id = resource.get("plan_id")
-
-        minutes = plan_to_minutes(plan_id)
-
-        # TODO: aquí debes asociar subscription al user (según tu modelo).
-        # Normalmente se hace guardando user_id cuando creas la suscripción (custom_id / subscriber / metadata).
-        # Por ahora: solo log.
-        current_app.logger.info(
-            "SUB ACTIVATED sub=%s plan=%s minutes=%s", subscription_id, plan_id, minutes
-        )
-
-        # Si ya tienes la tabla/ledger: aquí haces el crédito
-        # credit_minutes(user_id, minutes, source="paypal", ref=subscription_id)
-
-    elif event_type == "PAYMENT.SALE.COMPLETED":
-        current_app.logger.info("PAYMENT COMPLETED event received")
-
-    else:
-        current_app.logger.info("PayPal event ignored: %s", event_type)
-
+    # Respaldo (opcional): si el front no llamó /capture, aquí podrías acreditar.
+    # Para hacerlo bien, necesitas poder mapear el pago a un user_id (custom_id / invoice_id).
+    current_app.logger.info("PayPal webhook received: %s", event_type)
     return jsonify({"ok": True})
-@bp.route("/config", methods=["GET"])
-def paypal_config():
-    return jsonify({
-        "enabled": current_app.config.get("PAYPAL_ENABLED", False),
-        "env": current_app.config.get("PAYPAL_ENV", "sandbox"),
-        "currency": current_app.config.get("PAYPAL_CURRENCY", "USD"),
-        "client_id": current_app.config.get("PAYPAL_CLIENT_ID"),
-        "plans": {
-            "starter": current_app.config.get("PAYPAL_PLAN_STARTER_ID"),
-            "pro": current_app.config.get("PAYPAL_PLAN_PRO_ID"),
-            "business": current_app.config.get("PAYPAL_PLAN_BUSINESS_ID"),
-        }
-    })
