@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import json
+from decimal import Decimal, InvalidOperation
+
 import requests
 from flask import Blueprint, current_app, request, jsonify
 
-from app.extensions import db
+from app import db
 from app.models_payment import Payment
 
 bp = Blueprint("paypal", __name__, url_prefix="/api/paypal")
@@ -46,22 +48,6 @@ def paypal_get_order(order_id: str) -> dict:
     return r.json()
 
 
-def paypal_get_capture(capture_id: str) -> dict:
-    """
-    Si el id que nos llegó NO es un order_id sino un capture_id,
-    esta ruta lo valida: GET /v2/payments/captures/{capture_id}
-    """
-    access_token = paypal_get_access_token()
-    base_url = current_app.config["PAYPAL_BASE_URL"]
-    r = requests.get(
-        f"{base_url}/v2/payments/captures/{capture_id}",
-        headers=_paypal_headers(access_token),
-        timeout=30,
-    )
-    r.raise_for_status()
-    return r.json()
-
-
 def _get_user_id_from_request() -> str:
     uid = (request.headers.get("X-User-Id") or "").strip()
     if uid:
@@ -70,13 +56,24 @@ def _get_user_id_from_request() -> str:
     return str(body.get("user_id") or "").strip()
 
 
+def _money_eq(a: str, b: str) -> bool:
+    """Compara montos con tolerancia a formato."""
+    try:
+        da = Decimal(str(a))
+        dbb = Decimal(str(b))
+    except InvalidOperation:
+        return False
+    # tolerancia exacta a centavos
+    return da.quantize(Decimal("0.01")) == dbb.quantize(Decimal("0.01"))
+
+
 @bp.get("/config")
 def paypal_config():
     return jsonify(
         {
             "enabled": bool(current_app.config.get("PAYPAL_ENABLED")),
             "client_id": current_app.config.get("PAYPAL_CLIENT_ID"),
-            "currency": (current_app.config.get("PAYPAL_CURRENCY", "USD") or "USD").upper(),
+            "currency": current_app.config.get("PAYPAL_CURRENCY", "USD"),
             "env": current_app.config.get("PAYPAL_ENV", "sandbox"),
         }
     )
@@ -87,109 +84,77 @@ def paypal_capture():
     body = request.get_json(silent=True) or {}
 
     user_id = _get_user_id_from_request()
-    paypal_id = str(body.get("order_id") or "").strip()  # puede ser OrderID o CaptureID
+    order_id = str(body.get("order_id") or "").strip()
     sku = str(body.get("sku") or "").strip()
     minutes = int(body.get("minutes") or 0)
     amount = str(body.get("amount") or "").strip()
 
-    if not user_id or not paypal_id or not sku or minutes <= 0 or not amount:
+    if not user_id or not order_id or not sku or minutes <= 0 or not amount:
         return jsonify({"ok": False, "error": "missing_fields"}), 400
 
-    # Idempotencia: si ya procesamos este paypal_id, no duplicar
-    existing = Payment.query.filter_by(order_id=paypal_id).first()
-    if existing and existing.status == "captured":
-        return jsonify({"ok": True, "status": "already_captured"}), 200
+    # Idempotencia: si ya procesamos este order_id, no volver a acreditar
+    existing = Payment.query.filter_by(order_id=order_id).first()
+    if existing and (existing.status in ("captured", "completed")):
+        return jsonify({"ok": True, "status": "already_captured", "credited_minutes": int(existing.minutes or 0)}), 200
+
+    # Validar con PayPal
+    try:
+        order = paypal_get_order(order_id)
+    except Exception as e:
+        current_app.logger.exception("PayPal get order failed: %s", e)
+        return jsonify({"ok": False, "error": "paypal_lookup_failed"}), 502
+
+    status = (order.get("status") or "").upper()
+    if status != "COMPLETED":
+        return jsonify({"ok": False, "error": "order_not_completed", "status": status}), 400
+
+    # Leer monto y moneda desde capture
+    try:
+        pu = (order.get("purchase_units") or [])[0]
+        cap = pu["payments"]["captures"][0]
+        amt = cap["amount"]
+        paid_value = str(amt["value"])
+        paid_currency = str(amt["currency_code"])
+    except Exception:
+        current_app.logger.exception("Could not parse PayPal order capture amount")
+        return jsonify({"ok": False, "error": "bad_order_shape"}), 400
 
     expected_currency = (current_app.config.get("PAYPAL_CURRENCY") or "USD").upper()
+    if paid_currency.upper() != expected_currency:
+        return jsonify({"ok": False, "error": "currency_mismatch", "paid": paid_currency, "expected": expected_currency}), 400
 
-    # 1) Intentar validar como ORDER
-    paid_value = None
-    paid_currency = None
-    verified_payload = None
-    verified_kind = None
+    if not _money_eq(paid_value, amount):
+        return jsonify({"ok": False, "error": "amount_mismatch", "paid": paid_value, "expected": amount}), 400
 
-    try:
-        order = paypal_get_order(paypal_id)
-        verified_payload = order
-        verified_kind = "order"
-
-        status = (order.get("status") or "").upper()
-        if status not in ("COMPLETED", "APPROVED"):
-            return jsonify({"ok": False, "error": "order_not_completed", "status": status}), 400
-
-        # Si está COMPLETED, normalmente tiene captures dentro
-        try:
-            pu = (order.get("purchase_units") or [])[0]
-            captures = pu.get("payments", {}).get("captures", [])
-            if captures:
-                amt = captures[0]["amount"]
-                paid_value = str(amt["value"])
-                paid_currency = str(amt["currency_code"])
-            else:
-                # fallback: amount directo del purchase_unit
-                amt = pu.get("amount", {})
-                paid_value = str(amt.get("value", ""))
-                paid_currency = str(amt.get("currency_code", ""))
-        except Exception:
-            current_app.logger.exception("Could not parse ORDER amount/currency")
-            return jsonify({"ok": False, "error": "bad_order_shape"}), 400
-
-    except Exception as e:
-        # 2) Si falló como ORDER, intentar como CAPTURE
-        current_app.logger.warning("PayPal order lookup failed, trying capture lookup: %s", e)
-        try:
-            cap = paypal_get_capture(paypal_id)
-            verified_payload = cap
-            verified_kind = "capture"
-
-            status = (cap.get("status") or "").upper()
-            if status != "COMPLETED":
-                return jsonify({"ok": False, "error": "capture_not_completed", "status": status}), 400
-
-            amt = cap.get("amount") or {}
-            paid_value = str(amt.get("value", ""))
-            paid_currency = str(amt.get("currency_code", ""))
-        except Exception as e2:
-            current_app.logger.exception("PayPal capture lookup also failed: %s", e2)
-            return jsonify({"ok": False, "error": "paypal_lookup_failed"}), 502
-
-    # Validar moneda y monto
-    if not paid_currency or paid_currency.upper() != expected_currency:
-        return jsonify({"ok": False, "error": "currency_mismatch", "paid": paid_currency}), 400
-
-    # PayPal suele devolver 2 decimales; comparamos como string
-    if paid_value != amount:
-        return jsonify(
-            {"ok": False, "error": "amount_mismatch", "paid": paid_value, "expected": amount}
-        ), 400
-
-    # Guardar Payment (status debe ser "captured" porque usage.py lo suma así)
+    # Guardar Payment (esto es lo que usa /api/usage/balance para sumar minutos)
     try:
         if not existing:
             p = Payment(
                 user_id=str(user_id),
-                order_id=paypal_id,
+                order_id=order_id,
                 sku=sku,
                 minutes=minutes,
-                amount_usd=float(amount),
+                amount_usd=float(Decimal(amount).quantize(Decimal("0.01"))),
                 status="captured",
-                raw_payload={"kind": verified_kind, "data": verified_payload},
+                raw_payload=order,
             )
             db.session.add(p)
         else:
+            existing.user_id = str(user_id)
             existing.status = "captured"
             existing.sku = sku
             existing.minutes = minutes
-            existing.amount_usd = float(amount)
-            existing.raw_payload = {"kind": verified_kind, "data": verified_payload}
+            existing.amount_usd = float(Decimal(amount).quantize(Decimal("0.01")))
+            existing.raw_payload = order
 
         db.session.commit()
+
     except Exception as e:
         db.session.rollback()
         current_app.logger.exception("Payment save failed: %s", e)
-        return jsonify({"ok": False, "error": "db_failed"}), 500
+        return jsonify({"ok": False, "error": "credit_failed"}), 500
 
-    return jsonify({"ok": True, "credited_minutes": minutes}), 200
+    return jsonify({"ok": True, "credited_minutes": minutes, "user_id": user_id}), 200
 
 
 def paypal_verify_webhook_signature(event_body: dict) -> bool:
@@ -241,7 +206,5 @@ def paypal_webhook():
         current_app.logger.exception("PayPal verification error: %s", e)
         return jsonify({"ok": False, "error": "verify error"}), 500
 
-    # En esta versión dejamos el webhook como auditoría/backup.
-    # La acreditación real está en /capture, que amarra user_id + pago.
     current_app.logger.info("PayPal webhook received: %s", event_type)
     return jsonify({"ok": True})
