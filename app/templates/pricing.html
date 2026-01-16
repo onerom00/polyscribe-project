@@ -1,371 +1,179 @@
-<!-- templates/pricing.html -->
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>PolyScribe – Planes y Precios</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+{# templates/pricing.html #}
+{% extends "base.html" %}
 
-  <style>
-    :root{
-      --bg:#e4f0ff;
-      --blue:#0057d8;
-      --text:#0b1424;
-      --muted:#555;
-      --card:#ffffff;
-      --shadow:0 10px 26px rgba(15, 35, 52, 0.14);
-      --radius:18px;
-      --gap:16px;
-      --border:#d9e4f7;
-    }
+{% block title %}PolyScribe – Planes y Precios{% endblock %}
 
-    body{
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: var(--bg);
-      margin: 0;
-      color: var(--text);
-    }
+{% block content %}
+<div class="container" style="max-width: 1100px; margin: 0 auto; padding: 24px;">
+  <h1 style="margin: 0 0 6px 0;">Planes y Precios</h1>
+  <p style="margin: 0 0 16px 0; opacity: 0.85;">
+    Empieza gratis y escala solo si necesitas más minutos o funciones avanzadas.
+  </p>
 
-    /* NAV centrada */
-    .nav{
-      padding: 12px 16px;
-      font-size: 14px;
-      display:flex;
-      justify-content:center;
-      border-bottom: 1px solid rgba(0,0,0,0.04);
-      background: transparent;
-    }
-    .nav .nav-inner{
-      width:100%;
-      max-width:1100px;
-      display:flex;
-      justify-content:center;
-      align-items:center;
-      gap:14px;
-      flex-wrap:wrap;
-      font-weight:700;
-    }
-    .nav a{
-      text-decoration:none;
-      color: var(--blue);
-      font-weight:700;
-    }
-    .nav .sep{color:#4b5563; opacity:.7}
-    .nav .active{
-      color:#0b1424;
-      font-weight:800;
-      text-decoration:none;
-    }
+  <!-- Banners -->
+  <div id="banner-ok" style="display:none; background:#e6ffed; border:1px solid #9ae6b4; padding:10px 12px; border-radius:8px; margin:10px 0;"></div>
+  <div id="banner-warn" style="display:none; background:#fff7e6; border:1px solid #f6ad55; padding:10px 12px; border-radius:8px; margin:10px 0;"></div>
+  <div id="banner-err" style="display:none; background:#ffe6e6; border:1px solid #fc8181; padding:10px 12px; border-radius:8px; margin:10px 0;"></div>
 
-    .page{
-      max-width: 1100px;
-      margin: 28px auto 44px;
-      padding: 0 16px;
-    }
+  <!-- Cards -->
+  <div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:16px; margin-top:14px;">
+    <!-- FREE -->
+    <div style="background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px;">
+      <div style="font-weight:700;">Free</div>
+      <div style="font-size:28px; font-weight:800; margin-top:6px;">$0 <span style="font-size:13px; font-weight:600; opacity:.7;">para siempre</span></div>
+      <ul style="margin:12px 0 0 18px; padding:0; line-height:1.6;">
+        <li>10 minutos de transcripción al mes</li>
+        <li>Hasta 100 MB por archivo</li>
+        <li>Resumen automático incluido</li>
+        <li>Soporte para múltiples idiomas</li>
+      </ul>
+      <div style="margin-top:12px; font-size:12px; opacity:.7;">
+        Ideal para probar PolyScribe o usarlo de forma ocasional.
+      </div>
+    </div>
 
-    h1{
-      margin: 0 0 6px;
-      font-size: 26px;
-      letter-spacing: -0.2px;
-    }
-    .subtitle{
-      margin: 0 0 18px;
-      font-size: 14px;
-      color: var(--muted);
-      max-width: 70ch;
-    }
+    <!-- STARTER -->
+    <div style="background:#fff; border:2px solid #bee3f8; border-radius:14px; padding:16px;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <div style="font-weight:700;">Starter</div>
+        <span style="font-size:11px; background:#ebf8ff; border:1px solid #bee3f8; padding:2px 8px; border-radius:999px;">Recomendado</span>
+      </div>
+      <div style="font-size:28px; font-weight:800; margin-top:6px;">$9.99 <span style="font-size:13px; font-weight:700; opacity:.7;">prepago</span></div>
+      <ul style="margin:12px 0 0 18px; padding:0; line-height:1.6;">
+        <li>60 minutos de transcripción</li>
+        <li>Hasta 100 MB por archivo</li>
+        <li>Exportar SRT / VTT / DOCX / PDF</li>
+        <li>Resúmenes mejorados por IA</li>
+      </ul>
 
-    .banner{
-      padding: 10px 14px;
-      border-radius: 12px;
-      font-size: 13px;
-      margin-bottom: 12px;
-    }
-    .banner-ok{
-      background: #e2f7e9;
-      color: #125325;
-      border: 1px solid #8ad19d;
-    }
-    .banner-warn{
-      background: #fff4e5;
-      color: #7b3d00;
-      border: 1px solid #f4c08a;
-    }
-    #pay-alert{display:none}
+      <!-- Contenedor botón PayPal (NO LO BORRES) -->
+      <div style="margin-top:14px;">
+        <div id="paypal-button-starter"></div>
+      </div>
 
-    .plans-grid{
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: var(--gap);
-      margin-top: 10px;
-      margin-bottom: 26px;
-      align-items: stretch;
-    }
-    @media (max-width: 960px){
-      .plans-grid{grid-template-columns: repeat(2, minmax(0, 1fr));}
-    }
-    @media (max-width: 640px){
-      .plans-grid{grid-template-columns: minmax(0, 1fr);}
-    }
+      <div style="margin-top:10px; font-size:12px; opacity:.7;">
+        Perfecto si generas contenido o tomas notas frecuentemente.
+      </div>
+    </div>
 
-    .plan{
-      background: var(--card);
-      border-radius: var(--radius);
-      padding: 18px 18px 20px;
-      box-shadow: var(--shadow);
-      display:flex;
-      flex-direction:column;
-      justify-content:space-between;
-      border: 1px solid rgba(0,0,0,0.03);
-      min-height: 320px;
-    }
-    .plan-header{margin-bottom: 12px;}
-    .plan-name{
-      font-size: 16px;
-      font-weight: 700;
-      margin-bottom: 4px;
-    }
-    .plan-price{
-      font-size: 22px;
-      font-weight: 800;
-      letter-spacing: -0.2px;
-    }
-    .plan-price span{
-      font-size: 14px;
-      font-weight: 500;
-      color: #555;
-      margin-left: 6px;
-    }
-    .plan-body{
-      font-size: 14px;
-      color: #333;
-    }
-    .plan-body ul{
-      padding-left: 18px;
-      margin: 10px 0 8px;
-    }
-    .plan-body li{margin-bottom: 4px;}
-    .plan-footer{margin-top: 12px;}
+    <!-- PRO -->
+    <div style="background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px;">
+      <div style="font-weight:700;">Pro</div>
+      <div style="font-size:28px; font-weight:800; margin-top:6px;">$19.99 <span style="font-size:13px; font-weight:700; opacity:.7;">prepago</span></div>
+      <ul style="margin:12px 0 0 18px; padding:0; line-height:1.6;">
+        <li>300 minutos de transcripción</li>
+        <li>Hasta 100 MB por archivo</li>
+        <li>Historial completo y descargas</li>
+        <li>Funciones avanzadas de IA</li>
+      </ul>
 
-    .plan-tag{
-      display:inline-block;
-      padding: 2px 8px;
-      font-size: 11px;
-      border-radius: 999px;
-      background: #eef2ff;
-      color: #233472;
-      margin-bottom: 6px;
-      font-weight: 800;
-    }
+      <!-- Contenedor botón PayPal -->
+      <div style="margin-top:14px;">
+        <div id="paypal-button-pro"></div>
+      </div>
 
-    .hint{
-      font-size: 12px;
-      color: #4b5563;
-      margin-top: 6px;
-    }
+      <div style="margin-top:10px; font-size:12px; opacity:.7;">
+        Para creadores, podcasters y equipos pequeños.
+      </div>
+    </div>
 
-    .section-title{
-      margin-top: 18px;
-      font-size: 16px;
-      font-weight: 800;
-    }
+    <!-- BUSINESS -->
+    <div style="background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px;">
+      <div style="font-weight:700;">Business</div>
+      <div style="font-size:28px; font-weight:800; margin-top:6px;">$49.99 <span style="font-size:13px; font-weight:700; opacity:.7;">prepago</span></div>
+      <ul style="margin:12px 0 0 18px; padding:0; line-height:1.6;">
+        <li>1200 minutos de transcripción</li>
+        <li>Hasta 100 MB por archivo</li>
+        <li>Soporte prioritario</li>
+        <li>Uso compartido dentro de tu equipo</li>
+      </ul>
 
-    table{
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-      background: white;
-      border-radius: 16px;
-      overflow: hidden;
-      font-size: 13px;
-      box-shadow: 0 8px 22px rgba(15,23,42,0.08);
-      border: 1px solid rgba(0,0,0,0.03);
-    }
-    th,td{
-      padding: 9px 12px;
-      border-bottom: 1px solid #edf1fb;
-    }
-    th{
-      text-align: left;
-      background: #f4f6ff;
-      font-weight: 800;
-    }
-    tr:last-child td{border-bottom:none}
+      <!-- Contenedor botón PayPal -->
+      <div style="margin-top:14px;">
+        <div id="paypal-button-business"></div>
+      </div>
 
-    .tip{
-      margin-top: 8px;
-      font-size: 12px;
-      color: #555;
-    }
-    .footer-note{
-      margin-top: 20px;
-      font-size: 12px;
-      color: #555;
-    }
-  </style>
-</head>
-
-<body>
-  <div class="nav">
-    <div class="nav-inner">
-      <a href="/">PolyScribe</a>
-      <span class="sep">·</span>
-      <a href="/">Transcribir</a>
-      <span class="sep">·</span>
-      <a href="/history">Historial</a>
-      <span class="sep">·</span>
-      <span class="active">Precios</span>
-      <span class="sep">·</span>
-      <a href="/ayuda">Ayuda</a>
+      <div style="margin-top:10px; font-size:12px; opacity:.7;">
+        Ideal para academias, empresas o agencias de contenido.
+      </div>
     </div>
   </div>
 
-  <div class="page">
-    <h1>Planes y Precios</h1>
-    <p class="subtitle">
-      Empieza gratis y escala sólo si necesitas más minutos o funciones avanzadas.
-    </p>
-
-    {% if paypal_enabled %}
-    <div class="banner banner-ok">
-      PayPal está configurado. Puedes comprar cualquier plan de pago y tu saldo de minutos se activará automáticamente después del pago.
-    </div>
-    {% else %}
-    <div class="banner banner-warn">
-      PayPal no está configurado por el momento. Puedes continuar usando PolyScribe con el plan Free.
-    </div>
-    {% endif %}
-
-    <div id="pay-alert" class="banner banner-warn"></div>
-
-    <div class="plans-grid">
-      <!-- Free -->
-      <div class="plan">
-        <div>
-          <div class="plan-header">
-            <div class="plan-name">Free</div>
-            <div class="plan-price">$0 <span>para siempre</span></div>
-          </div>
-          <div class="plan-body">
-            <ul>
-              <li>10 minutos de transcripción al mes</li>
-              <li>Hasta 100&nbsp;MB por archivo</li>
-              <li>Resumen automático incluido</li>
-              <li>Soporte para múltiples idiomas</li>
-            </ul>
-            <div class="hint">Ideal para probar PolyScribe o usarlo de forma ocasional.</div>
-          </div>
-        </div>
-        <div class="plan-footer"></div>
-      </div>
-
-      <!-- Starter -->
-      <div class="plan">
-        <div>
-          <div class="plan-header">
-            <span class="plan-tag">Recomendado</span>
-            <div class="plan-name">Starter</div>
-            <div class="plan-price">$9.99 <span>prepago</span></div>
-          </div>
-          <div class="plan-body">
-            <ul>
-              <li>60 minutos de transcripción</li>
-              <li>Hasta 100&nbsp;MB por archivo</li>
-              <li>Exportar SRT / VTT / DOCX / PDF</li>
-              <li>Resúmenes mejorados por IA</li>
-            </ul>
-            <div class="hint">Perfecto si generas contenido o tomas notas frecuentemente.</div>
-          </div>
-        </div>
-        <div class="plan-footer">
-          <div id="pp-60"></div>
-        </div>
-      </div>
-
-      <!-- Pro -->
-      <div class="plan">
-        <div>
-          <div class="plan-header">
-            <div class="plan-name">Pro</div>
-            <div class="plan-price">$19.99 <span>prepago</span></div>
-          </div>
-          <div class="plan-body">
-            <ul>
-              <li>300 minutos de transcripción</li>
-              <li>Hasta 100&nbsp;MB por archivo</li>
-              <li>Historial completo y descargas</li>
-              <li>Funciones avanzadas de IA</li>
-            </ul>
-            <div class="hint">Para creadores, podcasters y equipos pequeños.</div>
-          </div>
-        </div>
-        <div class="plan-footer">
-          <div id="pp-300"></div>
-        </div>
-      </div>
-
-      <!-- Business -->
-      <div class="plan">
-        <div>
-          <div class="plan-header">
-            <div class="plan-name">Business</div>
-            <div class="plan-price">$49.99 <span>prepago</span></div>
-          </div>
-          <div class="plan-body">
-            <ul>
-              <li>1200 minutos de transcripción</li>
-              <li>Hasta 100&nbsp;MB por archivo</li>
-              <li>Soporte prioritario</li>
-              <li>Uso compartido dentro de tu equipo</li>
-            </ul>
-            <div class="hint">Ideal para academias, empresas o agencias de contenido.</div>
-          </div>
-        </div>
-        <div class="plan-footer">
-          <div id="pp-1200"></div>
-        </div>
-      </div>
-    </div>
-
-    <div>
-      <div class="section-title">¿Cuánto rinden 100&nbsp;MB?</div>
-      <table>
-        <thead>
-          <tr>
-            <th>Formato / Bitrate</th>
-            <th>Duración aprox. por 100&nbsp;MB</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>MP3 / AAC 128 kbps</td>
-            <td>≈ 1 h 49 min</td>
-          </tr>
-          <tr>
-            <td>MP3 / AAC 192 kbps</td>
-            <td>≈ 1 h 13 min</td>
-          </tr>
-          <tr>
-            <td>WAV 16-bit 44.1 kHz estéreo</td>
-            <td>≈ 9 min 54 s</td>
-          </tr>
-          <tr>
-            <td>Opus voz 24–32 kbps</td>
-            <td>≈ entre 7–10 horas</td>
-          </tr>
-        </tbody>
-      </table>
-      <p class="tip">
-        Tip: convierte tus archivos WAV/estéreo a MP3 128&nbsp;kbps u Opus 24–32&nbsp;kbps para obtener más minutos con el mismo límite de tamaño.
-      </p>
-    </div>
-
-    <p class="footer-note">
-      Los planes son de tipo <strong>prepago</strong>: compras minutos y los usas cuando quieras.
-      El plan Free se mantiene siempre activo como respaldo.
-    </p>
+  <!-- Tabla 100MB -->
+  <h3 style="margin-top:22px;">¿Cuánto rinden 100 MB?</h3>
+  <div style="background:#fff; border:1px solid #e5e7eb; border-radius:14px; overflow:hidden;">
+    <table style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr style="background:#f8fafc;">
+          <th style="text-align:left; padding:10px; border-bottom:1px solid #e5e7eb;">Formato / Bitrate</th>
+          <th style="text-align:left; padding:10px; border-bottom:1px solid #e5e7eb;">Duración aprox. por 100 MB</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td style="padding:10px; border-bottom:1px solid #eef2f7;">MP3 / AAC 128 kbps</td><td style="padding:10px; border-bottom:1px solid #eef2f7;">≈ 1 h 49 min</td></tr>
+        <tr><td style="padding:10px; border-bottom:1px solid #eef2f7;">MP3 / AAC 192 kbps</td><td style="padding:10px; border-bottom:1px solid #eef2f7;">≈ 1 h 13 min</td></tr>
+        <tr><td style="padding:10px; border-bottom:1px solid #eef2f7;">WAV 16-bit 44.1 kHz estéreo</td><td style="padding:10px; border-bottom:1px solid #eef2f7;">≈ 9 min 54 s</td></tr>
+        <tr><td style="padding:10px;">Opus voz 24–32 kbps</td><td style="padding:10px;">≈ entre 7–10 horas</td></tr>
+      </tbody>
+    </table>
   </div>
 
-  <script src="{{ url_for('static', filename='js/payments.js') }}"></script>
-</body>
-</html>
+  <p style="margin-top:10px; font-size:12px; opacity:.7;">
+    Tip: convierte tus archivos WAV/estéreo a MP3 128 kbps u Opus 24–32 kbps para obtener más minutos con el mismo límite de tamaño.
+  </p>
+</div>
+
+<!-- Loader: inyecta PayPal SDK según /api/paypal/config y luego carga payments.js -->
+<script>
+(async function() {
+  try {
+    const r = await fetch("/api/paypal/config", { cache: "no-store" });
+    const cfg = await r.json();
+
+    if (!cfg || !cfg.enabled || !cfg.client_id) {
+      const warn = document.getElementById("banner-warn");
+      if (warn) {
+        warn.style.display = "block";
+        warn.textContent = "PayPal no está habilitado o falta Client ID.";
+      }
+      return;
+    }
+
+    // Inyectar SDK PayPal
+    const params = new URLSearchParams({
+      "client-id": cfg.client_id,
+      "currency": (cfg.currency || "USD"),
+      "intent": "capture",
+      "components": "buttons",
+      "enable-funding": "card"
+    });
+
+    const sdk = document.createElement("script");
+    sdk.src = "https://www.paypal.com/sdk/js?" + params.toString();
+    sdk.async = true;
+    sdk.onload = function() {
+      // Cargar payments.js después del SDK
+      const js = document.createElement("script");
+      js.src = "/static/js/payments.js?v=" + Date.now();
+      js.defer = true;
+      document.body.appendChild(js);
+    };
+    sdk.onerror = function() {
+      const err = document.getElementById("banner-err");
+      if (err) {
+        err.style.display = "block";
+        err.textContent = "No se pudo cargar el SDK de PayPal.";
+      }
+    };
+    document.head.appendChild(sdk);
+
+  } catch (e) {
+    const err = document.getElementById("banner-err");
+    if (err) {
+      err.style.display = "block";
+      err.textContent = "Error inicializando PayPal: " + (e && e.message ? e.message : String(e));
+    }
+  }
+})();
+</script>
+{% endblock %}
