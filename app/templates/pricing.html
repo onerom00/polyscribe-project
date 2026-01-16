@@ -1,179 +1,182 @@
-{# templates/pricing.html #}
-{% extends "base.html" %}
+<!-- templates/pricing.html (STANDALONE, sin extends) -->
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PolyScribe – Planes y Precios</title>
+</head>
 
-{% block title %}PolyScribe – Planes y Precios{% endblock %}
-
-{% block content %}
-<div class="container" style="max-width: 1100px; margin: 0 auto; padding: 24px;">
-  <h1 style="margin: 0 0 6px 0;">Planes y Precios</h1>
-  <p style="margin: 0 0 16px 0; opacity: 0.85;">
-    Empieza gratis y escala solo si necesitas más minutos o funciones avanzadas.
-  </p>
-
-  <!-- Banners -->
-  <div id="banner-ok" style="display:none; background:#e6ffed; border:1px solid #9ae6b4; padding:10px 12px; border-radius:8px; margin:10px 0;"></div>
-  <div id="banner-warn" style="display:none; background:#fff7e6; border:1px solid #f6ad55; padding:10px 12px; border-radius:8px; margin:10px 0;"></div>
-  <div id="banner-err" style="display:none; background:#ffe6e6; border:1px solid #fc8181; padding:10px 12px; border-radius:8px; margin:10px 0;"></div>
-
-  <!-- Cards -->
-  <div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:16px; margin-top:14px;">
-    <!-- FREE -->
-    <div style="background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px;">
-      <div style="font-weight:700;">Free</div>
-      <div style="font-size:28px; font-weight:800; margin-top:6px;">$0 <span style="font-size:13px; font-weight:600; opacity:.7;">para siempre</span></div>
-      <ul style="margin:12px 0 0 18px; padding:0; line-height:1.6;">
-        <li>10 minutos de transcripción al mes</li>
-        <li>Hasta 100 MB por archivo</li>
-        <li>Resumen automático incluido</li>
-        <li>Soporte para múltiples idiomas</li>
-      </ul>
-      <div style="margin-top:12px; font-size:12px; opacity:.7;">
-        Ideal para probar PolyScribe o usarlo de forma ocasional.
+<body style="margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#eaf3ff; color:#0f172a;">
+  <div style="max-width:1100px; margin:0 auto; padding:24px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px;">
+      <div style="font-weight:800; font-size:18px;">PolyScribe</div>
+      <div style="display:flex; gap:14px; font-size:13px;">
+        <a href="/" style="color:#0b3b8f; text-decoration:none; font-weight:700;">Transcribir</a>
+        <a href="/history" style="color:#0b3b8f; text-decoration:none; font-weight:700;">Historial</a>
+        <a href="/pricing" style="color:#0b3b8f; text-decoration:none; font-weight:800;">Precios</a>
+        <a href="/help" style="color:#0b3b8f; text-decoration:none; font-weight:700;">Ayuda</a>
       </div>
     </div>
 
-    <!-- STARTER -->
-    <div style="background:#fff; border:2px solid #bee3f8; border-radius:14px; padding:16px;">
-      <div style="display:flex; align-items:center; gap:8px;">
-        <div style="font-weight:700;">Starter</div>
-        <span style="font-size:11px; background:#ebf8ff; border:1px solid #bee3f8; padding:2px 8px; border-radius:999px;">Recomendado</span>
-      </div>
-      <div style="font-size:28px; font-weight:800; margin-top:6px;">$9.99 <span style="font-size:13px; font-weight:700; opacity:.7;">prepago</span></div>
-      <ul style="margin:12px 0 0 18px; padding:0; line-height:1.6;">
-        <li>60 minutos de transcripción</li>
-        <li>Hasta 100 MB por archivo</li>
-        <li>Exportar SRT / VTT / DOCX / PDF</li>
-        <li>Resúmenes mejorados por IA</li>
-      </ul>
+    <h1 style="margin:0 0 6px 0;">Planes y Precios</h1>
+    <p style="margin:0 0 16px 0; opacity:.85;">
+      Empieza gratis y escala solo si necesitas más minutos o funciones avanzadas.
+    </p>
 
-      <!-- Contenedor botón PayPal (NO LO BORRES) -->
-      <div style="margin-top:14px;">
-        <div id="paypal-button-starter"></div>
+    <!-- Banners -->
+    <div id="banner-ok" style="display:none; background:#e6ffed; border:1px solid #9ae6b4; padding:10px 12px; border-radius:8px; margin:10px 0;"></div>
+    <div id="banner-warn" style="display:none; background:#fff7e6; border:1px solid #f6ad55; padding:10px 12px; border-radius:8px; margin:10px 0;"></div>
+    <div id="banner-err" style="display:none; background:#ffe6e6; border:1px solid #fc8181; padding:10px 12px; border-radius:8px; margin:10px 0;"></div>
+
+    <!-- Cards -->
+    <div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:16px; margin-top:14px;">
+      <!-- FREE -->
+      <div style="background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px;">
+        <div style="font-weight:700;">Free</div>
+        <div style="font-size:28px; font-weight:800; margin-top:6px;">$0 <span style="font-size:13px; font-weight:600; opacity:.7;">para siempre</span></div>
+        <ul style="margin:12px 0 0 18px; padding:0; line-height:1.6;">
+          <li>10 minutos de transcripción al mes</li>
+          <li>Hasta 100 MB por archivo</li>
+          <li>Resumen automático incluido</li>
+          <li>Soporte para múltiples idiomas</li>
+        </ul>
+        <div style="margin-top:12px; font-size:12px; opacity:.7;">
+          Ideal para probar PolyScribe o usarlo de forma ocasional.
+        </div>
       </div>
 
-      <div style="margin-top:10px; font-size:12px; opacity:.7;">
-        Perfecto si generas contenido o tomas notas frecuentemente.
+      <!-- STARTER -->
+      <div style="background:#fff; border:2px solid #bee3f8; border-radius:14px; padding:16px;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div style="font-weight:700;">Starter</div>
+          <span style="font-size:11px; background:#ebf8ff; border:1px solid #bee3f8; padding:2px 8px; border-radius:999px;">Recomendado</span>
+        </div>
+        <div style="font-size:28px; font-weight:800; margin-top:6px;">$9.99 <span style="font-size:13px; font-weight:700; opacity:.7;">prepago</span></div>
+        <ul style="margin:12px 0 0 18px; padding:0; line-height:1.6;">
+          <li>60 minutos de transcripción</li>
+          <li>Hasta 100 MB por archivo</li>
+          <li>Exportar SRT / VTT / DOCX / PDF</li>
+          <li>Resúmenes mejorados por IA</li>
+        </ul>
+        <div style="margin-top:14px;">
+          <div id="paypal-button-starter"></div>
+        </div>
+        <div style="margin-top:10px; font-size:12px; opacity:.7;">
+          Perfecto si generas contenido o tomas notas frecuentemente.
+        </div>
+      </div>
+
+      <!-- PRO -->
+      <div style="background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px;">
+        <div style="font-weight:700;">Pro</div>
+        <div style="font-size:28px; font-weight:800; margin-top:6px;">$19.99 <span style="font-size:13px; font-weight:700; opacity:.7;">prepago</span></div>
+        <ul style="margin:12px 0 0 18px; padding:0; line-height:1.6;">
+          <li>300 minutos de transcripción</li>
+          <li>Hasta 100 MB por archivo</li>
+          <li>Historial completo y descargas</li>
+          <li>Funciones avanzadas de IA</li>
+        </ul>
+        <div style="margin-top:14px;">
+          <div id="paypal-button-pro"></div>
+        </div>
+        <div style="margin-top:10px; font-size:12px; opacity:.7;">
+          Para creadores, podcasters y equipos pequeños.
+        </div>
+      </div>
+
+      <!-- BUSINESS -->
+      <div style="background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px;">
+        <div style="font-weight:700;">Business</div>
+        <div style="font-size:28px; font-weight:800; margin-top:6px;">$49.99 <span style="font-size:13px; font-weight:700; opacity:.7;">prepago</span></div>
+        <ul style="margin:12px 0 0 18px; padding:0; line-height:1.6;">
+          <li>1200 minutos de transcripción</li>
+          <li>Hasta 100 MB por archivo</li>
+          <li>Soporte prioritario</li>
+          <li>Uso compartido dentro de tu equipo</li>
+        </ul>
+        <div style="margin-top:14px;">
+          <div id="paypal-button-business"></div>
+        </div>
+        <div style="margin-top:10px; font-size:12px; opacity:.7;">
+          Ideal para academias, empresas o agencias de contenido.
+        </div>
       </div>
     </div>
 
-    <!-- PRO -->
-    <div style="background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px;">
-      <div style="font-weight:700;">Pro</div>
-      <div style="font-size:28px; font-weight:800; margin-top:6px;">$19.99 <span style="font-size:13px; font-weight:700; opacity:.7;">prepago</span></div>
-      <ul style="margin:12px 0 0 18px; padding:0; line-height:1.6;">
-        <li>300 minutos de transcripción</li>
-        <li>Hasta 100 MB por archivo</li>
-        <li>Historial completo y descargas</li>
-        <li>Funciones avanzadas de IA</li>
-      </ul>
-
-      <!-- Contenedor botón PayPal -->
-      <div style="margin-top:14px;">
-        <div id="paypal-button-pro"></div>
-      </div>
-
-      <div style="margin-top:10px; font-size:12px; opacity:.7;">
-        Para creadores, podcasters y equipos pequeños.
-      </div>
+    <h3 style="margin-top:22px;">¿Cuánto rinden 100 MB?</h3>
+    <div style="background:#fff; border:1px solid #e5e7eb; border-radius:14px; overflow:hidden;">
+      <table style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr style="background:#f8fafc;">
+            <th style="text-align:left; padding:10px; border-bottom:1px solid #e5e7eb;">Formato / Bitrate</th>
+            <th style="text-align:left; padding:10px; border-bottom:1px solid #e5e7eb;">Duración aprox. por 100 MB</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td style="padding:10px; border-bottom:1px solid #eef2f7;">MP3 / AAC 128 kbps</td><td style="padding:10px; border-bottom:1px solid #eef2f7;">≈ 1 h 49 min</td></tr>
+          <tr><td style="padding:10px; border-bottom:1px solid #eef2f7;">MP3 / AAC 192 kbps</td><td style="padding:10px; border-bottom:1px solid #eef2f7;">≈ 1 h 13 min</td></tr>
+          <tr><td style="padding:10px; border-bottom:1px solid #eef2f7;">WAV 16-bit 44.1 kHz estéreo</td><td style="padding:10px; border-bottom:1px solid #eef2f7;">≈ 9 min 54 s</td></tr>
+          <tr><td style="padding:10px;">Opus voz 24–32 kbps</td><td style="padding:10px;">≈ entre 7–10 horas</td></tr>
+        </tbody>
+      </table>
     </div>
 
-    <!-- BUSINESS -->
-    <div style="background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px;">
-      <div style="font-weight:700;">Business</div>
-      <div style="font-size:28px; font-weight:800; margin-top:6px;">$49.99 <span style="font-size:13px; font-weight:700; opacity:.7;">prepago</span></div>
-      <ul style="margin:12px 0 0 18px; padding:0; line-height:1.6;">
-        <li>1200 minutos de transcripción</li>
-        <li>Hasta 100 MB por archivo</li>
-        <li>Soporte prioritario</li>
-        <li>Uso compartido dentro de tu equipo</li>
-      </ul>
-
-      <!-- Contenedor botón PayPal -->
-      <div style="margin-top:14px;">
-        <div id="paypal-button-business"></div>
-      </div>
-
-      <div style="margin-top:10px; font-size:12px; opacity:.7;">
-        Ideal para academias, empresas o agencias de contenido.
-      </div>
-    </div>
+    <p style="margin-top:10px; font-size:12px; opacity:.7;">
+      Tip: convierte tus archivos WAV/estéreo a MP3 128 kbps u Opus 24–32 kbps para obtener más minutos con el mismo límite de tamaño.
+    </p>
   </div>
 
-  <!-- Tabla 100MB -->
-  <h3 style="margin-top:22px;">¿Cuánto rinden 100 MB?</h3>
-  <div style="background:#fff; border:1px solid #e5e7eb; border-radius:14px; overflow:hidden;">
-    <table style="width:100%; border-collapse:collapse;">
-      <thead>
-        <tr style="background:#f8fafc;">
-          <th style="text-align:left; padding:10px; border-bottom:1px solid #e5e7eb;">Formato / Bitrate</th>
-          <th style="text-align:left; padding:10px; border-bottom:1px solid #e5e7eb;">Duración aprox. por 100 MB</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr><td style="padding:10px; border-bottom:1px solid #eef2f7;">MP3 / AAC 128 kbps</td><td style="padding:10px; border-bottom:1px solid #eef2f7;">≈ 1 h 49 min</td></tr>
-        <tr><td style="padding:10px; border-bottom:1px solid #eef2f7;">MP3 / AAC 192 kbps</td><td style="padding:10px; border-bottom:1px solid #eef2f7;">≈ 1 h 13 min</td></tr>
-        <tr><td style="padding:10px; border-bottom:1px solid #eef2f7;">WAV 16-bit 44.1 kHz estéreo</td><td style="padding:10px; border-bottom:1px solid #eef2f7;">≈ 9 min 54 s</td></tr>
-        <tr><td style="padding:10px;">Opus voz 24–32 kbps</td><td style="padding:10px;">≈ entre 7–10 horas</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <p style="margin-top:10px; font-size:12px; opacity:.7;">
-    Tip: convierte tus archivos WAV/estéreo a MP3 128 kbps u Opus 24–32 kbps para obtener más minutos con el mismo límite de tamaño.
-  </p>
-</div>
-
-<!-- Loader: inyecta PayPal SDK según /api/paypal/config y luego carga payments.js -->
-<script>
-(async function() {
-  try {
-    const r = await fetch("/api/paypal/config", { cache: "no-store" });
-    const cfg = await r.json();
-
-    if (!cfg || !cfg.enabled || !cfg.client_id) {
-      const warn = document.getElementById("banner-warn");
-      if (warn) {
-        warn.style.display = "block";
-        warn.textContent = "PayPal no está habilitado o falta Client ID.";
-      }
-      return;
+  <!-- Loader PayPal SDK + payments.js -->
+  <script>
+  (async function() {
+    function show(id, msg){
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = msg;
+      el.style.display = "block";
     }
 
-    // Inyectar SDK PayPal
-    const params = new URLSearchParams({
-      "client-id": cfg.client_id,
-      "currency": (cfg.currency || "USD"),
-      "intent": "capture",
-      "components": "buttons",
-      "enable-funding": "card"
-    });
+    try {
+      const r = await fetch("/api/paypal/config", { cache: "no-store" });
+      const cfg = await r.json();
 
-    const sdk = document.createElement("script");
-    sdk.src = "https://www.paypal.com/sdk/js?" + params.toString();
-    sdk.async = true;
-    sdk.onload = function() {
-      // Cargar payments.js después del SDK
-      const js = document.createElement("script");
-      js.src = "/static/js/payments.js?v=" + Date.now();
-      js.defer = true;
-      document.body.appendChild(js);
-    };
-    sdk.onerror = function() {
-      const err = document.getElementById("banner-err");
-      if (err) {
-        err.style.display = "block";
-        err.textContent = "No se pudo cargar el SDK de PayPal.";
+      if (!cfg || !cfg.enabled || !cfg.client_id) {
+        show("banner-warn", "PayPal no está habilitado o falta Client ID.");
+        return;
       }
-    };
-    document.head.appendChild(sdk);
 
-  } catch (e) {
-    const err = document.getElementById("banner-err");
-    if (err) {
-      err.style.display = "block";
-      err.textContent = "Error inicializando PayPal: " + (e && e.message ? e.message : String(e));
+      show("banner-ok", "PayPal está configurado. Puedes comprar cualquier plan y tu saldo se activará automáticamente después del pago.");
+
+      const params = new URLSearchParams({
+        "client-id": cfg.client_id,
+        "currency": (cfg.currency || "USD"),
+        "intent": "capture",
+        "components": "buttons",
+        "enable-funding": "card"
+      });
+
+      const sdk = document.createElement("script");
+      sdk.src = "https://www.paypal.com/sdk/js?" + params.toString();
+      sdk.async = true;
+
+      sdk.onload = function() {
+        const js = document.createElement("script");
+        js.src = "/static/js/payments.js?v=" + Date.now();
+        js.defer = true;
+        document.body.appendChild(js);
+      };
+
+      sdk.onerror = function() {
+        show("banner-err", "No se pudo cargar el SDK de PayPal.");
+      };
+
+      document.head.appendChild(sdk);
+
+    } catch (e) {
+      show("banner-err", "Error inicializando PayPal: " + (e && e.message ? e.message : String(e)));
     }
-  }
-})();
-</script>
-{% endblock %}
+  })();
+  </script>
+</body>
+</html>
