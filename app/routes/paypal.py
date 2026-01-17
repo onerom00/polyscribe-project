@@ -11,6 +11,11 @@ from app.models_payment import Payment
 bp = Blueprint("paypal", __name__, url_prefix="/api/paypal")
 
 
+def _clean_base_url(url: str) -> str:
+    # elimina espacios, tabs y newlines invisibles
+    return (url or "").strip().replace("\n", "").replace("\r", "")
+
+
 def _paypal_headers(access_token: str) -> dict:
     return {
         "Authorization": f"Bearer {access_token}",
@@ -19,9 +24,9 @@ def _paypal_headers(access_token: str) -> dict:
 
 
 def paypal_get_access_token() -> str:
-    base_url = current_app.config["PAYPAL_BASE_URL"]
-    cid = current_app.config["PAYPAL_CLIENT_ID"]
-    secret = current_app.config["PAYPAL_CLIENT_SECRET"]
+    base_url = _clean_base_url(current_app.config["PAYPAL_BASE_URL"])
+    cid = (current_app.config["PAYPAL_CLIENT_ID"] or "").strip()
+    secret = (current_app.config["PAYPAL_CLIENT_SECRET"] or "").strip()
 
     r = requests.post(
         f"{base_url}/v1/oauth2/token",
@@ -36,7 +41,7 @@ def paypal_get_access_token() -> str:
 
 def paypal_get_order(order_id: str) -> dict:
     access_token = paypal_get_access_token()
-    base_url = current_app.config["PAYPAL_BASE_URL"]
+    base_url = _clean_base_url(current_app.config["PAYPAL_BASE_URL"])
 
     r = requests.get(
         f"{base_url}/v2/checkout/orders/{order_id}",
@@ -48,7 +53,6 @@ def paypal_get_order(order_id: str) -> dict:
 
 
 def _get_user_id_from_request() -> str:
-    # prioridad: header (dev login), luego json body
     uid = (request.headers.get("X-User-Id") or "").strip()
     if uid:
         return uid
@@ -58,10 +62,10 @@ def _get_user_id_from_request() -> str:
 
 @bp.get("/config")
 def paypal_config():
-    # Lo usa static/js/payments.js para decidir si renderiza botones
+    enabled = bool(current_app.config.get("PAYPAL_ENABLED", True))
     return jsonify(
         {
-            "enabled": bool(current_app.config.get("PAYPAL_ENABLED", True)),
+            "enabled": enabled,
             "client_id": current_app.config.get("PAYPAL_CLIENT_ID"),
             "currency": current_app.config.get("PAYPAL_CURRENCY", "USD"),
             "env": current_app.config.get("PAYPAL_ENV", "live"),
@@ -82,12 +86,10 @@ def paypal_capture():
     if not user_id or not order_id or not sku or minutes <= 0 or not amount:
         return jsonify({"ok": False, "error": "missing_fields"}), 400
 
-    # Idempotencia: si ya procesamos este order_id como captured, no volver a acreditar
     existing = Payment.query.filter_by(order_id=order_id).first()
     if existing and str(existing.status).lower() == "captured":
         return jsonify({"ok": True, "status": "already_captured"}), 200
 
-    # Validar con PayPal (fuente de verdad)
     try:
         order = paypal_get_order(order_id)
     except Exception as e:
@@ -96,22 +98,17 @@ def paypal_capture():
 
     status = (order.get("status") or "").upper()
     if status != "COMPLETED":
-        # a veces puedes recibir APPROVED si aún no capturó
         return jsonify({"ok": False, "error": "order_not_completed", "status": status}), 400
 
-    # Validar monto/moneda (PayPal puede variar la forma)
     try:
         purchase_units = order.get("purchase_units") or []
         pu0 = purchase_units[0]
-
-        # capturas típicas:
         captures = (
             pu0.get("payments", {}).get("captures", [])
             if isinstance(pu0.get("payments", {}), dict)
             else []
         )
         if not captures:
-            # fallback: algunos casos traen "purchase_units[0].amount" pero es menos confiable
             return jsonify({"ok": False, "error": "no_capture_found"}), 400
 
         amt = captures[0].get("amount", {})
@@ -127,13 +124,11 @@ def paypal_capture():
             {"ok": False, "error": "currency_mismatch", "paid": paid_currency, "expected": expected_currency}
         ), 400
 
-    # Comparación de monto como string (PayPal suele devolver con 2 decimales)
     if paid_value != amount:
         return jsonify(
             {"ok": False, "error": "amount_mismatch", "paid": paid_value, "expected": amount}
         ), 400
 
-    # Guardar Payment como CAPTURED (porque usage.py suma Payment.status == "captured")
     try:
         if not existing:
             p = Payment(
@@ -171,7 +166,7 @@ def paypal_verify_webhook_signature(event_body: dict) -> bool:
         return True
 
     access_token = paypal_get_access_token()
-    base_url = current_app.config["PAYPAL_BASE_URL"]
+    base_url = _clean_base_url(current_app.config["PAYPAL_BASE_URL"])
 
     transmission_id = request.headers.get("PAYPAL-TRANSMISSION-ID", "")
     transmission_time = request.headers.get("PAYPAL-TRANSMISSION-TIME", "")
@@ -205,7 +200,6 @@ def paypal_webhook():
     event = request.get_json(silent=True) or {}
     event_type = (event.get("event_type") or "UNKNOWN").upper()
 
-    # Verificar firma
     try:
         if not paypal_verify_webhook_signature(event):
             current_app.logger.warning("PayPal webhook signature verification FAILED")
