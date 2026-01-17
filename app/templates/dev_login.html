@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>PolyScribe – Acceso de prueba</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #e4f0ff;
+            margin: 0;
+        }
+        .nav {
+            padding: 12px 24px;
+            font-size: 14px;
+        }
+        .nav a {
+            text-decoration: none;
+            color: #0057d8;
+            font-weight: 600;
+        }
+        .wrapper {
+            max-width: 420px;
+            margin: 60px auto;
+            background: white;
+            border-radius: 16px;
+            padding: 24px 28px 28px;
+            box-shadow: 0 12px 30px rgba(15, 35, 52, 0.18);
+        }
+        h1 {
+            margin-top: 0;
+            font-size: 22px;
+        }
+        p {
+            font-size: 14px;
+            color: #444;
+        }
+        label {
+            display: block;
+            margin-top: 14px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        input {
+            width: 100%;
+            margin-top: 6px;
+            padding: 8px 10px;
+            font-size: 14px;
+            border-radius: 8px;
+            border: 1px solid #c4d4f1;
+        }
+        button {
+            margin-top: 20px;
+            width: 100%;
+            padding: 10px 12px;
+            font-size: 15px;
+            font-weight: 600;
+            border-radius: 999px;
+            border: none;
+            cursor: pointer;
+            background: #0057d8;
+            color: white;
+        }
+        .hint {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <a href="/">PolyScribe</a>
+    </div>
+
+    <div class="wrapper">
+        {% if is_signup %}
+            <h1>Crea tu acceso de prueba</h1>
+            <p>PolyScribe está en modo demo. Crea un usuario de prueba para guardar tu historial y minutos.</p>
+        {% else %}
+            <h1>Inicia sesión de prueba</h1>
+            <p>Este acceso es sólo para pruebas internas. No es un registro real de producción.</p>
+        {% endif %}
+
+        <form id="dev-login-form">
+            <label for="email">Correo (se usará como ID de usuario)</label>
+            <input id="email" name="email" type="email" required
+                   placeholder="tucorreo@example.com">
+
+            <label for="name">Nombre (opcional)</label>
+            <input id="name" name="name" type="text" placeholder="Tu nombre">
+
+            <button type="submit">
+                {% if is_signup %}Crear cuenta demo{% else %}Entrar{% endif %}
+            </button>
+
+            <p class="hint">
+                Se guardará un identificador en este navegador para asociar tus transcripciones
+                y minutos. Puedes cambiarlo más adelante volviendo a esta página.
+            </p>
+        </form>
+    </div>
+
+    <script>
+        const form = document.getElementById('dev-login-form');
+
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value.trim();
+            const name = document.getElementById('name').value.trim();
+
+            if (!email) {
+                alert("Por favor, escribe un correo.");
+                return;
+            }
+
+            const userId = email.toLowerCase();
+            const displayName = name || email.split('@')[0];
+
+            // Guardamos en localStorage (como definimos en la arquitectura)
+            localStorage.setItem('user_id', userId);
+            localStorage.setItem('ps_user_name', displayName);
+
+            
+
+            // Redirección: volvemos a home o a lo que venga en ?next=
+            const params = new URLSearchParams(window.location.search);
+            const redirect = params.get('next') || '/';
+            const url = redirect.includes('?')
+                ? redirect + '&user_id=' + encodeURIComponent(userId)
+                : redirect + '?user_id=' + encodeURIComponent(userId);
+
+            window.location.href = url;
+        });
+    </script>
+</body>
+</html>

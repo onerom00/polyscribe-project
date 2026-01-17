@@ -1,0 +1,36 @@
+# app/routes_paypal.py
+import os, datetime as dt
+from flask import Blueprint, request, jsonify
+from app import db
+try:
+    from app.models_payment import Payment
+except Exception:
+    Payment = None
+
+bp = Blueprint("paypal", __name__)
+
+_PLANS = {
+    "starter_60": 60,
+    "pro_300": 300,
+    "biz_1200": 1200,
+}
+
+@bp.route("/api/paypal/simulate_capture", methods=["POST"])
+def simulate_capture():
+    if os.getenv("PAYPAL_TEST_MODE","0") not in ("1","true","True"):
+        return jsonify({"ok":False,"error":"No autenticado o modo test off"}), 401
+    data = request.get_json(silent=True) or {}
+    plan_id = (data.get("plan_id") or "").strip()
+    minutes = _PLANS.get(plan_id)
+    if not minutes:
+        return jsonify({"ok":False,"error":"plan_id inválido"}), 400
+    # user_id desde cookie de sesión (mismo método que /auth/me)
+    from flask import session
+    uid = session.get("uid")
+    if not uid: 
+        return jsonify({"ok":False,"error":"No autenticado"}), 401
+    if Payment:
+        p = Payment(user_id=uid, provider="paypal", status="captured",
+                    minutes=minutes, created_at=dt.datetime.utcnow())
+        db.session.add(p); db.session.commit()
+    return jsonify({"ok":True, "plan_id":plan_id, "minutes":minutes})
