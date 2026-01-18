@@ -14,6 +14,16 @@
     alertBox.style.display = "block";
   }
 
+  function isGuestUserId(uid) {
+    const u = String(uid || "").trim().toLowerCase();
+    return (
+      u === "guest" ||
+      u.startsWith("guest-") ||
+      u === "id-guest" ||
+      u.startsWith("id-guest-")
+    );
+  }
+
   async function getConfig() {
     try {
       const r = await fetch("/api/paypal/config", { credentials: "same-origin" });
@@ -54,6 +64,11 @@
     });
   }
 
+  function goLogin() {
+    // Ajusta esta ruta si tu login vive en otro endpoint
+    window.location.href = "/auth/login";
+  }
+
   async function apiCreateOrder(planKey, userId) {
     const r = await fetch("/api/paypal/create-order", {
       method: "POST",
@@ -66,6 +81,11 @@
     });
 
     const j = await r.json().catch(() => ({}));
+
+    if (r.status === 401 && j && j.error === "login_required") {
+      throw new Error("login_required");
+    }
+
     if (!r.ok || !j.orderID) throw new Error(j.error || "create_order_failed");
     return j.orderID;
   }
@@ -82,6 +102,11 @@
     });
 
     const j = await r.json().catch(() => ({}));
+
+    if (r.status === 401 && j && j.error === "login_required") {
+      throw new Error("login_required");
+    }
+
     if (!r.ok || !j.ok) throw new Error(j.error || "capture_failed");
     return j;
   }
@@ -92,8 +117,18 @@
       return;
     }
 
-    // ✅ user_id REAL del backend (sesión)
     const userId = await getBackendUserId();
+
+    // ✅ 1) Ocultar guest en producción: no renderizar PayPal si no hay login
+    if (isGuestUserId(userId)) {
+      showAlert("Para comprar minutos debes iniciar sesión. Luego vuelve a Planes y Precios.");
+      // Limpia contenedores de botones para que no quede UI rara
+      plans.forEach(({ elId }) => {
+        const el = document.getElementById(elId);
+        if (el) el.innerHTML = "";
+      });
+      return;
+    }
 
     plans.forEach(({ elId, planKey }) => {
       const el = document.getElementById(elId);
@@ -105,16 +140,28 @@
           style: { layout: "vertical", color: "gold", shape: "rect", label: "paypal" },
 
           createOrder: function () {
-            return apiCreateOrder(planKey, userId);
+            return apiCreateOrder(planKey, userId).catch((err) => {
+              if (String(err.message) === "login_required") {
+                showAlert("Debes iniciar sesión para comprar.");
+                goLogin();
+                return;
+              }
+              throw err;
+            });
           },
 
           onApprove: function (data) {
             return apiCaptureOrder(data.orderID, userId)
               .then(() => {
-                alert("Pago aprobado. ¡Gracias! Tus minutos fueron acreditados.");
-                window.location.reload();
+                // ✅ 3) Post-pago: redirigir a /history y refrescar balance
+                window.location.href = "/history?paid=1";
               })
               .catch((err) => {
+                if (String(err.message) === "login_required") {
+                  showAlert("Debes iniciar sesión para comprar.");
+                  goLogin();
+                  return;
+                }
                 console.error("capture error:", err);
                 showAlert("Pago aprobado pero no se pudo acreditar. Contacta soporte.");
               });
