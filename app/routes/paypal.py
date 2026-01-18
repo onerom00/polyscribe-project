@@ -11,6 +11,8 @@ from flask import Blueprint, current_app, jsonify, request
 from app import db
 from app.models_payment import Payment
 
+# ✅ Mantener ambos Blueprints porque app/__init__.py los importa
+bp = Blueprint("paypal_pages", __name__, url_prefix="/paypal")
 api_bp = Blueprint("paypal_api", __name__, url_prefix="/api/paypal")
 
 
@@ -41,13 +43,11 @@ def _paypal_base_url() -> str:
 
 
 def _paypal_client_id() -> str:
-    v = (current_app.config.get("PAYPAL_CLIENT_ID") or "").strip()
-    return v
+    return (current_app.config.get("PAYPAL_CLIENT_ID") or "").strip()
 
 
 def _paypal_client_secret() -> str:
-    v = (current_app.config.get("PAYPAL_CLIENT_SECRET") or "").strip()
-    return v
+    return (current_app.config.get("PAYPAL_CLIENT_SECRET") or "").strip()
 
 
 def _paypal_currency() -> str:
@@ -88,6 +88,15 @@ def _paypal_headers(access_token: str) -> Dict[str, str]:
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
     }
+
+
+# -----------------------------------------------------
+# (Opcional) ping para probar blueprint
+# GET /paypal/ping
+# -----------------------------------------------------
+@bp.get("/ping")
+def paypal_ping():
+    return {"ok": True, "message": "paypal blueprint up"}
 
 
 # -----------------------------------------------------
@@ -226,7 +235,7 @@ def paypal_capture_order():
         if paid_currency != _paypal_currency():
             return jsonify({"error": "currency_mismatch"}), 400
 
-        # Determinar plan por precio (verdad del server)
+        # Determinar plan por precio (server truth)
         plan_key: Optional[str] = None
         for k, p in PLANS.items():
             if str(p["price"]) == paid_value:
@@ -258,6 +267,7 @@ def paypal_capture_order():
             user_id, plan_key, minutes, order_id
         )
 
+        # ✅ usage.py ya sumará esto automáticamente (paid_min)
         return jsonify({"ok": True, "user_id": user_id, "credited_minutes": minutes})
 
     except Exception as e:
