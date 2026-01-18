@@ -1,53 +1,97 @@
 # app/routes/paypal.py
 from __future__ import annotations
 
+import base64
 import json
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
-from flask import (
-    Blueprint,
-    current_app,
-    jsonify,
-    request,
-)
+import requests
+from flask import Blueprint, current_app, jsonify, request
 
 from app import db
 from app.models_payment import Payment
 
-bp = Blueprint("paypal_pages", __name__, url_prefix="/paypal")
 api_bp = Blueprint("paypal_api", __name__, url_prefix="/api/paypal")
 
 
-# -----------------------------------------------------
-# Helper para obtener el user_id de forma consistente
-# -----------------------------------------------------
+# -----------------------------
+# Helper: user_id consistente
+# -----------------------------
 def _get_user_id() -> str:
-    """
-    Intenta resolver el user_id desde:
-      1) Cabecera X-User-Id
-      2) Query string ?user_id=...
-      3) JSON body {"user_id": "..."}
-      4) Fallback "guest"
-    """
     uid = request.headers.get("X-User-Id") or request.args.get("user_id")
-
     if not uid:
-        try:
-            data = request.get_json(silent=True) or {}
-        except Exception:
-            data = {}
+        data = request.get_json(silent=True) or {}
         uid = data.get("user_id")
+    return uid or "guest"
 
-    if not uid:
-        uid = "guest"
 
-    return uid
+# -----------------------------
+# Planes PREPAGO (verdad del server)
+# -----------------------------
+PLANS = {
+    "starter": {"sku": "starter_60", "minutes": 60, "price": "9.99"},
+    "pro": {"sku": "pro_300", "minutes": 300, "price": "19.99"},
+    "business": {"sku": "biz_1200", "minutes": 1200, "price": "49.99"},
+}
+
+
+def _paypal_base_url() -> str:
+    base_url = (current_app.config.get("PAYPAL_BASE_URL") or "").strip()
+    return base_url.rstrip("/")
+
+
+def _paypal_client_id() -> str:
+    v = (current_app.config.get("PAYPAL_CLIENT_ID") or "").strip()
+    return v
+
+
+def _paypal_client_secret() -> str:
+    v = (current_app.config.get("PAYPAL_CLIENT_SECRET") or "").strip()
+    return v
+
+
+def _paypal_currency() -> str:
+    return (current_app.config.get("PAYPAL_CURRENCY") or "USD").strip().upper()
+
+
+def _paypal_get_access_token() -> str:
+    base_url = _paypal_base_url()
+    client_id = _paypal_client_id()
+    client_secret = _paypal_client_secret()
+
+    if not base_url:
+        raise RuntimeError("PAYPAL_BASE_URL missing")
+    if not client_id or not client_secret:
+        raise RuntimeError("PAYPAL_CLIENT_ID/SECRET missing")
+
+    token = base64.b64encode(f"{client_id}:{client_secret}".encode("utf-8")).decode("utf-8")
+
+    r = requests.post(
+        f"{base_url}/v1/oauth2/token",
+        headers={
+            "Authorization": f"Basic {token}",
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+        data={"grant_type": "client_credentials"},
+        timeout=20,
+    )
+
+    if r.status_code != 200:
+        current_app.logger.error("PAYPAL_TOKEN_ERROR %s %s", r.status_code, r.text)
+        raise RuntimeError("paypal_token_failed")
+
+    return r.json().get("access_token")
+
+
+def _paypal_headers(access_token: str) -> Dict[str, str]:
+    return {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
 
 
 # -----------------------------------------------------
 # API: CONFIG
-#  GET /api/paypal/config
-# Usado por static/js/payments.js para cargar el SDK
 # -----------------------------------------------------
 @api_bp.get("/config")
 def paypal_config():
@@ -58,92 +102,164 @@ def paypal_config():
         {
             "enabled": True,
             "client_id": current_app.config.get("PAYPAL_CLIENT_ID"),
-            "currency": current_app.config.get("PAYPAL_CURRENCY", "USD"),
-            "env": current_app.config.get("PAYPAL_ENV", "sandbox"),
+            "currency": _paypal_currency(),
+            "env": current_app.config.get("PAYPAL_ENV", "live"),
         }
     )
 
 
 # -----------------------------------------------------
-# API: CAPTURE (notificación desde payments.js)
-#  POST /api/paypal/capture
-#  Body JSON: { order_id, sku, minutes, amount }
-#
-# Ojo: el capture real lo hace el JS del navegador.
-# Aquí SOLO registramos el pago y abonamos minutos.
+# API: CREATE ORDER (server-side)
+# POST /api/paypal/create-order
+# Body: { plan: "starter" | "pro" | "business" }
 # -----------------------------------------------------
-@api_bp.post("/capture")
-def paypal_capture():
+@api_bp.post("/create-order")
+def paypal_create_order():
     if not current_app.config.get("PAYPAL_ENABLED", False):
         return jsonify({"error": "PayPal no está habilitado en el servidor."}), 400
 
-    data: Dict[str, Any] = request.get_json(force=True, silent=True) or {}
+    data: Dict[str, Any] = request.get_json(silent=True) or {}
+    plan_key = (data.get("plan") or "").strip().lower()
 
-    order_id = data.get("order_id")
-    sku = data.get("sku")
-    minutes = int(data.get("minutes") or 0)
-    amount_str = str(data.get("amount") or "0")
-
-    if not order_id or minutes <= 0:
-        return jsonify({"error": "Datos de pago incompletos."}), 400
-
-    try:
-        amount_usd = float(amount_str)
-    except ValueError:
-        amount_usd = 0.0
+    if plan_key not in PLANS:
+        return jsonify({"error": "Plan inválido."}), 400
 
     user_id = _get_user_id()
-    app = current_app
+    plan = PLANS[plan_key]
 
-    app.logger.info(
-        "PayPal capture notify: user=%s order_id=%s sku=%s minutes=%s amount=%s",
-        user_id,
-        order_id,
-        sku,
-        minutes,
-        amount_usd,
-    )
+    try:
+        access_token = _paypal_get_access_token()
+        base_url = _paypal_base_url()
 
-    # ¿Ya registramos este order_id? Evitamos duplicados.
+        payload = {
+            "intent": "CAPTURE",
+            "purchase_units": [
+                {
+                    "reference_id": plan["sku"],
+                    "description": f"{plan['minutes']} minutos PolyScribe (prepago)",
+                    "amount": {"currency_code": _paypal_currency(), "value": plan["price"]},
+                    "custom_id": user_id,
+                }
+            ],
+        }
+
+        r = requests.post(
+            f"{base_url}/v2/checkout/orders",
+            headers=_paypal_headers(access_token),
+            data=json.dumps(payload),
+            timeout=20,
+        )
+
+        if r.status_code not in (200, 201):
+            current_app.logger.error("PAYPAL_CREATE_ORDER_ERROR %s %s", r.status_code, r.text)
+            return jsonify({"error": "paypal_create_order_failed"}), 502
+
+        order = r.json()
+        order_id = order.get("id")
+
+        if not order_id:
+            current_app.logger.error("PAYPAL_CREATE_ORDER_NO_ID %s", order)
+            return jsonify({"error": "paypal_create_order_no_id"}), 502
+
+        current_app.logger.info("PAYPAL_CREATE_ORDER_OK user=%s plan=%s order_id=%s", user_id, plan_key, order_id)
+        return jsonify({"ok": True, "orderID": order_id})
+
+    except Exception as e:
+        current_app.logger.exception("PAYPAL_CREATE_ORDER_EXCEPTION %s", e)
+        return jsonify({"error": "paypal_create_order_exception"}), 500
+
+
+# -----------------------------------------------------
+# API: CAPTURE ORDER (server-side)
+# POST /api/paypal/capture-order
+# Body: { orderID: "..." }
+# -----------------------------------------------------
+@api_bp.post("/capture-order")
+def paypal_capture_order():
+    if not current_app.config.get("PAYPAL_ENABLED", False):
+        return jsonify({"error": "PayPal no está habilitado en el servidor."}), 400
+
+    data: Dict[str, Any] = request.get_json(silent=True) or {}
+    order_id = (data.get("orderID") or data.get("order_id") or "").strip()
+
+    if not order_id:
+        return jsonify({"error": "orderID requerido"}), 400
+
+    user_id = _get_user_id()
+
+    # Anti doble crédito
     existing = Payment.query.filter_by(order_id=order_id).first()
     if existing:
-        app.logger.warning("PayPal capture duplicado para order_id=%s", order_id)
-        return jsonify({"ok": True, "already_recorded": True})
+        current_app.logger.warning("PAYPAL_CAPTURE_DUPLICATE order_id=%s user=%s", order_id, user_id)
+        return jsonify({"ok": True, "already_recorded": True, "credited_minutes": int(existing.minutes or 0)}), 200
 
-    # Guardar el pago con los minutos
-    payment = Payment(
-        user_id=user_id,
-        order_id=order_id,
-        sku=sku,
-        minutes=minutes,
-        amount_usd=amount_usd,
-        status="captured",
-        raw_payload=data,
-    )
-    db.session.add(payment)
-    db.session.commit()
+    try:
+        access_token = _paypal_get_access_token()
+        base_url = _paypal_base_url()
 
-    app.logger.info(
-        "PayPal payment registrado: user=%s, +%s minutos (payment_id=%s)",
-        user_id,
-        minutes,
-        payment.id,
-    )
+        r = requests.post(
+            f"{base_url}/v2/checkout/orders/{order_id}/capture",
+            headers=_paypal_headers(access_token),
+            timeout=25,
+        )
 
-    return jsonify(
-        {
-            "ok": True,
-            "user_id": user_id,
-            "payment_id": payment.id,
-            "credited_minutes": minutes,
-        }
-    )
+        if r.status_code not in (200, 201):
+            current_app.logger.error("PAYPAL_CAPTURE_ERROR %s %s", r.status_code, r.text)
+            return jsonify({"error": "paypal_capture_failed"}), 502
 
+        cap = r.json()
+        status = (cap.get("status") or "").upper()
 
-# -----------------------------------------------------
-# (Opcional) Ruta sencilla para probar que el BP está vivo
-#  GET /paypal/ping
-# -----------------------------------------------------
-@bp.get("/ping")
-def paypal_ping():
-    return {"ok": True, "message": "paypal blueprint up"}
+        if status != "COMPLETED":
+            current_app.logger.warning("PAYPAL_CAPTURE_NOT_COMPLETED %s", cap)
+            return jsonify({"error": "payment_not_completed", "status": status}), 400
+
+        pu = (cap.get("purchase_units") or [{}])[0]
+        payments = pu.get("payments", {}) or {}
+        captures = payments.get("captures", []) or []
+        cap0 = captures[0] if captures else {}
+
+        amount = cap0.get("amount", {}) or {}
+        paid_value = str(amount.get("value") or "")
+        paid_currency = str(amount.get("currency_code") or "").upper()
+
+        if paid_currency != _paypal_currency():
+            return jsonify({"error": "currency_mismatch"}), 400
+
+        # Determinar plan por precio (verdad del server)
+        plan_key: Optional[str] = None
+        for k, p in PLANS.items():
+            if str(p["price"]) == paid_value:
+                plan_key = k
+                break
+
+        if not plan_key:
+            current_app.logger.warning("PAYPAL_AMOUNT_NOT_ALLOWED %s %s", paid_currency, paid_value)
+            return jsonify({"error": "amount_not_allowed"}), 400
+
+        plan = PLANS[plan_key]
+        minutes = int(plan["minutes"])
+        sku = plan["sku"]
+
+        payment = Payment(
+            user_id=user_id,
+            order_id=order_id,
+            sku=sku,
+            minutes=minutes,
+            amount_usd=float(paid_value),
+            status="captured",
+            raw_payload=cap,
+        )
+        db.session.add(payment)
+        db.session.commit()
+
+        current_app.logger.info(
+            "PAYPAL_CAPTURE_OK user=%s plan=%s minutes=%s order_id=%s",
+            user_id, plan_key, minutes, order_id
+        )
+
+        return jsonify({"ok": True, "user_id": user_id, "credited_minutes": minutes})
+
+    except Exception as e:
+        current_app.logger.exception("PAYPAL_CAPTURE_EXCEPTION %s", e)
+        return jsonify({"error": "paypal_capture_exception"}), 500
