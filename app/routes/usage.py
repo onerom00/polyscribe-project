@@ -28,24 +28,27 @@ def _get_user_id() -> str:
 
 
 def _user_id_variants(user_id: str) -> list[str]:
-    """
-    Compat: en tu app se ven dos formatos:
-      - "id-xxxxx"
-      - "xxxxx"
-    Para pagos, aceptamos ambos para no perder créditos.
-    """
     u = (user_id or "").strip()
     if not u:
         return ["guest"]
 
     variants = {u}
-
     if u.startswith("id-") and len(u) > 3:
-        variants.add(u[3:])  # sin prefijo
+        variants.add(u[3:])
     else:
-        variants.add("id-" + u)  # con prefijo
+        variants.add("id-" + u)
 
     return list(variants)
+
+
+@bp.get("/whoami")
+def whoami():
+    """
+    Devuelve el user_id real que está usando el backend (sesión).
+    Esto se usa para que PayPal y Usage estén SIEMPRE sincronizados.
+    """
+    user_id = _get_user_id()
+    return jsonify({"ok": True, "user_id": user_id})
 
 
 @bp.get("/balance")
@@ -53,10 +56,8 @@ def usage_balance():
     user_id = _get_user_id()
     free_min = int(current_app.config.get("FREE_TIER_MINUTES", 10))
 
-    # ✅ Variantes aceptadas SOLO para pagos
     pay_uids = _user_id_variants(user_id)
 
-    # Minutos pagados (captured)
     paid_min = 0
     try:
         q = db.session.query(Payment).filter(
@@ -68,7 +69,6 @@ def usage_balance():
         current_app.logger.error("usage_balance: error leyendo pagos: %s", e)
         paid_min = 0
 
-    # Segundos usados (jobs) -> aquí mantenemos SOLO el user_id actual
     used_seconds = 0
     try:
         qj = db.session.query(AudioJob).filter(AudioJob.user_id == user_id)
