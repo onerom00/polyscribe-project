@@ -24,6 +24,17 @@
     }
   }
 
+  async function getBackendUserId() {
+    try {
+      const r = await fetch("/api/usage/whoami", { credentials: "same-origin" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.user_id) return "guest";
+      return String(j.user_id);
+    } catch (_) {
+      return "guest";
+    }
+  }
+
   function injectSdk(clientId, currency) {
     return new Promise((resolve, reject) => {
       if (window.paypal) return resolve();
@@ -41,15 +52,6 @@
       s.onerror = () => reject(new Error("No se pudo cargar el SDK de PayPal"));
       document.head.appendChild(s);
     });
-  }
-
-  function ensureUser() {
-    let userId = localStorage.getItem("user_id");
-    if (!userId) {
-      userId = "guest-" + Math.random().toString(36).slice(2);
-      localStorage.setItem("user_id", userId);
-    }
-    return userId;
   }
 
   async function apiCreateOrder(planKey, userId) {
@@ -84,13 +86,14 @@
     return j;
   }
 
-  function renderButtons() {
+  async function renderButtons() {
     if (!window.paypal) {
       showAlert("SDK de PayPal no cargado.");
       return;
     }
 
-    const userId = ensureUser();
+    // ✅ user_id REAL del backend (sesión)
+    const userId = await getBackendUserId();
 
     plans.forEach(({ elId, planKey }) => {
       const el = document.getElementById(elId);
@@ -135,7 +138,7 @@
 
     try {
       await injectSdk(cfg.client_id, cfg.currency);
-      renderButtons();
+      await renderButtons();
     } catch (err) {
       console.error(err);
       showAlert("No se pudo cargar el SDK de PayPal. Intenta más tarde.");
