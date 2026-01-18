@@ -27,16 +27,40 @@ def _get_user_id() -> str:
     return s or "guest"
 
 
+def _user_id_variants(user_id: str) -> list[str]:
+    """
+    Compat: en tu app se ven dos formatos:
+      - "id-xxxxx"
+      - "xxxxx"
+    Para pagos, aceptamos ambos para no perder créditos.
+    """
+    u = (user_id or "").strip()
+    if not u:
+        return ["guest"]
+
+    variants = {u}
+
+    if u.startswith("id-") and len(u) > 3:
+        variants.add(u[3:])  # sin prefijo
+    else:
+        variants.add("id-" + u)  # con prefijo
+
+    return list(variants)
+
+
 @bp.get("/balance")
 def usage_balance():
     user_id = _get_user_id()
     free_min = int(current_app.config.get("FREE_TIER_MINUTES", 10))
 
+    # ✅ Variantes aceptadas SOLO para pagos
+    pay_uids = _user_id_variants(user_id)
+
     # Minutos pagados (captured)
     paid_min = 0
     try:
         q = db.session.query(Payment).filter(
-            Payment.user_id == user_id,
+            Payment.user_id.in_(pay_uids),
             Payment.status == "captured",
         )
         paid_min = sum(int(p.minutes or 0) for p in q.all())
@@ -44,7 +68,7 @@ def usage_balance():
         current_app.logger.error("usage_balance: error leyendo pagos: %s", e)
         paid_min = 0
 
-    # Segundos usados (sumando duration_seconds de jobs por user)
+    # Segundos usados (jobs) -> aquí mantenemos SOLO el user_id actual
     used_seconds = 0
     try:
         qj = db.session.query(AudioJob).filter(AudioJob.user_id == user_id)
@@ -57,8 +81,9 @@ def usage_balance():
     allowance_seconds = int(allowance_min * 60)
 
     current_app.logger.info(
-        "USAGE_BALANCE uid=%s used_seconds=%s allowance_seconds=%s free_min=%s paid_min=%s",
+        "USAGE_BALANCE uid=%s pay_uids=%s used_seconds=%s allowance_seconds=%s free_min=%s paid_min=%s",
         user_id,
+        pay_uids,
         used_seconds,
         allowance_seconds,
         free_min,
