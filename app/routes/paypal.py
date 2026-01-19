@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import base64
 import json
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 
 import requests
 from flask import Blueprint, current_app, jsonify, request
@@ -24,7 +24,31 @@ def _get_user_id() -> str:
     if not uid:
         data = request.get_json(silent=True) or {}
         uid = data.get("user_id")
-    return uid or "guest"
+    return (uid or "guest").strip()
+
+
+def _is_guest(uid: str) -> bool:
+    u = (uid or "").strip().lower()
+    return (
+        not u
+        or u == "guest"
+        or u.startswith("guest-")
+        or u == "id-guest"
+        or u.startswith("id-guest-")
+    )
+
+
+def _require_login_or_401(user_id: str):
+    """
+    ✅ 1) Ocultar/bloquear guest en producción.
+    El frontend (payments.js) ya maneja login_required.
+    """
+    # Puedes controlar esto por config si quieres:
+    # PAYPAL_REQUIRE_LOGIN=True por defecto
+    require_login = bool(current_app.config.get("PAYPAL_REQUIRE_LOGIN", True))
+    if require_login and _is_guest(user_id):
+        return jsonify({"error": "login_required"}), 401
+    return None
 
 
 # -----------------------------
@@ -38,7 +62,10 @@ PLANS = {
 
 
 def _paypal_base_url() -> str:
+    # ✅ evita el %0a y otros espacios raros
     base_url = (current_app.config.get("PAYPAL_BASE_URL") or "").strip()
+    # por si hubiese whitespace interno (muy raro), lo limpiamos
+    base_url = "".join(base_url.split())
     return base_url.rstrip("/")
 
 
@@ -80,7 +107,7 @@ def _paypal_get_access_token() -> str:
         current_app.logger.error("PAYPAL_TOKEN_ERROR %s %s", r.status_code, r.text)
         raise RuntimeError("paypal_token_failed")
 
-    return r.json().get("access_token")
+    return (r.json() or {}).get("access_token") or ""
 
 
 def _paypal_headers(access_token: str) -> Dict[str, str]:
@@ -88,6 +115,37 @@ def _paypal_headers(access_token: str) -> Dict[str, str]:
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
     }
+
+
+def _find_plan_by_amount(value: str) -> Optional[str]:
+    v = str(value or "").strip()
+    for k, p in PLANS.items():
+        if str(p["price"]) == v:
+            return k
+    return None
+
+
+def _extract_capture_info(cap: Dict[str, Any]) -> Tuple[str, str, str]:
+    """
+    Returns (capture_id, paid_value, paid_currency)
+    """
+    pu = (cap.get("purchase_units") or [{}])[0] or {}
+    payments = pu.get("payments", {}) or {}
+    captures = payments.get("captures", []) or []
+    cap0 = captures[0] if captures else {}
+
+    capture_id = str(cap0.get("id") or "").strip()
+
+    amount = cap0.get("amount", {}) or {}
+    paid_value = str(amount.get("value") or "").strip()
+    paid_currency = str(amount.get("currency_code") or "").strip().upper()
+
+    return capture_id, paid_value, paid_currency
+
+
+def _extract_custom_id(cap: Dict[str, Any]) -> str:
+    pu = (cap.get("purchase_units") or [{}])[0] or {}
+    return str(pu.get("custom_id") or "").strip()
 
 
 # -----------------------------------------------------
@@ -134,6 +192,12 @@ def paypal_create_order():
         return jsonify({"error": "Plan inválido."}), 400
 
     user_id = _get_user_id()
+
+    # ✅ 1) Bloquear guest
+    blocked = _require_login_or_401(user_id)
+    if blocked:
+        return blocked
+
     plan = PLANS[plan_key]
 
     try:
@@ -147,7 +211,7 @@ def paypal_create_order():
                     "reference_id": plan["sku"],
                     "description": f"{plan['minutes']} minutos PolyScribe (prepago)",
                     "amount": {"currency_code": _paypal_currency(), "value": plan["price"]},
-                    "custom_id": user_id,
+                    "custom_id": user_id,  # ✅ amarra la compra al usuario
                 }
             ],
         }
@@ -163,8 +227,8 @@ def paypal_create_order():
             current_app.logger.error("PAYPAL_CREATE_ORDER_ERROR %s %s", r.status_code, r.text)
             return jsonify({"error": "paypal_create_order_failed"}), 502
 
-        order = r.json()
-        order_id = order.get("id")
+        order = r.json() or {}
+        order_id = str(order.get("id") or "").strip()
 
         if not order_id:
             current_app.logger.error("PAYPAL_CREATE_ORDER_NO_ID %s", order)
@@ -196,11 +260,25 @@ def paypal_capture_order():
 
     user_id = _get_user_id()
 
-    # Anti doble crédito
+    # ✅ 1) Bloquear guest
+    blocked = _require_login_or_401(user_id)
+    if blocked:
+        return blocked
+
+    # ✅ Anti doble crédito
     existing = Payment.query.filter_by(order_id=order_id).first()
     if existing:
         current_app.logger.warning("PAYPAL_CAPTURE_DUPLICATE order_id=%s user=%s", order_id, user_id)
-        return jsonify({"ok": True, "already_recorded": True, "credited_minutes": int(existing.minutes or 0)}), 200
+        return jsonify(
+            {
+                "ok": True,
+                "already_recorded": True,
+                "status": (existing.status or "").strip(),
+                "user_id": existing.user_id,
+                "credited_minutes": int(existing.minutes or 0),
+                "order_id": order_id,
+            }
+        ), 200
 
     try:
         access_token = _paypal_get_access_token()
@@ -216,32 +294,30 @@ def paypal_capture_order():
             current_app.logger.error("PAYPAL_CAPTURE_ERROR %s %s", r.status_code, r.text)
             return jsonify({"error": "paypal_capture_failed"}), 502
 
-        cap = r.json()
-        status = (cap.get("status") or "").upper()
+        cap: Dict[str, Any] = r.json() or {}
+        status = str(cap.get("status") or "").strip().upper()
 
+        # ✅ 2) SOLO COMPLETED acredita y SOLO ahí status="captured"
         if status != "COMPLETED":
-            current_app.logger.warning("PAYPAL_CAPTURE_NOT_COMPLETED %s", cap)
-            return jsonify({"error": "payment_not_completed", "status": status}), 400
+            current_app.logger.warning("PAYPAL_CAPTURE_NOT_COMPLETED status=%s payload=%s", status, cap)
+            return jsonify({"error": "payment_not_completed", "status": status, "order_id": order_id}), 400
 
-        pu = (cap.get("purchase_units") or [{}])[0]
-        payments = pu.get("payments", {}) or {}
-        captures = payments.get("captures", []) or []
-        cap0 = captures[0] if captures else {}
+        # ✅ seguridad: custom_id debe coincidir con user_id
+        custom_id = _extract_custom_id(cap)
+        if custom_id and custom_id != user_id:
+            current_app.logger.error(
+                "PAYPAL_CUSTOM_ID_MISMATCH order_id=%s expected_user=%s custom_id=%s",
+                order_id, user_id, custom_id
+            )
+            return jsonify({"error": "user_mismatch"}), 400
 
-        amount = cap0.get("amount", {}) or {}
-        paid_value = str(amount.get("value") or "")
-        paid_currency = str(amount.get("currency_code") or "").upper()
+        capture_id, paid_value, paid_currency = _extract_capture_info(cap)
 
         if paid_currency != _paypal_currency():
+            current_app.logger.warning("PAYPAL_CURRENCY_MISMATCH %s != %s", paid_currency, _paypal_currency())
             return jsonify({"error": "currency_mismatch"}), 400
 
-        # Determinar plan por precio (server truth)
-        plan_key: Optional[str] = None
-        for k, p in PLANS.items():
-            if str(p["price"]) == paid_value:
-                plan_key = k
-                break
-
+        plan_key: Optional[str] = _find_plan_by_amount(paid_value)
         if not plan_key:
             current_app.logger.warning("PAYPAL_AMOUNT_NOT_ALLOWED %s %s", paid_currency, paid_value)
             return jsonify({"error": "amount_not_allowed"}), 400
@@ -256,19 +332,35 @@ def paypal_capture_order():
             sku=sku,
             minutes=minutes,
             amount_usd=float(paid_value),
-            status="captured",
+            status="captured",  # ✅ solo aquí porque ya es COMPLETED
             raw_payload=cap,
         )
+        # Si tu modelo Payment tiene capture_id, lo seteamos si existe
+        if hasattr(payment, "capture_id"):
+            setattr(payment, "capture_id", capture_id)
+
         db.session.add(payment)
         db.session.commit()
 
         current_app.logger.info(
-            "PAYPAL_CAPTURE_OK user=%s plan=%s minutes=%s order_id=%s",
-            user_id, plan_key, minutes, order_id
+            "PAYPAL_CAPTURE_OK user=%s plan=%s minutes=%s order_id=%s capture_id=%s",
+            user_id, plan_key, minutes, order_id, capture_id
         )
 
-        # ✅ usage.py ya sumará esto automáticamente (paid_min)
-        return jsonify({"ok": True, "user_id": user_id, "credited_minutes": minutes})
+        # ✅ usage.py sumará esto automáticamente (paid_min)
+        return jsonify(
+            {
+                "ok": True,
+                "status": status,  # ✅ frontend usa esto para confirmar COMPLETED
+                "user_id": user_id,
+                "order_id": order_id,
+                "capture_id": capture_id,
+                "plan": plan_key,
+                "credited_minutes": minutes,
+                "amount": paid_value,
+                "currency": paid_currency,
+            }
+        ), 200
 
     except Exception as e:
         current_app.logger.exception("PAYPAL_CAPTURE_EXCEPTION %s", e)

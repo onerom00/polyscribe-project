@@ -5,6 +5,15 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>PolyScribe · Transcriptor Global</title>
 
+  <!-- ✅ Google Analytics (GA4) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-6TEFRMS8K0"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){ dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-6TEFRMS8K0');
+  </script>
+
   <!-- Fuentes -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -363,7 +372,7 @@
     }
 
     /* ============================
-       ✅ DEMO SECTION (nuevo)
+       ✅ DEMO SECTION
        ============================ */
     .demo-wrap{
       margin:14px 0 16px;
@@ -446,7 +455,7 @@
       <nav class="links ps-nav-links">
         <a href="/" data-path="/">Transcribir</a>
         <a href="/history" data-path="/history">Historial</a>
-        <a href="/pricing" data-path="/pricing">Precios</a>
+        <a href="/pricing" data-path="/pricing" id="nav-pricing-link">Precios</a>
         <a href="/ayuda" data-path="/ayuda">Ayuda</a>
       </nav>
       <div class="right">
@@ -457,7 +466,6 @@
         <a href="/auth/register" class="a11y-btn" id="nav-signup-link"
            style="background:#22c55e;border-color:#16a34a;color:#0b111d">
           Registro
-        
         </a>
       </div>
     </div>
@@ -486,7 +494,7 @@
 
     <p class="details">Sube tu audio y recibe transcripción + resumen.</p>
 
-    <!-- ✅ DEMO (nuevo bloque) -->
+    <!-- ✅ DEMO -->
     <div class="demo-wrap">
       <div class="demo-card">
         <div class="demo-head">
@@ -494,7 +502,7 @@
             <h2 class="demo-title">🎬 Demo rápido (40s)</h2>
             <p class="demo-sub">Mira el flujo completo: sube → IA procesa → transcripción + resumen → exporta.</p>
           </div>
-          <a class="a11y-btn" href="/pricing" style="white-space:nowrap;">Ver planes</a>
+          <a class="a11y-btn" href="/pricing" style="white-space:nowrap;" id="btn-ver-planes">Ver planes</a>
         </div>
 
         <video class="demo-video" controls autoplay muted loop playsinline preload="metadata">
@@ -513,7 +521,8 @@
         </ul>
 
         <div class="demo-cta">
-          <button class="btn btn-primary" type="button" onclick="document.getElementById('audio-file').click()">
+          <button class="btn btn-primary" type="button" id="btn-probar-ahora"
+                  onclick="document.getElementById('audio-file').click()">
             🚀 Probar ahora
           </button>
           <a class="btn" href="/history" style="text-decoration:none;display:inline-flex;align-items:center;">
@@ -617,6 +626,21 @@
   (function(){
     const $ = s => document.querySelector(s);
 
+    // ✅ Tracking clicks a pricing (funnel)
+    function track(eventName, params){
+      try{
+        if (typeof gtag === "function"){
+          gtag('event', eventName, params || {});
+        }
+      }catch{}
+    }
+
+    const navPricing = $("#nav-pricing-link");
+    const btnVerPlanes = $("#btn-ver-planes");
+
+    if (navPricing) navPricing.addEventListener("click", () => track("click_pricing", { location: "nav" }));
+    if (btnVerPlanes) btnVerPlanes.addEventListener("click", () => track("click_pricing", { location: "demo" }));
+
     // ============================
     // DOM
     // ============================
@@ -654,7 +678,7 @@
     if (USER_ID) localStorage.setItem("user_id", USER_ID);
     if (!USER_ID) USER_ID = "guest";
 
-    // ✅ FIX PRINCIPAL: tomar user_id/job_id del querystring (si vienen del historial)
+    // ✅ tomar user_id/job_id del querystring
     const qs = new URLSearchParams(window.location.search);
     const qUser = (qs.get("user_id") || "").trim();
     const qJob  = (qs.get("job_id") || "").trim();
@@ -772,8 +796,6 @@
     if (btnRefresh) btnRefresh.addEventListener("click", refreshBadge);
     refreshBadge();
 
-    if (btnUpgrade) btnUpgrade.addEventListener("click", () => { /* link normal */ });
-
     // ============================
     // DIRECCIÓN (RTL/LTR)
     // ============================
@@ -826,7 +848,7 @@
     }
 
     // ============================
-    // ✅ CARGAR JOB AL ABRIR (si vienes de historial con job_id)
+    // CARGAR JOB AL ABRIR
     // ============================
     async function loadJobFromQuery(){
       if (!qJob) return;

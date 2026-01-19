@@ -6,6 +6,15 @@
   <title>PolyScribe – Planes y Precios</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
+  <!-- ✅ Google Analytics (GA4) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-6TEFRMS8K0"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){ dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-6TEFRMS8K0');
+  </script>
+
   <style>
     :root{
       --bg:#e4f0ff;
@@ -90,6 +99,11 @@
       background: #fff4e5;
       color: #7b3d00;
       border: 1px solid #f4c08a;
+    }
+    .banner-danger{
+      background:#ffe5e5;
+      color:#8a1c1c;
+      border:1px solid #f3abab;
     }
     #pay-alert{display:none}
 
@@ -202,10 +216,39 @@
       font-size: 12px;
       color: #555;
     }
+
+    /* ✅ Lock paywall for guest */
+    .locked{
+      opacity:.55;
+      filter:grayscale(0.25);
+      pointer-events:none;
+    }
+    .login-cta{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:8px;
+    }
+    .btnx{
+      background:#0b62e0;
+      border:1px solid #0a59c9;
+      color:#fff;
+      font-weight:800;
+      padding:8px 12px;
+      border-radius:10px;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+    }
+    .btnx.secondary{
+      background:#22c55e;
+      border-color:#16a34a;
+      color:#0b111d;
+    }
   </style>
 </head>
 
-<body>
+<body data-user-id="{{ user_id|default('') }}">
   <div class="nav">
     <div class="nav-inner">
       <a href="/">PolyScribe</a>
@@ -236,6 +279,16 @@
     </div>
     {% endif %}
 
+    <!-- ✅ Banner: requiere login para comprar -->
+    <div class="banner banner-danger" id="guest-lock" style="display:none">
+      <strong>🔒 Para comprar un plan debes iniciar sesión.</strong><br>
+      Esto evita que se pierdan créditos si pagas sin estar logueado.
+      <div class="login-cta">
+        <a class="btnx" href="/auth/login">Entrar</a>
+        <a class="btnx secondary" href="/auth/register">Registro</a>
+      </div>
+    </div>
+
     <div id="pay-alert" class="banner banner-warn"></div>
 
     <div class="plans-grid">
@@ -260,7 +313,7 @@
       </div>
 
       <!-- Starter -->
-      <div class="plan">
+      <div class="plan" id="plan-60">
         <div>
           <div class="plan-header">
             <span class="plan-tag">Recomendado</span>
@@ -278,12 +331,12 @@
           </div>
         </div>
         <div class="plan-footer">
-          <div id="pp-60"></div>
+          <div id="pp-60" data-plan="starter" data-minutes="60" data-price="9.99"></div>
         </div>
       </div>
 
       <!-- Pro -->
-      <div class="plan">
+      <div class="plan" id="plan-300">
         <div>
           <div class="plan-header">
             <div class="plan-name">Pro</div>
@@ -300,12 +353,12 @@
           </div>
         </div>
         <div class="plan-footer">
-          <div id="pp-300"></div>
+          <div id="pp-300" data-plan="pro" data-minutes="300" data-price="19.99"></div>
         </div>
       </div>
 
       <!-- Business -->
-      <div class="plan">
+      <div class="plan" id="plan-1200">
         <div>
           <div class="plan-header">
             <div class="plan-name">Business</div>
@@ -322,7 +375,7 @@
           </div>
         </div>
         <div class="plan-footer">
-          <div id="pp-1200"></div>
+          <div id="pp-1200" data-plan="business" data-minutes="1200" data-price="49.99"></div>
         </div>
       </div>
     </div>
@@ -365,6 +418,43 @@
       El plan Free se mantiene siempre activo como respaldo.
     </p>
   </div>
+
+  <script>
+    (function(){
+      // ✅ tracking helper
+      function track(eventName, params){
+        try{ if (typeof gtag === "function") gtag("event", eventName, params || {}); }catch{}
+      }
+
+      // ✅ guest detection
+      let USER_ID = (document.body.dataset.userId || "").trim();
+      if (!USER_ID) USER_ID = (localStorage.getItem("user_id") || "").trim();
+      if (!USER_ID) USER_ID = "guest";
+
+      // GA: view pricing
+      track("view_pricing", { user_type: USER_ID === "guest" ? "guest" : "logged" });
+
+      // ✅ lock PayPal containers for guest (UX) - bloqueo visual
+      const guestLock = document.getElementById("guest-lock");
+      const payNodes = ["pp-60","pp-300","pp-1200"].map(id => document.getElementById(id)).filter(Boolean);
+      if (USER_ID === "guest"){
+        if (guestLock) guestLock.style.display = "block";
+        payNodes.forEach(n => {
+          const wrap = n.closest(".plan");
+          if (wrap) wrap.classList.add("locked");
+        });
+      }
+
+      // ✅ track click intent (cuando user toca zona PayPal)
+      payNodes.forEach(n => {
+        n.addEventListener("click", () => {
+          const plan = n.getAttribute("data-plan") || "unknown";
+          const price = n.getAttribute("data-price") || "";
+          track("begin_checkout", { plan, price });
+        });
+      });
+    })();
+  </script>
 
   <script src="{{ url_for('static', filename='js/payments.js') }}"></script>
 </body>

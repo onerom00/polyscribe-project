@@ -1,9 +1,20 @@
+<!-- templates/history.html -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="utf-8" />
   <title>Historial · PolyScribe</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <!-- ✅ Google Analytics (GA4) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-6TEFRMS8K0"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){ dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-6TEFRMS8K0');
+  </script>
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -29,9 +40,11 @@
     .badge{background:#e8f3ff;border:1px solid #b9d9ff;border-radius:999px;padding:6px 10px;color:#0b1424;font-size:12px;font-weight:700}
     .muted{color:var(--muted);font-size:13px}
     .alert{display:none;margin:10px 0 12px;background:#fff4e5;border:1px solid #f4c08a;color:#7b3d00;padding:10px;border-radius:12px;font-size:14px}
+    .alert.ok{background:#e2f7e9;border-color:#8ad19d;color:#125325}
     @media (max-width:700px){.card{flex-direction:column;align-items:flex-start;gap:10px}}
   </style>
 </head>
+
 <body>
   <div class="container">
     <header>
@@ -51,6 +64,8 @@
 
     <h1>Historial</h1>
     <div class="muted">Tus transcripciones recientes (según tu usuario actual).</div>
+
+    <!-- alert-box sirve para warnings y para confirmación post-pago -->
     <div class="alert" id="alert-box"></div>
 
     <div class="cards" id="cards"></div>
@@ -69,11 +84,18 @@
 
       function showWarn(msg){
         alertBox.textContent = msg;
+        alertBox.classList.remove("ok");
         alertBox.style.display = "block";
       }
-      function hideWarn(){
+      function showOk(msg){
+        alertBox.textContent = msg;
+        alertBox.classList.add("ok");
+        alertBox.style.display = "block";
+      }
+      function hideAlert(){
         alertBox.style.display = "none";
         alertBox.textContent = "";
+        alertBox.classList.remove("ok");
       }
 
       // USER_ID (igual que en index)
@@ -90,6 +112,28 @@
         return { ok: res.ok, status: res.status, body };
       }
 
+      // ✅ Post-pago: si vienes de PayPal -> /history?paid=1
+      function handlePaidQuery(){
+        const qs = new URLSearchParams(window.location.search);
+        const paid = (qs.get("paid") || "").trim();
+        if (paid === "1") {
+          showOk("✅ Pago confirmado. Tus minutos fueron acreditados. (Si no ves el saldo actualizado, refresca en 2–3s).");
+
+          // GA4 event (opcional, no rompe si gtag no existe)
+          try{
+            if (typeof gtag === "function") {
+              gtag("event", "purchase_completed", { page: "history" });
+            }
+          }catch(_){}
+
+          // Limpia el query para que no se repita el mensaje al refrescar
+          try{
+            const clean = window.location.pathname;
+            window.history.replaceState({}, "", clean);
+          }catch(_){}
+        }
+      }
+
       // VOLVER INTELIGENTE (sin depender de referrer)
       function setBackLink(){
         const lastJob = (localStorage.getItem("ps_last_job_id") || "").trim();
@@ -100,15 +144,17 @@
         btnBack.href = `/?user_id=${encodeURIComponent(USER_ID)}`;
       }
 
-      // Badge de uso
+      // Badge de uso (y refresco extra si vienes de pago)
       async function refreshBadge(){
         try{
           const r = await api(`/api/usage/balance?user_id=${encodeURIComponent(USER_ID)}`);
           if(!r.ok) return;
+
           const j = r.body || {};
           const used = Math.round((j.used_seconds||0)/60);
           const allow = Math.round((j.allowance_seconds||0)/60);
           const remain = Math.max(0, allow-used);
+
           const el = document.getElementById('usage-text');
           if(el) el.textContent = `${used}/${allow} min · libre ${remain} min`;
         }catch{}
@@ -182,7 +228,7 @@
       }
 
       async function loadHistory(){
-        hideWarn();
+        hideAlert();
         cards.innerHTML = "";
         empty.style.display = "none";
 
@@ -202,8 +248,19 @@
         items.forEach(it => cards.appendChild(buildCard(it)));
       }
 
+      // --- init
       setBackLink();
+      handlePaidQuery();
+
+      // refresca al entrar
       refreshBadge();
+
+      // ✅ si vienes de pago, refresca de nuevo a los 2.5s por latencia de commit en DB
+      const qs = new URLSearchParams(window.location.search);
+      if ((qs.get("paid") || "").trim() === "1") {
+        setTimeout(refreshBadge, 2500);
+      }
+
       loadHistory();
     })();
   </script>
