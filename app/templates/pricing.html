@@ -35,97 +35,60 @@
       color: var(--text);
     }
 
-    /* ✅ NAV: 3 zonas (izq/centro/der) */
-    .nav{
-      padding: 12px 16px;
-      font-size: 14px;
-      border-bottom: 1px solid rgba(0,0,0,0.04);
-      background: transparent;
+    /* ✅ NAV unificado */
+    header.ps-nav{
+      background:#fff;
+      border-bottom:1px solid var(--border);
     }
-    .nav .nav-inner{
-      width:100%;
+    .ps-nav .inner{
       max-width:1100px;
       margin:0 auto;
+      padding:10px 16px;
       display:flex;
+      gap:12px;
       align-items:center;
-      gap:14px;
-      flex-wrap:wrap;
-      font-weight:700;
-    }
-    .nav-left{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      min-width: 140px;
-    }
-    .nav-center{
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      gap:14px;
-      flex:1;
-      flex-wrap:wrap;
-      text-align:center;
-    }
-    .nav-right{
-      display:flex;
-      align-items:center;
-      justify-content:flex-end;
-      gap:10px;
-      min-width: 260px;
+      justify-content:space-between;
       flex-wrap:wrap;
     }
-
-    .nav a{
-      text-decoration:none;
-      color: var(--blue);
-      font-weight:700;
-    }
-    .nav .sep{color:#4b5563; opacity:.7}
-    .nav .active{
+    .ps-nav .brand{
+      font-weight:900;
       color:#0b1424;
-      font-weight:800;
       text-decoration:none;
+      font-size:1.05rem;
     }
-
-    /* Botones mini del nav */
-    .a11y-btn{
-      padding:6px 10px;
-      border-radius:10px;
-      border:1px solid #cddaf5;
-      background:#f2f6ff;
-      color:#0b1424;
-      font-weight:800;
+    .ps-nav .links a{
+      margin-right:14px;
       text-decoration:none;
+      color:#13406f;
+      font-weight:800;
+      font-size:0.95rem;
+    }
+    .ps-nav .links a.active{ color:#0b62e0; }
+    .badge-usage{
       display:inline-flex;
       align-items:center;
-      gap:6px;
-      line-height:1;
-    }
-    .a11y-btn.primary{
-      background:#22c55e;
-      border-color:#16a34a;
-      color:#0b111d;
-    }
-    .a11y-btn.danger{
-      border-color:#f3abab;
-      background:#fde2e2;
-      color:#8a1c1c;
-    }
-
-    /* Badge uso nav */
-    .badge-usage{
+      gap:8px;
       background:#e8f3ff;
+      color:#0b1424;
       border:1px solid #b9d9ff;
       border-radius:999px;
-      padding:6px 10px;
+      padding:5px 10px;
+      font-size:13px;
+      font-weight:800;
+    }
+    .a11y-btn{
+      background:#f2f6ff;
+      border:1px solid #cddaf5;
       color:#0b1424;
-      font-size:12px;
-      font-weight:900;
+      padding:6px 10px;
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:700;
+      font-size:.95rem;
+      text-decoration:none;
       display:inline-flex;
       align-items:center;
       gap:6px;
-      white-space:nowrap;
     }
 
     .page{
@@ -169,7 +132,6 @@
     }
     #pay-alert{display:none}
 
-    /* ✅ Panel de uso (Opción B) */
     .usage-panel{
       display:none;
       background:#ffffff;
@@ -218,7 +180,6 @@
       font-size:.95rem;
     }
 
-    /* ✅ Status mini */
     .usage-status{
       display:none;
       margin-top:6px;
@@ -237,13 +198,9 @@
     }
     @media (max-width: 960px){
       .plans-grid{grid-template-columns: repeat(2, minmax(0, 1fr));}
-      .nav-left{min-width:auto}
-      .nav-right{min-width:auto}
     }
     @media (max-width: 640px){
       .plans-grid{grid-template-columns: minmax(0, 1fr);}
-      .nav-inner{justify-content:center}
-      .nav-left, .nav-right{justify-content:center}
     }
 
     .plan{
@@ -341,7 +298,6 @@
       color: #555;
     }
 
-    /* ✅ Lock paywall for guest */
     .locked{
       opacity:.55;
       filter:grayscale(0.25);
@@ -373,37 +329,34 @@
 </head>
 
 <body data-user-id="{{ user_id|default('') }}">
-  <!-- ✅ NAV 3 zonas -->
-  <div class="nav">
-    <div class="nav-inner">
-      <div class="nav-left">
-        <a href="/">PolyScribe</a>
-      </div>
+  <!-- ✅ NAV UNIFICADO -->
+  <header class="ps-nav">
+    <div class="inner">
+      <a class="brand" href="/">PolyScribe</a>
 
-      <div class="nav-center">
-        <a href="/">Transcribir</a>
-        <span class="sep">·</span>
-        <a href="/history">Historial</a>
-        <span class="sep">·</span>
-        <span class="active">Precios</span>
-        <span class="sep">·</span>
-        <a href="/ayuda">Ayuda</a>
-      </div>
+      <nav class="links ps-nav-links">
+        <a href="/" data-path="/">Transcribir</a>
+        <a href="/history" data-path="/history">Historial</a>
+        <a href="/pricing" data-path="/pricing">Precios</a>
+        <a href="/ayuda" data-path="/ayuda">Ayuda</a>
+      </nav>
 
-      <!-- ✅ Esta es la pieza que faltaba -->
-      <div class="nav-right">
-        <span class="badge-usage" id="usage-badge-nav" style="display:none;">
+      <div class="right">
+        <span id="usage-badge-nav" class="badge-usage" style="display:none;">
           <span id="usage-text-nav">—/— min · libre —</span>
         </span>
 
-        <a id="nav-login-link" class="a11y-btn" href="/auth/login">Entrar</a>
-        <a id="nav-signup-link" class="a11y-btn primary" href="/auth/register">Registro</a>
+        <a href="/auth/login" class="a11y-btn" id="nav-login-link">Entrar</a>
+        <a href="/auth/register" class="a11y-btn" id="nav-signup-link"
+           style="background:#22c55e;border-color:#16a34a;color:#0b111d">
+          Registro
+        </a>
 
-        <a id="nav-account-link" class="a11y-btn" href="/account" style="display:none;">Mi cuenta</a>
-        <a id="nav-logout-link" class="a11y-btn danger" href="/auth/logout" style="display:none;">Salir</a>
+        <a href="/account" class="a11y-btn" id="nav-account-link" style="display:none;">Mi cuenta</a>
+        <a href="/auth/logout" class="a11y-btn" id="nav-logout-link" style="display:none;">Salir</a>
       </div>
     </div>
-  </div>
+  </header>
 
   <div class="page">
     <h1>Planes y Precios</h1>
@@ -421,7 +374,6 @@
     </div>
     {% endif %}
 
-    <!-- ✅ Panel de uso (Opción B) -->
     <div class="usage-panel" id="usage-panel">
       <div class="top">
         <div class="title">📊 Tu uso actual</div>
@@ -438,7 +390,6 @@
       </div>
     </div>
 
-    <!-- ✅ Banner: requiere login para comprar -->
     <div class="banner banner-danger" id="guest-lock" style="display:none">
       <strong>🔒 Para comprar un plan debes iniciar sesión.</strong><br>
       Esto evita que se pierdan créditos si pagas sin estar logueado.
@@ -451,7 +402,6 @@
     <div id="pay-alert" class="banner banner-warn"></div>
 
     <div class="plans-grid">
-      <!-- Free -->
       <div class="plan">
         <div>
           <div class="plan-header">
@@ -471,7 +421,6 @@
         <div class="plan-footer"></div>
       </div>
 
-      <!-- Starter -->
       <div class="plan" id="plan-60">
         <div>
           <div class="plan-header">
@@ -494,7 +443,6 @@
         </div>
       </div>
 
-      <!-- Pro -->
       <div class="plan" id="plan-300">
         <div>
           <div class="plan-header">
@@ -516,7 +464,6 @@
         </div>
       </div>
 
-      <!-- Business -->
       <div class="plan" id="plan-1200">
         <div>
           <div class="plan-header">
@@ -578,6 +525,7 @@
     </p>
   </div>
 
+  <!-- ✅ TU SCRIPT ORIGINAL de pricing (sin cambios) -->
   <script>
     (function(){
       function track(eventName, params){
@@ -616,10 +564,6 @@
       const usageFile  = document.getElementById("usage-filelimit");
       const usageStatus = document.getElementById("usage-status");
 
-      // nav badge
-      const navBadge = document.getElementById("usage-badge-nav");
-      const navText  = document.getElementById("usage-text-nav");
-
       function fmtMin(n){ return `${Number(n).toFixed(1)} min`; }
       function fmtMB(bytes){
         const b = Number(bytes || 0);
@@ -631,6 +575,7 @@
         if (!usageStatus) return;
         usageStatus.style.display = "block";
         usageStatus.textContent = msg;
+
         if (mode === "ok") usageStatus.style.color = "#0f5132";
         else if (mode === "warn") usageStatus.style.color = "#92400e";
         else if (mode === "error") usageStatus.style.color = "#8a1c1c";
@@ -640,7 +585,6 @@
       function lockGuestUI(){
         if (guestLock) guestLock.style.display = "block";
         if (usagePanel) usagePanel.style.display = "none";
-        if (navBadge) navBadge.style.display = "none";
 
         payNodes.forEach(n => {
           n.innerHTML = "";
@@ -657,6 +601,7 @@
 
       function unlockLoggedUI(){
         if (guestLock) guestLock.style.display = "none";
+
         payNodes.forEach(n => {
           n.style.display = "block";
           const wrap = n.closest(".plan");
@@ -670,7 +615,6 @@
 
         if (usagePanel) usagePanel.style.display = "block";
         if (usageUser) usageUser.textContent = USER_ID;
-        if (navBadge) navBadge.style.display = "inline-flex";
       }
 
       async function refreshUsage(){
@@ -703,7 +647,6 @@
             if (usageUsed) usageUsed.textContent = "—";
             if (usageAvail) usageAvail.textContent = "—";
             if (usageFile) usageFile.textContent = "—";
-            if (navText) navText.textContent = "—/— min · libre —";
             setStatus("No se pudo actualizar el saldo.", "error");
             return;
           }
@@ -719,14 +662,11 @@
           if (usageAvail) usageAvail.textContent = fmtMin(remain);
           if (usageFile) usageFile.textContent  = fileLimitBytes ? fmtMB(fileLimitBytes) : "—";
 
-          if (navText) navText.textContent = `${usedMin.toFixed(1)}/${allowMin.toFixed(0)} min · libre ${remain.toFixed(1)} min`;
-
           setStatus("Saldo actualizado ✅", "ok");
         }catch(e){
           if (usageUsed) usageUsed.textContent = "—";
           if (usageAvail) usageAvail.textContent = "—";
           if (usageFile) usageFile.textContent = "—";
-          if (navText) navText.textContent = "—/— min · libre —";
           setStatus("Error de red refrescando saldo.", "error");
         }finally{
           if (btnRefresh && original){
@@ -749,7 +689,6 @@
     })();
   </script>
 
-  <!-- ✅ Cargar payments.js SOLO si está logueado -->
   <script>
     (function(){
       if (!window.PS_IS_LOGGED) return;
@@ -760,8 +699,7 @@
     })();
   </script>
 
-  <!-- ✅ Nav auth (muestra/oculta Mi cuenta/Salir vs Entrar/Registro) -->
+  <!-- ✅ NAV AUTH UNIFICADO -->
   <script src="{{ url_for('static', filename='js/nav_auth.js') }}"></script>
-
 </body>
 </html>
