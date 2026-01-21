@@ -3,16 +3,41 @@
   "use strict";
 
   // =========================================================
-  // PolyScribe NAV + Auth helper (Opción B)
-  // - resolveUserId: body[data-user-id] -> ?user_id -> localStorage
-  // - NO bindea botones de refresh (evita doble listener)
-  // - Marca link activo
-  // - Muestra Entrar/Registro si guest
-  // - Muestra Mi cuenta/Salir si logged
+  // NAV + Auth (PROD)
+  // - En producción: SOLO consideramos "logged" si el backend confirma sesión
+  //   via /api/usage/whoami  -> { user_id: "..." }
+  // - Si whoami no existe o falla, fallback a Opción B (URL/localStorage)
   // =========================================================
 
+  const STRICT_SESSION = true; // ✅ true = producción (recomendado)
+  const WHOAMI_URL = "/api/usage/whoami";
+
   // -------------------------
-  // USER ID helpers
+  // Storage helpers
+  // -------------------------
+  function lsGet(key) {
+    try {
+      const v = localStorage.getItem(key);
+      return v && v.trim() ? v.trim() : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function lsSet(key, value) {
+    try {
+      if (value && String(value).trim()) localStorage.setItem(key, String(value).trim());
+    } catch (_) {}
+  }
+
+  function lsDel(key) {
+    try {
+      localStorage.removeItem(key);
+    } catch (_) {}
+  }
+
+  // -------------------------
+  // Opción B (fallback)
   // -------------------------
   function getUserIdFromBody() {
     const id = (document.body?.dataset?.userId || "").trim();
@@ -25,41 +50,49 @@
     return uid || null;
   }
 
-  function getUserIdFromLocalStorage() {
+  function resolveUserIdFallback() {
+    const fromBody = getUserIdFromBody();
+    if (fromBody) {
+      lsSet("user_id", fromBody);
+      return fromBody;
+    }
+
+    const fromQuery = getUserIdFromQuery();
+    if (fromQuery) {
+      lsSet("user_id", fromQuery);
+      return fromQuery;
+    }
+
+    return lsGet("user_id");
+  }
+
+  // -------------------------
+  // Session (whoami)
+  // -------------------------
+  async function tryWhoAmI() {
     try {
-      const uid = (localStorage.getItem("user_id") || "").trim();
+      const r = await fetch(WHOAMI_URL, { credentials: "same-origin" });
+      if (!r.ok) return null;
+      const j = await r.json().catch(() => ({}));
+      const uid = (j && j.user_id ? String(j.user_id) : "").trim();
       return uid || null;
     } catch (_) {
       return null;
     }
   }
 
-  function setUserIdToLocalStorage(userId) {
-    try {
-      if (userId && String(userId).trim()) {
-        localStorage.setItem("user_id", String(userId).trim());
-      }
-    } catch (_) {}
-  }
+  // UID final (cache)
+  let SESSION_UID = null;
 
-  // Regla final:
-  // 1) data-user-id (backend) manda
-  // 2) ?user_id
-  // 3) localStorage
   function resolveUserId() {
-    const fromBody = getUserIdFromBody();
-    if (fromBody) {
-      setUserIdToLocalStorage(fromBody);
-      return fromBody;
-    }
+    // Si ya tenemos UID de sesión (confirmada por backend), usamos eso.
+    if (SESSION_UID) return SESSION_UID;
 
-    const fromQuery = getUserIdFromQuery();
-    if (fromQuery) {
-      setUserIdToLocalStorage(fromQuery);
-      return fromQuery;
-    }
+    // Si estamos en modo estricto, NO confiamos en query/localStorage.
+    if (STRICT_SESSION) return null;
 
-    return getUserIdFromLocalStorage();
+    // Fallback a Opción B
+    return resolveUserIdFallback();
   }
 
   function isLoggedIn() {
@@ -67,7 +100,7 @@
   }
 
   // -------------------------
-  // NAV: active link
+  // NAV: link activo
   // -------------------------
   function setActiveNavLink() {
     const path = (window.location.pathname || "/").replace(/\/+$/, "") || "/";
@@ -80,22 +113,18 @@
     });
   }
 
-  // -------------------------
-  // Helpers UI
-  // -------------------------
   function setVisible(el, visible) {
     if (!el) return;
     el.style.display = visible ? "" : "none";
   }
 
   // -------------------------
-  // Crear botones "Mi cuenta" y "Salir" si no existen
+  // Botones Mi cuenta / Salir
   // -------------------------
   function ensureAccountButtons() {
     const right = document.querySelector(".ps-nav .inner .right");
     if (!right) return;
 
-    // Botón Mi cuenta
     let btnAccount = document.getElementById("nav-account-link");
     if (!btnAccount) {
       btnAccount = document.createElement("a");
@@ -107,7 +136,6 @@
       right.appendChild(btnAccount);
     }
 
-    // Botón Salir
     let btnLogout = document.getElementById("nav-logout-link");
     if (!btnLogout) {
       btnLogout = document.createElement("button");
@@ -123,31 +151,21 @@
       right.appendChild(btnLogout);
     }
 
-    // Acción logout (frontend safe)
     btnLogout.addEventListener("click", async () => {
+      // Limpieza frontend
+      lsDel("user_id");
+      SESSION_UID = null;
+
+      // Intentar logout backend (si existe)
       try {
-        // 1) borrar localStorage
-        try {
-          localStorage.removeItem("user_id");
-        } catch (_) {}
+        await fetch("/auth/logout", { method: "POST", credentials: "same-origin" });
+      } catch (_) {}
 
-        // 2) intentar cerrar sesión backend si existe
-        // (si no existe, no pasa nada)
-        try {
-          await fetch("/auth/logout", { method: "POST", credentials: "same-origin" });
-        } catch (_) {}
-
-        // 3) volver a home limpio
-        window.location.href = "/";
-      } catch (_) {
-        window.location.href = "/";
-      }
+      // Redirigir limpio (sin user_id)
+      window.location.href = "/";
     });
   }
 
-  // -------------------------
-  // UI: login/register vs account/logout
-  // -------------------------
   function updateAuthButtons() {
     ensureAccountButtons();
 
@@ -174,52 +192,43 @@
   }
 
   // -------------------------
-  // Optional: Sync con backend (si existe /api/usage/whoami)
-  // -------------------------
-  async function trySyncWhoAmI() {
-    try {
-      const r = await fetch("/api/usage/whoami", { credentials: "same-origin" });
-      if (!r.ok) return null;
-      const j = await r.json().catch(() => ({}));
-      const uid = (j && j.user_id ? String(j.user_id) : "").trim();
-      if (uid) {
-        setUserIdToLocalStorage(uid);
-        return uid;
-      }
-      return null;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  // -------------------------
   // Boot
   // -------------------------
   async function boot() {
     setActiveNavLink();
 
-    // Guardar user_id si backend lo mandó en data-user-id
-    resolveUserId();
+    // Si modo estricto: el backend manda
+    const who = await tryWhoAmI();
 
-    // Intentar sincronizar sesión real (si existe endpoint)
-    await trySyncWhoAmI();
+    if (who) {
+      SESSION_UID = who;
+      lsSet("user_id", who); // opcional, por compat
+    } else {
+      SESSION_UID = null;
+      if (STRICT_SESSION) {
+        // En modo estricto, ignoramos ?user_id y localStorage si no hay sesión
+        // (Esto evita "login falso" por URL)
+        // Puedes comentar estas dos líneas si quieres conservarlo para dev.
+        lsDel("user_id");
+      } else {
+        // fallback
+        resolveUserIdFallback();
+      }
+    }
 
     updateAuthButtons();
   }
 
   document.addEventListener("DOMContentLoaded", boot);
 
-  // Sync si cambia user_id en otra pestaña
+  // Sync si cambia user_id en otra pestaña (modo no estricto)
   window.addEventListener("storage", (ev) => {
-    if (ev && ev.key === "user_id") {
-      updateAuthButtons();
-    }
+    if (ev && ev.key === "user_id") updateAuthButtons();
   });
 
-  // Exponemos helpers para otros scripts
   window.PolyScribeAuth = {
     resolveUserId,
     isLoggedIn,
-    trySyncWhoAmI,
+    tryWhoAmI,
   };
 })();
