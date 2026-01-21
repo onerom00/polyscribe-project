@@ -12,7 +12,7 @@
     window.dataLayer = window.dataLayer || [];
     function gtag(){ dataLayer.push(arguments); }
     gtag('js', new Date());
-    /* ✅ FIX: tenías typo (G-6TEFRMS8K0). Debe ser el mismo del script async */
+    /* ✅ FIX: tenías typo (G-6TFFRMS8K0). Debe ser el mismo del script async */
     gtag('config', 'G-6TFFRMS8K0');
   </script>
 
@@ -333,7 +333,7 @@
     <div class="usage-panel" id="usage-panel">
       <div class="top">
         <div class="title">📊 Tu uso actual</div>
-        <button class="btn-refresh" id="btn-refresh-usage">Refrescar</button>
+        <button class="btn-refresh" id="btn-refresh-usage" type="button">Refrescar</button>
       </div>
       <div class="meta">
         <div class="chip">👤 <span id="usage-user">—</span></div>
@@ -596,16 +596,14 @@
 
       // Inicial
       refreshUsage();
-      if (btnRefresh) btnRefresh.addEventListener("click", refreshUsage);
-
-      // ✅ track click intent (cuando user toca zona PayPal)
-      payNodes.forEach(n => {
-        n.addEventListener("click", () => {
-          const plan = n.getAttribute("data-plan") || "unknown";
-          const price = n.getAttribute("data-price") || "";
-          track("begin_checkout", { plan, price });
-        });
+      if (btnRefresh) btnRefresh.addEventListener("click", (e) => {
+        e.preventDefault();
+        refreshUsage();
       });
+
+      // ✅ A) begin_checkout ahora se mide en payments.js dentro de createOrder (real)
+      // (quitamos tracking por click al contenedor porque produce falsos positivos)
+
     })();
   </script>
 

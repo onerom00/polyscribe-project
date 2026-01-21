@@ -49,20 +49,44 @@
     }
   }
 
+  // ============================
+  // USER ID (alineado con Opción B)
+  // body[data-user-id] -> ?user_id -> localStorage
+  // NO forzamos "guest"
+  // ============================
+  function resolveUserIdFromFront() {
+    let id = (document.body?.dataset?.userId || "").trim();
+
+    const qs = new URLSearchParams(window.location.search);
+    const qUser = (qs.get("user_id") || "").trim();
+    if (qUser) id = qUser;
+
+    if (!id) {
+      try {
+        id = (localStorage.getItem("user_id") || "").trim();
+      } catch (_) {
+        id = "";
+      }
+    }
+
+    if (id) {
+      try {
+        localStorage.setItem("user_id", id);
+      } catch (_) {}
+    }
+
+    return id;
+  }
+
   async function getBackendUserId() {
-    // Preferimos backend (session real). Si falla, fallback a localStorage.
+    // Preferimos backend (sesión real). Si falla, fallback al front.
     try {
       const r = await fetch("/api/usage/whoami", { credentials: "same-origin" });
       const j = await r.json().catch(() => ({}));
       if (r.ok && j && j.user_id) return String(j.user_id);
     } catch (_) {}
 
-    try {
-      const ls = (localStorage.getItem("user_id") || "").trim();
-      return ls || "guest";
-    } catch (_) {
-      return "guest";
-    }
+    return resolveUserIdFromFront();
   }
 
   function injectSdk(clientId, currency) {
@@ -92,7 +116,6 @@
   }
 
   function goLogin() {
-    // Ajusta esta ruta si tu login vive en otro endpoint
     window.location.href = "/auth/login";
   }
 
@@ -140,8 +163,7 @@
   }
 
   function requireCompletedStatus(captureResp) {
-    // ✅ Regla: SOLO consideramos "captured" cuando status es COMPLETED
-    // Pedimos que el backend nos devuelva status. Si no viene, fallback seguro.
+    // SOLO consideramos venta final cuando status es COMPLETED
     const s = String(
       (captureResp && (captureResp.status || captureResp.paypal_status)) || ""
     )
@@ -149,11 +171,9 @@
       .toUpperCase();
 
     if (!s) {
-      // fallback: si backend no manda status, asumimos ok pero NO hacemos claims
-      // (igual redirigimos a history y ahí se reflejará el saldo si backend acreditó)
+      // fallback seguro si backend no manda status
       return { ok: true, status: "UNKNOWN" };
     }
-
     return { ok: s === "COMPLETED", status: s };
   }
 
@@ -165,14 +185,12 @@
 
     const userId = await getBackendUserId();
 
-    // ✅ 1) Ocultar “guest” en producción: no renderizar PayPal si no hay login
+    // ✅ No renderizar PayPal si no hay login real
     if (isGuestUserId(userId)) {
       clearPayContainers();
-      showAlert("🔒 Para comprar minutos debes iniciar sesión. Luego vuelve a Planes y Precios.");
+      showAlert("🔒 Para comprar minutos debes iniciar sesión.");
       track("paywall_guest_blocked", { page: "pricing" });
-
-      // redirección agresiva (marketing directo): llevar a login
-      setTimeout(() => goLogin(), 900);
+      // No redirección agresiva: el pricing ya muestra CTA “Entrar/Registro”
       return;
     }
 
@@ -191,7 +209,6 @@
           style: { layout: "vertical", color: "gold", shape: "rect", label: "paypal" },
 
           createOrder: function () {
-            // ✅ Funnel: begin_checkout
             track("begin_checkout", {
               method: "paypal",
               plan: planKey,
@@ -206,7 +223,10 @@
                 goLogin();
                 return;
               }
-              track("paypal_create_order_error", { plan: planKey, message: String(err.message || err) });
+              track("paypal_create_order_error", {
+                plan: planKey,
+                message: String(err.message || err),
+              });
               throw err;
             });
           },
@@ -216,21 +236,19 @@
               .then((resp) => {
                 const check = requireCompletedStatus(resp);
 
-                // ✅ 2) Registrar ventas “COMPLETED”
-                // Si NO es COMPLETED, no tratamos como venta final
                 if (!check.ok) {
                   track("paypal_not_completed", {
                     plan: planKey,
                     status: check.status,
                     orderID: String(data.orderID || ""),
                   });
-                  showAlert("Pago aprobado pero aún no está COMPLETADO. Si no se refleja en 2 minutos, contacta soporte.");
-                  // igual mandamos a historial, para que el usuario vea su saldo
+                  showAlert(
+                    "Pago aprobado pero aún no está COMPLETADO. Si no se refleja en 2 minutos, contacta soporte."
+                  );
                   window.location.href = "/history?paid=1";
                   return;
                 }
 
-                // ✅ Purchase event (GA4)
                 track("purchase", {
                   method: "paypal",
                   plan: planKey,
@@ -240,7 +258,6 @@
                   status: check.status,
                 });
 
-                // ✅ 3) Post-pago: redirigir a /history y refrescar balance
                 window.location.href = "/history?paid=1";
               })
               .catch((err) => {
@@ -251,14 +268,19 @@
                   return;
                 }
                 console.error("capture error:", err);
-                track("paypal_capture_error", { plan: planKey, message: String(err.message || err) });
+                track("paypal_capture_error", {
+                  plan: planKey,
+                  message: String(err.message || err),
+                });
                 showAlert("Pago aprobado pero no se pudo acreditar. Contacta soporte.");
               });
           },
 
           onError: function (err) {
             console.error("PayPal error:", err);
-            track("paypal_sdk_error", { message: String(err && err.message ? err.message : err) });
+            track("paypal_sdk_error", {
+              message: String(err && err.message ? err.message : err),
+            });
             showAlert("Hubo un problema con PayPal. Intenta de nuevo.");
           },
         })
@@ -268,6 +290,7 @@
 
   (async function init() {
     const cfg = await getConfig();
+
     if (!cfg || !cfg.enabled || !cfg.client_id) {
       showAlert("PayPal no está configurado por el momento. Puedes continuar con el plan Free.");
       track("paypal_disabled", { page: "pricing" });
@@ -280,7 +303,9 @@
       await renderButtons();
     } catch (err) {
       console.error(err);
-      track("paypal_sdk_load_failed", { message: String(err && err.message ? err.message : err) });
+      track("paypal_sdk_load_failed", {
+        message: String(err && err.message ? err.message : err),
+      });
       showAlert("No se pudo cargar el SDK de PayPal. Intenta más tarde.");
       clearPayContainers();
     }

@@ -12,7 +12,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function go(path) {
     const u = new URL(path, location.origin);
-    location.href = u.pathname + (u.search ? "?" + u.searchParams.toString() : "");
+    // ✅ más robusto: preserva search y hash si existieran
+    location.href = u.pathname + u.search + u.hash;
   }
 
   if (login) {

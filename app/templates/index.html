@@ -784,23 +784,27 @@
     // ALERTAS
     // ============================
     function showError(msg){
+      if (!alertBox) return;
       alertBox.textContent = msg;
       alertBox.classList.remove("success","info");
       alertBox.style.display = "block";
     }
     function showOk(msg){
+      if (!alertBox) return;
       alertBox.textContent = msg;
       alertBox.classList.remove("info");
       alertBox.classList.add("success");
       alertBox.style.display = "block";
     }
     function showInfo(msg){
+      if (!alertBox) return;
       alertBox.textContent = msg;
       alertBox.classList.remove("success");
       alertBox.classList.add("info");
       alertBox.style.display = "block";
     }
     function clearAlert(){
+      if (!alertBox) return;
       alertBox.style.display = "none";
       alertBox.classList.remove("success","info");
     }
@@ -923,6 +927,7 @@
     // DIRECCIÓN (RTL/LTR)
     // ============================
     function applyDirection(code){
+      if (!taT || !taS) return;
       const rtl = ["ar", "he", "fa", "ur", "ps"];
       const c = (code || "").slice(0,2);
       const dir = rtl.includes(c) ? "rtl" : "ltr";
@@ -933,35 +938,39 @@
     // ============================
     // DROPZONE
     // ============================
-    drop.onclick = () => fileInput.click();
-    drop.ondragover = e => {
-      e.preventDefault();
-      drop.style.borderColor = "#60a5fa";
-    };
-    drop.ondragleave = () => {
-      drop.style.borderColor = "#97bff7";
-    };
-    drop.ondrop = e => {
-      e.preventDefault();
-      drop.style.borderColor = "#97bff7";
-      if (e.dataTransfer.files[0]){
-        fileInput.files = e.dataTransfer.files;
-        dFile.textContent = e.dataTransfer.files[0].name;
-      }
-    };
+    if (drop && fileInput){
+      drop.onclick = () => fileInput.click();
+      drop.ondragover = e => {
+        e.preventDefault();
+        drop.style.borderColor = "#60a5fa";
+      };
+      drop.ondragleave = () => {
+        drop.style.borderColor = "#97bff7";
+      };
+      drop.ondrop = e => {
+        e.preventDefault();
+        drop.style.borderColor = "#97bff7";
+        if (e.dataTransfer.files[0]){
+          fileInput.files = e.dataTransfer.files;
+          if (dFile) dFile.textContent = e.dataTransfer.files[0].name;
+        }
+      };
 
-    fileInput.onchange = () => {
-      dFile.textContent = fileInput.files[0]?.name || "—";
-    };
+      fileInput.onchange = () => {
+        if (dFile) dFile.textContent = fileInput.files[0]?.name || "—";
+      };
+    }
 
     // ============================
     // CAMBIO DE IDIOMA
     // ============================
-    idiomaSel.onchange = () => {
-      const code = idiomaSel.value || "auto";
-      dLang.textContent = code;
-      applyDirection(code);
-    };
+    if (idiomaSel){
+      idiomaSel.onchange = () => {
+        const code = idiomaSel.value || "auto";
+        if (dLang) dLang.textContent = code;
+        applyDirection(code);
+      };
+    }
 
     // ============================
     // HISTORIAL
@@ -978,7 +987,7 @@
 
       clearAlert();
       showInfo("📄 Cargando resultado del historial…");
-      btnTrans.disabled = true;
+      if (btnTrans) btnTrans.disabled = true;
 
       try{
         const r = await api(`/jobs/${encodeURIComponent(qJob)}`, { method:"GET" });
@@ -988,15 +997,15 @@
         }
 
         const job = r.body || {};
-        taT.value = job.transcript || "";
-        taS.value = job.summary || "";
-        dDet.textContent = job.language_detected || "—";
-        dJob.textContent = job.id || job.job_id || qJob;
+        if (taT) taT.value = job.transcript || "";
+        if (taS) taS.value = job.summary || "";
+        if (dDet) dDet.textContent = job.language_detected || "—";
+        if (dJob) dJob.textContent = job.id || job.job_id || qJob;
 
-        if (job.filename) dFile.textContent = job.filename;
+        if (job.filename && dFile) dFile.textContent = job.filename;
 
         if (job.language) {
-          dLang.textContent = job.language;
+          if (dLang) dLang.textContent = job.language;
           if (idiomaSel) idiomaSel.value = job.language;
           applyDirection(job.language);
         }
@@ -1004,7 +1013,7 @@
           applyDirection(job.language_detected);
         }
 
-        try{ localStorage.setItem("ps_last_job_id", String(dJob.textContent || qJob)); }catch{}
+        try{ localStorage.setItem("ps_last_job_id", String((dJob && dJob.textContent) || qJob)); }catch{}
 
         showOk("✅ Resultado cargado desde historial.");
         refreshBadge();
@@ -1012,7 +1021,7 @@
         console.error(e);
         showError("Error inesperado cargando el historial.");
       }finally{
-        btnTrans.disabled = false;
+        if (btnTrans) btnTrans.disabled = false;
       }
     }
 
@@ -1037,24 +1046,24 @@
         return;
       }
 
-      const file = fileInput.files?.[0];
+      const file = fileInput && fileInput.files ? fileInput.files[0] : null;
       if (!file) return showError("Selecciona un archivo.");
       if (file.size > MAX_MB * 1024 * 1024){
         return showError("El archivo supera el límite de 100 MB.");
       }
 
-      const lang = (idiomaSel.value || "auto").trim().toLowerCase();
-      dFile.textContent = file.name;
-      dLang.textContent = lang;
+      const lang = (idiomaSel ? (idiomaSel.value || "auto") : "auto").trim().toLowerCase();
+      if (dFile) dFile.textContent = file.name;
+      if (dLang) dLang.textContent = lang;
       applyDirection(lang);
 
-      taT.value = "";
-      taS.value = "";
-      dDet.textContent = "—";
-      dJob.textContent = "—";
+      if (taT) taT.value = "";
+      if (taS) taS.value = "";
+      if (dDet) dDet.textContent = "—";
+      if (dJob) dJob.textContent = "—";
 
       showInfo("⏳ Procesando audio… por favor espera.");
-      btnTrans.disabled = true;
+      if (btnTrans) btnTrans.disabled = true;
 
       try{
         const fd = new FormData();
@@ -1077,16 +1086,16 @@
         }
 
         const job = r.body || {};
-        taT.value = job.transcript || "";
-        taS.value = job.summary || "";
-        dDet.textContent = job.language_detected || "";
-        dJob.textContent = job.id || job.job_id || "—";
+        if (taT) taT.value = job.transcript || "";
+        if (taS) taS.value = job.summary || "";
+        if (dDet) dDet.textContent = job.language_detected || "";
+        if (dJob) dJob.textContent = job.id || job.job_id || "—";
 
         if (job.language_detected){
           applyDirection(job.language_detected);
         }
 
-        try{ localStorage.setItem("ps_last_job_id", String(dJob.textContent || "")); }catch{}
+        try{ localStorage.setItem("ps_last_job_id", String((dJob && dJob.textContent) || "")); }catch{}
 
         showOk("✅ Transcripción y resumen listos.");
         await refreshBadge();
@@ -1094,27 +1103,29 @@
         console.error(e);
         showError("Ocurrió un error inesperado al procesar el archivo.");
       }finally{
-        btnTrans.disabled = false;
+        if (btnTrans) btnTrans.disabled = false;
       }
     }
 
-    btnTrans.onclick = crearJob;
+    if (btnTrans) btnTrans.onclick = crearJob;
 
     // ============================
     // RESET
     // ============================
-    btnReset.onclick = () => {
-      taT.value = "";
-      taS.value = "";
-      dFile.textContent = "—";
-      dLang.textContent = "auto";
-      dDet.textContent = "—";
-      dJob.textContent = "—";
-      fileInput.value = "";
-      idiomaSel.value = "auto";
-      applyDirection("auto");
-      clearAlert();
-    };
+    if (btnReset){
+      btnReset.onclick = () => {
+        if (taT) taT.value = "";
+        if (taS) taS.value = "";
+        if (dFile) dFile.textContent = "—";
+        if (dLang) dLang.textContent = "auto";
+        if (dDet) dDet.textContent = "—";
+        if (dJob) dJob.textContent = "—";
+        if (fileInput) fileInput.value = "";
+        if (idiomaSel) idiomaSel.value = "auto";
+        applyDirection("auto");
+        clearAlert();
+      };
+    }
 
     // ============================
     // EXPORT TXT CLIENTE
@@ -1133,7 +1144,7 @@
     }
 
     function getBaseName(){
-      const name = dFile.textContent || "";
+      const name = (dFile && dFile.textContent) ? dFile.textContent : "";
       if (!name || name === "—") return "resultado";
       return name.replace(/\.[^.]+$/, "");
     }
@@ -1141,31 +1152,42 @@
     // ============================
     // BOTONES TRANSCRIPCIÓN
     // ============================
-    $("#copy-trans").onclick = async () => {
-      const txt = taT.value || "";
-      if (!txt) return;
-      try{
-        await navigator.clipboard.writeText(txt);
-        showOk("✅ Transcripción copiada.");
-      }catch{
-        showError("No se pudo copiar la transcripción.");
-      }
-    };
+    const btnCopyTrans = $("#copy-trans");
+    const btnDownloadTxt = $("#download-txt");
+    const btnDownloadSrt = $("#download-srt");
+    const btnDownloadVtt = $("#download-vtt");
+    const btnDownloadDocx = $("#download-docx");
+    const btnDownloadPdf = $("#download-pdf");
 
-    $("#download-txt").onclick = () => {
-      if (!taT.value) return showError("No hay transcripción para exportar.");
-      const base = getBaseName() || "transcripcion";
-      downloadClient(base, "txt", taT.value, "text/plain;charset=utf-8");
-    };
+    if (btnCopyTrans){
+      btnCopyTrans.onclick = async () => {
+        const txt = taT ? (taT.value || "") : "";
+        if (!txt) return;
+        try{
+          await navigator.clipboard.writeText(txt);
+          showOk("✅ Transcripción copiada.");
+        }catch{
+          showError("No se pudo copiar la transcripción.");
+        }
+      };
+    }
+
+    if (btnDownloadTxt){
+      btnDownloadTxt.onclick = () => {
+        if (!taT || !taT.value) return showError("No hay transcripción para exportar.");
+        const base = getBaseName() || "transcripcion";
+        downloadClient(base, "txt", taT.value, "text/plain;charset=utf-8");
+      };
+    }
 
     async function exportServer(fmt){
-      if (!taT.value){
+      if (!taT || !taT.value){
         return showError("No hay transcripción para exportar.");
       }
       const payload = {
         transcript: taT.value || "",
-        summary: taS.value || "",
-        filename: dFile.textContent || ""
+        summary: taS ? (taS.value || "") : "",
+        filename: (dFile && dFile.textContent) ? dFile.textContent : ""
       };
 
       try{
@@ -1197,44 +1219,54 @@
       }
     }
 
-    $("#download-srt").onclick  = () => exportServer("srt");
-    $("#download-vtt").onclick  = () => exportServer("vtt");
-    $("#download-docx").onclick = () => exportServer("docx");
-    $("#download-pdf").onclick  = () => exportServer("pdf");
+    if (btnDownloadSrt)  btnDownloadSrt.onclick  = () => exportServer("srt");
+    if (btnDownloadVtt)  btnDownloadVtt.onclick  = () => exportServer("vtt");
+    if (btnDownloadDocx) btnDownloadDocx.onclick = () => exportServer("docx");
+    if (btnDownloadPdf)  btnDownloadPdf.onclick  = () => exportServer("pdf");
 
     // ============================
     // BOTONES RESUMEN
     // ============================
-    $("#copy-sum").onclick = async () => {
-      const txt = taS.value || "";
-      if (!txt) return;
-      try{
-        await navigator.clipboard.writeText(txt);
-        showOk("✅ Resumen copiado.");
-      }catch{
-        showError("No se pudo copiar el resumen.");
-      }
-    };
+    const btnCopySum = $("#copy-sum");
+    const btnDownloadSum = $("#download-sum");
+    const btnDownloadJson = $("#download-json");
 
-    $("#download-sum").onclick = () => {
-      if (!taS.value) return showError("No hay resumen para exportar.");
-      const base = getBaseName() || "resumen";
-      downloadClient(base, "txt", taS.value, "text/plain;charset=utf-8");
-    };
-
-    $("#download-json").onclick = () => {
-      const obj = {
-        filename: dFile.textContent || null,
-        language_selected: dLang.textContent || null,
-        language_detected: dDet.textContent || null,
-        job_id: dJob.textContent || null,
-        transcript: taT.value || "",
-        summary: taS.value || ""
+    if (btnCopySum){
+      btnCopySum.onclick = async () => {
+        const txt = taS ? (taS.value || "") : "";
+        if (!txt) return;
+        try{
+          await navigator.clipboard.writeText(txt);
+          showOk("✅ Resumen copiado.");
+        }catch{
+          showError("No se pudo copiar el resumen.");
+        }
       };
-      const json = JSON.stringify(obj, null, 2);
-      const base = getBaseName();
-      downloadClient(base, "json", json, "application/json;charset=utf-8");
-    };
+    }
+
+    if (btnDownloadSum){
+      btnDownloadSum.onclick = () => {
+        if (!taS || !taS.value) return showError("No hay resumen para exportar.");
+        const base = getBaseName() || "resumen";
+        downloadClient(base, "txt", taS.value, "text/plain;charset=utf-8");
+      };
+    }
+
+    if (btnDownloadJson){
+      btnDownloadJson.onclick = () => {
+        const obj = {
+          filename: (dFile && dFile.textContent) ? dFile.textContent : null,
+          language_selected: (dLang && dLang.textContent) ? dLang.textContent : null,
+          language_detected: (dDet && dDet.textContent) ? dDet.textContent : null,
+          job_id: (dJob && dJob.textContent) ? dJob.textContent : null,
+          transcript: taT ? (taT.value || "") : "",
+          summary: taS ? (taS.value || "") : ""
+        };
+        const json = JSON.stringify(obj, null, 2);
+        const base = getBaseName();
+        downloadClient(base, "json", json, "application/json;charset=utf-8");
+      };
+    }
 
   })();
   </script>
