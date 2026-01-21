@@ -2,324 +2,191 @@
 (function () {
   "use strict";
 
-  // =========================
-  // Helpers: USER_ID robusto
-  // =========================
-  function getUserIdFromDOM() {
-    const el = document.querySelector("[data-user-id]");
-    const uid = el?.getAttribute("data-user-id");
-    return uid && uid.trim() !== "" ? uid.trim() : null;
-  }
+  const $ = (s) => document.querySelector(s);
 
-  function getUserIdFromQuery() {
-    const params = new URLSearchParams(window.location.search);
-    const uid = params.get("user_id");
-    return uid && uid.trim() !== "" ? uid.trim() : null;
-  }
+  // -----------------------------
+  // Resolve user_id (robusto)
+  // -----------------------------
+  function resolveUserId() {
+    let id = "";
 
-  function getUserIdFromLocalStorage() {
+    // 1) server rendered (data-user-id)
     try {
-      const uid = localStorage.getItem("user_id");
-      return uid && uid.trim() !== "" ? uid.trim() : null;
-    } catch {
-      return null;
-    }
-  }
+      id = (document.body?.dataset?.userId || "").trim();
+    } catch (_) {}
 
-  function setUserIdToLocalStorage(userId) {
+    // 2) querystring ?user_id=
     try {
-      localStorage.setItem("user_id", userId);
-    } catch {}
-  }
+      const qs = new URLSearchParams(window.location.search);
+      const q = (qs.get("user_id") || "").trim();
+      if (q) id = q;
+    } catch (_) {}
 
-  // Regla final:
-  // 1) data-user-id (backend) manda
-  // 2) ?user_id
-  // 3) localStorage
-  function resolveUserIdFront() {
-    const fromDOM = getUserIdFromDOM();
-    if (fromDOM) {
-      setUserIdToLocalStorage(fromDOM);
-      return fromDOM;
+    // 3) localStorage
+    if (!id) {
+      try {
+        id = (localStorage.getItem("user_id") || "").trim();
+      } catch (_) {
+        id = "";
+      }
     }
 
-    const fromQuery = getUserIdFromQuery();
-    if (fromQuery) {
-      setUserIdToLocalStorage(fromQuery);
-      return fromQuery;
+    // persist
+    if (id) {
+      try {
+        localStorage.setItem("user_id", id);
+      } catch (_) {}
     }
 
-    return getUserIdFromLocalStorage();
+    return id; // puede ser ""
   }
 
-  // =========================
-  // Backend whoami (verdad)
-  // =========================
-  async function resolveUserIdBackend() {
+  function setUserId(id) {
     try {
-      const r = await fetch("/api/usage/whoami", { credentials: "same-origin" });
-      const j = await r.json().catch(() => ({}));
-      if (r.ok && j && j.user_id) {
-        const uid = String(j.user_id).trim();
-        if (uid) {
-          setUserIdToLocalStorage(uid);
-          return uid;
-        }
-      }
-    } catch {}
-    return null;
+      if (id) localStorage.setItem("user_id", id);
+      else localStorage.removeItem("user_id");
+    } catch (_) {}
   }
 
-  async function resolveUserId() {
-    // Preferimos backend. Si no hay sesión real, usamos front.
-    const b = await resolveUserIdBackend();
-    if (b) return b;
-    return resolveUserIdFront();
+  // -----------------------------
+  // DOM targets (si existen)
+  // -----------------------------
+  const navLogin = $("#nav-login-link");
+  const navSignup = $("#nav-signup-link");
+  const navAccount = $("#nav-account-link");
+  const navLogout = $("#nav-logout-link");
+
+  const usageBadgeNav = $("#usage-badge-nav");
+  const usageTextNav = $("#usage-text-nav");
+
+  // -----------------------------
+  // Helpers UI
+  // -----------------------------
+  function show(el) {
+    if (!el) return;
+    el.style.display = "";
+  }
+  function hide(el) {
+    if (!el) return;
+    el.style.display = "none";
   }
 
-  // =========================
-  // UI helpers
-  // =========================
-  function qs(sel) {
-    return document.querySelector(sel);
-  }
+  function setAuthUI(userId) {
+    // Guest
+    if (!userId) {
+      show(navLogin);
+      show(navSignup);
+      hide(navAccount);
+      hide(navLogout);
 
-  function ensureNavRightUI() {
-    // Soportamos 2 layouts:
-    // A) header.ps-nav .inner (nuevo)
-    // B) header simple con nav/topbar (history viejo)
-    // Objetivo: que SIEMPRE haya botones.
-
-    const psInner = qs("header.ps-nav .inner");
-
-    // ---- Caso A: nuevo header (ideal)
-    if (psInner) {
-      let right = psInner.querySelector(".right");
-      if (!right) {
-        right = document.createElement("div");
-        right.className = "right";
-        psInner.appendChild(right);
-      }
-
-      // Badge
-      if (!right.querySelector("#usage-badge-nav")) {
-        const badge = document.createElement("span");
-        badge.id = "usage-badge-nav";
-        badge.className = "badge-usage";
-        badge.style.display = "inline-flex";
-        badge.innerHTML = `<span id="usage-text-nav">—/— min · libre —</span>`;
-        right.appendChild(badge);
-      }
-
-      // Entrar
-      if (!right.querySelector("#nav-login-link")) {
-        const a = document.createElement("a");
-        a.id = "nav-login-link";
-        a.href = "/auth/login";
-        a.className = "a11y-btn";
-        a.textContent = "Entrar";
-        right.appendChild(a);
-      }
-
-      // Registro
-      if (!right.querySelector("#nav-signup-link")) {
-        const a = document.createElement("a");
-        a.id = "nav-signup-link";
-        a.href = "/auth/register";
-        a.className = "a11y-btn";
-        a.textContent = "Registro";
-        // estilo tipo index
-        a.style.background = "#22c55e";
-        a.style.borderColor = "#16a34a";
-        a.style.color = "#0b111d";
-        right.appendChild(a);
-      }
-
-      // Mi cuenta
-      if (!right.querySelector("#nav-account-link")) {
-        const a = document.createElement("a");
-        a.id = "nav-account-link";
-        a.href = "/account";
-        a.className = "a11y-btn";
-        a.textContent = "Mi cuenta";
-        a.style.display = "none";
-        right.appendChild(a);
-      }
-
-      // Salir
-      if (!right.querySelector("#nav-logout-link")) {
-        const a = document.createElement("a");
-        a.id = "nav-logout-link";
-        a.href = "/auth/logout";
-        a.className = "a11y-btn";
-        a.textContent = "Salir";
-        a.style.display = "none";
-        // pequeño tono rojo como lo veías en pantalla
-        a.style.borderColor = "#f3abab";
-        a.style.background = "#fde2e2";
-        a.style.color = "#8a1c1c";
-        right.appendChild(a);
-      }
-
-      return { mode: "ps-nav" };
+      if (usageBadgeNav) hide(usageBadgeNav);
+      return;
     }
 
-    // ---- Caso B: header viejo (history/pricing viejos)
-    // Intentamos agregar un mini bloque a la derecha del header
-    const legacyHeader = qs("body > .container header");
-    if (legacyHeader) {
-      let topbar = legacyHeader.querySelector(".topbar");
-      if (!topbar) {
-        topbar = document.createElement("div");
-        topbar.className = "topbar";
-        legacyHeader.appendChild(topbar);
+    // Logged
+    hide(navLogin);
+    hide(navSignup);
+    show(navAccount);
+    show(navLogout);
+
+    if (usageBadgeNav) show(usageBadgeNav);
+    if (usageTextNav && !usageTextNav.textContent.trim()) {
+      usageTextNav.textContent = "—/— min · libre —";
+    }
+  }
+
+  // -----------------------------
+  // Append user_id to internal links (solo si hay user)
+  // -----------------------------
+  function withUserId(url, userId) {
+    try {
+      if (!userId) return url;
+
+      // no tocar anchors / externos / mailto / tel
+      if (!url || url.startsWith("http") || url.startsWith("mailto:") || url.startsWith("tel:") || url.startsWith("#")) {
+        return url;
       }
 
-      if (!topbar.querySelector("#legacy-auth-wrap")) {
-        const wrap = document.createElement("div");
-        wrap.id = "legacy-auth-wrap";
-        wrap.style.display = "inline-flex";
-        wrap.style.gap = "8px";
-        wrap.style.alignItems = "center";
-        wrap.style.flexWrap = "wrap";
-
-        // Entrar / Registro (legacy)
-        const login = document.createElement("a");
-        login.id = "nav-login-link";
-        login.href = "/auth/login";
-        login.className = "btn btn-secondary";
-        login.textContent = "Entrar";
-
-        const reg = document.createElement("a");
-        reg.id = "nav-signup-link";
-        reg.href = "/auth/register";
-        reg.className = "btn";
-        reg.textContent = "Registro";
-
-        const acc = document.createElement("a");
-        acc.id = "nav-account-link";
-        acc.href = "/account";
-        acc.className = "btn btn-secondary";
-        acc.textContent = "Mi cuenta";
-        acc.style.display = "none";
-
-        const out = document.createElement("a");
-        out.id = "nav-logout-link";
-        out.href = "/auth/logout";
-        out.className = "btn btn-secondary";
-        out.textContent = "Salir";
-        out.style.display = "none";
-
-        wrap.appendChild(login);
-        wrap.appendChild(reg);
-        wrap.appendChild(acc);
-        wrap.appendChild(out);
-
-        topbar.appendChild(wrap);
-      }
-
-      return { mode: "legacy" };
+      const u = new URL(url, window.location.origin);
+      if (!u.searchParams.get("user_id")) u.searchParams.set("user_id", userId);
+      return u.pathname + u.search + u.hash;
+    } catch (_) {
+      return url;
     }
-
-    return { mode: "none" };
   }
 
-  // =========================
-  // Fetch: usage balance
-  // =========================
-  async function fetchUsageBalance(userId) {
-    const url = `/api/usage/balance?user_id=${encodeURIComponent(userId)}`;
-
-    const res = await fetch(url, {
-      method: "GET",
-      headers: { "X-User-Id": userId },
-      credentials: "same-origin",
-    });
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(`Error ${res.status}: ${text || "No response body"}`);
-    }
-    return await res.json();
-  }
-
-  function applyUsageTextToUI(data) {
-    // Tu backend actual (por tus templates) maneja seconds.
-    // Si te devuelve minutes, igual lo soportamos.
-    let usedMin, allowMin, remainMin;
-
-    if (data && (data.used_seconds != null || data.allowance_seconds != null)) {
-      const usedSec = Number(data.used_seconds || 0);
-      const allowSec = Number(data.allowance_seconds || 0);
-      usedMin = usedSec / 60;
-      allowMin = allowSec / 60;
-      remainMin = Math.max(0, allowMin - usedMin);
-    } else {
-      // fallback por si devuelve minutes
-      usedMin = Number(data.used_minutes || 0);
-      allowMin = Number(data.limit_minutes || data.monthly_limit_minutes || 0);
-      remainMin = Math.max(0, Number(data.remaining_minutes || 0));
-      if (!allowMin && usedMin + remainMin > 0) allowMin = usedMin + remainMin;
-    }
-
-    const txt = `${usedMin.toFixed(1)}/${allowMin.toFixed(0)} min · libre ${remainMin.toFixed(1)} min`;
-
-    const a = document.getElementById("usage-text-nav");
-    if (a) a.textContent = txt;
-
-    const b = document.getElementById("usage-text");
-    if (b) b.textContent = txt;
-  }
-
-  async function refreshUsageUI(userId) {
+  function patchLinks(userId) {
     if (!userId) return;
-    try {
-      const data = await fetchUsageBalance(userId);
-      applyUsageTextToUI(data);
-    } catch (err) {
-      // silencioso: no rompemos UI por esto
-      console.warn("refreshUsageUI:", err?.message || err);
-    }
+
+    // Ajustamos links clave para que mantengan user_id
+    const links = document.querySelectorAll('a[href^="/"]:not([href^="//"])');
+    links.forEach((a) => {
+      const href = (a.getAttribute("href") || "").trim();
+      if (!href) return;
+
+      // No tocar logout
+      if (href.startsWith("/auth/logout")) return;
+
+      // Ajustar solo ciertas rutas para no ensuciar todo
+      const keep = ["/", "/history", "/pricing", "/ayuda", "/account"];
+      const isKeep = keep.some((p) => href === p || href.startsWith(p + "?") || href.startsWith(p + "#"));
+
+      if (!isKeep) return;
+
+      const newHref = withUserId(href, userId);
+      a.setAttribute("href", newHref);
+    });
   }
 
-  function setAuthState(loggedIn) {
-    const login = document.getElementById("nav-login-link");
-    const signup = document.getElementById("nav-signup-link");
-    const account = document.getElementById("nav-account-link");
-    const logout = document.getElementById("nav-logout-link");
-
-    if (loggedIn) {
-      if (login) login.style.display = "none";
-      if (signup) signup.style.display = "none";
-      if (account) account.style.display = "";
-      if (logout) logout.style.display = "";
-    } else {
-      if (login) login.style.display = "";
-      if (signup) signup.style.display = "";
-      if (account) account.style.display = "none";
-      if (logout) logout.style.display = "none";
-    }
+  // -----------------------------
+  // Active nav highlighting (data-path)
+  // -----------------------------
+  function markActiveNav() {
+    const path = window.location.pathname || "/";
+    const items = document.querySelectorAll(".ps-nav-links a[data-path]");
+    items.forEach((a) => {
+      const p = a.getAttribute("data-path");
+      if (!p) return;
+      if (p === path) a.classList.add("active");
+      else a.classList.remove("active");
+    });
   }
 
-  async function boot() {
-    // 1) Garantiza que existan botones (aunque el template haya quedado viejo)
-    ensureNavRightUI();
+  // -----------------------------
+  // Logout behavior
+  // -----------------------------
+  function wireLogout() {
+    if (!navLogout) return;
 
-    // 2) Decide sesión real
-    const uid = await resolveUserId();
-    setAuthState(!!uid);
+    navLogout.addEventListener("click", (e) => {
+      // dejamos que backend haga logout si existe endpoint
+      // pero limpiamos localStorage SIEMPRE para evitar estados raros.
+      setUserId("");
+      try {
+        localStorage.removeItem("ps_last_job_id");
+      } catch (_) {}
 
-    // 3) Si hay usuario, refresca saldo
-    if (uid) {
-      refreshUsageUI(uid);
-    }
+      // Si el backend no existe o falla, igual te sacamos
+      // (no bloqueamos navegación)
+    });
   }
 
-  document.addEventListener("DOMContentLoaded", boot);
+  // -----------------------------
+  // Init
+  // -----------------------------
+  const USER_ID = resolveUserId();
+  setAuthUI(USER_ID);
+  patchLinks(USER_ID);
+  markActiveNav();
+  wireLogout();
 
-  // Exponemos por si otros scripts lo necesitan
-  window.PolyScribeAuth = {
-    resolveUserId,
-    refreshUsageUI,
-  };
+  // Sync si cambia en otra pestaña
+  window.addEventListener("storage", (ev) => {
+    if (!ev) return;
+    if (ev.key === "user_id") {
+      const id = resolveUserId();
+      setAuthUI(id);
+      patchLinks(id);
+    }
+  });
 })();
