@@ -1,7 +1,0 @@
-services:
-  - type: web
-    name: polyscribe-project
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn run_auth_wrapper:app --bind 0.0.0.0:$PORT --workers 2 --timeout 900
-    postDeployCommand: flask db upgrade
