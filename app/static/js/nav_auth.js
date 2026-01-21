@@ -2,263 +2,218 @@
 (function () {
   "use strict";
 
-  /**
-   * ✅ OBJETIVO (PRODUCCIÓN):
-   * - La UI de auth (Entrar/Registro vs Mi cuenta/Salir) NO debe depender de:
-   *   - ?user_id=...
-   *   - localStorage user_id
-   * Porque eso "simula" login y oculta Entrar/Registro.
-   *
-   * - La UI debe depender SOLO de sesión real (cookies) -> /api/usage/whoami
-   *
-   * DEV MODE opcional:
-   * - Si quieres permitir el flujo viejo (header/localStorage/query) en DEV,
-   *   activa: window.PS_ALLOW_DEV_USER_ID = true; (antes de cargar este script)
-   */
+  // ==========================================
+  // CONFIG: ids esperados en tus templates
+  // ==========================================
+  const IDS = {
+    login: "nav-login-link",
+    signup: "nav-signup-link",
+    account: "nav-account-link",
+    logout: "nav-logout-link",
+    usageBadgeNav: "usage-badge-nav",
+    usageTextNav: "usage-text-nav",
+  };
 
-  const ALLOW_DEV_USER_ID = !!window.PS_ALLOW_DEV_USER_ID;
-
-  // =========================
-  // Helpers DOM
-  // =========================
-  function $(sel) {
-    return document.querySelector(sel);
+  // ==========================================
+  // Helpers: storage
+  // ==========================================
+  function lsGet(key) {
+    try {
+      const v = localStorage.getItem(key);
+      return v ? String(v).trim() : "";
+    } catch {
+      return "";
+    }
   }
 
-  function setVisible(elOrId, visible) {
-    const el = typeof elOrId === "string" ? document.getElementById(elOrId) : elOrId;
-    if (!el) return;
-    el.style.display = visible ? "" : "none";
+  function lsSet(key, value) {
+    try {
+      localStorage.setItem(key, String(value));
+    } catch {}
   }
 
-  function setText(id, value) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = value;
+  function lsDel(key) {
+    try {
+      localStorage.removeItem(key);
+    } catch {}
   }
 
-  // =========================
-  // DEV fallback (NO PRODUCCIÓN)
-  // =========================
+  // ==========================================
+  // USER ID resolve (solo como fallback)
+  // data-user-id -> ?user_id -> localStorage
+  // ==========================================
   function getUserIdFromDOM() {
-    const el = document.querySelector("[data-user-id]");
-    const uid = el?.getAttribute("data-user-id");
-    return uid && uid.trim() !== "" ? uid.trim() : null;
+    const uid = (document.body?.dataset?.userId || "").trim();
+    return uid || "";
   }
 
   function getUserIdFromQuery() {
-    const params = new URLSearchParams(window.location.search);
-    const uid = params.get("user_id");
-    return uid && uid.trim() !== "" ? uid.trim() : null;
-  }
-
-  function getUserIdFromLocalStorage() {
     try {
-      const uid = localStorage.getItem("user_id");
-      return uid && uid.trim() !== "" ? uid.trim() : null;
+      const qs = new URLSearchParams(window.location.search);
+      return (qs.get("user_id") || "").trim();
     } catch {
-      return null;
+      return "";
     }
   }
 
-  function setUserIdToLocalStorage(userId) {
-    try {
-      localStorage.setItem("user_id", userId);
-    } catch {}
+  function resolveUserIdFallback() {
+    let id = getUserIdFromDOM();
+    const q = getUserIdFromQuery();
+    if (q) id = q;
+    if (!id) id = lsGet("user_id");
+    if (id) lsSet("user_id", id);
+    return id;
   }
 
-  function clearLocalUserId() {
+  // ==========================================
+  // Fuente REAL: backend session
+  // ==========================================
+  async function whoAmI() {
+    // Si el endpoint no existe o falla, devolvemos "" (guest)
     try {
-      localStorage.removeItem("user_id");
-    } catch {}
-  }
-
-  function resolveDevUserId() {
-    // Regla DEV:
-    // 1) data-user-id
-    // 2) ?user_id
-    // 3) localStorage
-    const fromDOM = getUserIdFromDOM();
-    if (fromDOM) {
-      setUserIdToLocalStorage(fromDOM);
-      return fromDOM;
-    }
-
-    const fromQuery = getUserIdFromQuery();
-    if (fromQuery) {
-      setUserIdToLocalStorage(fromQuery);
-      return fromQuery;
-    }
-
-    return getUserIdFromLocalStorage();
-  }
-
-  // =========================
-  // ✅ PRODUCCIÓN: backend whoami
-  // =========================
-  async function fetchWhoAmI() {
-    try {
-      const r = await fetch("/api/usage/whoami", {
-        method: "GET",
-        credentials: "same-origin",
-        headers: { "Accept": "application/json" },
-      });
-
-      // Si no hay sesión real, normalmente será 401/403 o ok:false
-      if (!r.ok) return null;
-
+      const r = await fetch("/api/usage/whoami", { credentials: "same-origin" });
       const j = await r.json().catch(() => ({}));
-      if (j && j.user_id) return String(j.user_id).trim();
-      return null;
+      if (r.ok && j && j.user_id) {
+        const id = String(j.user_id).trim();
+        if (id) {
+          lsSet("user_id", id);
+          return id;
+        }
+      }
+      return "";
     } catch {
-      return null;
+      return "";
     }
   }
 
-  // =========================
-  // UI Auth Toggle (Entrar/Registro vs Mi cuenta/Salir)
-  // =========================
-  function applyAuthUI(isLogged) {
-    // IDs típicos en tu index.html:
-    const loginLink = document.getElementById("nav-login-link");
-    const signupLink = document.getElementById("nav-signup-link");
-
-    // Por si tienes botones alternativos (según tu navbar desplegada en prod):
-    const accountLink = document.getElementById("nav-account-link"); // opcional
-    const logoutLink = document.getElementById("nav-logout-link");   // opcional
-
-    // Si existen los links de Entrar/Registro:
-    if (loginLink) setVisible(loginLink, !isLogged);
-    if (signupLink) setVisible(signupLink, !isLogged);
-
-    // Si existen los links Mi cuenta/Salir:
-    if (accountLink) setVisible(accountLink, isLogged);
-    if (logoutLink) setVisible(logoutLink, isLogged);
+  // ==========================================
+  // UI toggles
+  // ==========================================
+  function el(id) {
+    return document.getElementById(id);
   }
 
-  // =========================
-  // Usage balance (para badge/panel si quieres)
-  // =========================
+  function show(node, visible) {
+    if (!node) return;
+    node.style.display = visible ? "" : "none";
+  }
+
+  function setText(node, text) {
+    if (!node) return;
+    node.textContent = text;
+  }
+
+  function bindLogoutCleanup(userId) {
+    const logout = el(IDS.logout);
+    if (!logout) return;
+
+    // Evita doble binding
+    if (logout.dataset.bound === "1") return;
+    logout.dataset.bound = "1";
+
+    logout.addEventListener("click", () => {
+      // Limpieza fuerte del estado “pegado”
+      lsDel("user_id");
+      lsDel("ps_last_job_id");
+
+      // (Opcional) si guardas otros keys, límpialos aquí
+      // lsDel("ps_lang");
+    });
+  }
+
+  function applyAuthUI(isLogged, userId) {
+    const login = el(IDS.login);
+    const signup = el(IDS.signup);
+    const account = el(IDS.account);
+    const logout = el(IDS.logout);
+
+    // Guest -> mostrar Entrar/Registro
+    show(login, !isLogged);
+    show(signup, !isLogged);
+
+    // Logged -> mostrar Mi cuenta/Salir
+    show(account, isLogged);
+    show(logout, isLogged);
+
+    if (isLogged) bindLogoutCleanup(userId);
+  }
+
+  // ==========================================
+  // Usage badge (nav) usando tu formato REAL:
+  // used_seconds / allowance_seconds
+  // ==========================================
   async function fetchUsageBalance(userId) {
     const url = `/api/usage/balance?user_id=${encodeURIComponent(userId)}`;
-
-    const res = await fetch(url, {
+    const r = await fetch(url, {
       method: "GET",
       headers: { "X-User-Id": userId },
       credentials: "same-origin",
     });
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(`Error ${res.status}: ${text || "No response body"}`);
+    if (!r.ok) {
+      return null;
     }
 
-    return await res.json();
+    const j = await r.json().catch(() => null);
+    return j || null;
   }
 
-  function applyUsageToUI(data) {
-    // Tu frontend nuevo usa: used_seconds, allowance_seconds, file_limit_bytes
-    // pero este archivo viejo tenía used_minutes/remaining_minutes etc.
-    // Entonces soportamos ambos formatos.
+  function renderUsageBadgeNav(data) {
+    const badge = el(IDS.usageBadgeNav);
+    const text = el(IDS.usageTextNav);
 
-    // Formato nuevo:
-    const usedSec = data.used_seconds != null ? Number(data.used_seconds || 0) : null;
-    const allowSec = data.allowance_seconds != null ? Number(data.allowance_seconds || 0) : null;
+    if (!badge || !text) return;
 
-    let usedMin, remainingMin, limitMin;
-
-    if (usedSec != null && allowSec != null) {
-      usedMin = usedSec / 60;
-      limitMin = allowSec / 60;
-      remainingMin = Math.max(0, limitMin - usedMin);
-    } else {
-      // Formato viejo:
-      usedMin = Number(data.used_minutes ?? 0);
-      remainingMin = Number(data.remaining_minutes ?? 0);
-      limitMin = Number(data.limit_minutes ?? data.monthly_limit_minutes ?? 0);
-    }
-
-    // Badge mini (si existe)
-    // (estos IDs tal vez no existan en tu UI actual, pero no rompe)
-    setText("usage-badge-used", `${Math.round(usedMin)}`);
-    setText("usage-badge-remaining", `${Math.round(remainingMin)}`);
-
-    // Panel detallado (si existe)
-    setText("usage-used-minutes", `${Math.round(usedMin)}`);
-    setText("usage-remaining-minutes", `${Math.round(remainingMin)}`);
-    setText("usage-limit-minutes", `${Math.round(limitMin)}`);
-
-    // Max file
-    const maxFileMB =
-      data.file_limit_bytes != null
-        ? Math.round(Number(data.file_limit_bytes || 0) / (1024 * 1024))
-        : Number(data.max_file_mb ?? 25);
-
-    setText("usage-max-file", `${maxFileMB} MB`);
-  }
-
-  async function refreshUsageUI(userId) {
-    if (!userId) {
-      // No logueado => ocultar panel si existe
-      setVisible("usage-panel", false);
+    if (!data) {
+      // si no hay data, lo dejamos pero visible
+      setText(text, "—/— min · libre —");
       return;
     }
 
-    try {
-      const data = await fetchUsageBalance(userId);
-      applyUsageToUI(data);
-      setVisible("usage-panel", true);
-    } catch (err) {
-      console.error("refreshUsageUI error:", err);
-      // Si falla, no escondemos auth, solo el panel
-      setVisible("usage-panel", false);
-    }
+    const usedSec = Number(data.used_seconds || 0);
+    const allowSec = Number(data.allowance_seconds || 0);
+
+    const usedMin = usedSec / 60;
+    const allowMin = allowSec / 60;
+    const remain = Math.max(0, allowMin - usedMin);
+
+    setText(text, `${usedMin.toFixed(1)}/${allowMin.toFixed(0)} min · libre ${remain.toFixed(1)} min`);
   }
 
-  // =========================
+  // ==========================================
   // Boot
-  // =========================
+  // ==========================================
   async function boot() {
-    // 1) Confirmar sesión real
-    const whoamiId = await fetchWhoAmI();
+    // 1) primero intentamos sesión real
+    let userId = await whoAmI();
 
-    if (whoamiId) {
-      // ✅ Logueado real
-      applyAuthUI(true);
-
-      // (Opcional) guardar para tu historial/dev
-      setUserIdToLocalStorage(whoamiId);
-
-      // refrescar panel/badges si aplica
-      refreshUsageUI(whoamiId);
-      return;
+    // 2) si no hay sesión real, NO asumimos localStorage como login
+    //    (pero lo dejamos como fallback para compatibilidad vieja)
+    if (!userId) {
+      // Si quieres ser ESTRICTO 100% backend, comenta la línea de abajo:
+      // userId = ""; // guest siempre si whoami no da user
+      //
+      // Compatibilidad: si ya estabas usando user_id param/localStorage en modo dev:
+      userId = resolveUserIdFallback();
     }
 
-    // 2) No hay sesión real
-    applyAuthUI(false);
+    const isLogged = !!userId;
 
-    // ✅ IMPORTANTÍSIMO:
-    // Si no hay sesión real, limpiamos localStorage para que no "pegue" login falso.
-    clearLocalUserId();
+    applyAuthUI(isLogged, userId);
 
-    // 3) DEV fallback (solo si lo activas explícitamente)
-    if (ALLOW_DEV_USER_ID) {
-      const devId = resolveDevUserId();
-      if (devId) {
-        // En DEV puedes querer ver usage aunque no haya sesión real
-        refreshUsageUI(devId);
-      }
+    // Badge solo si hay user_id
+    if (isLogged) {
+      const usage = await fetchUsageBalance(userId);
+      renderUsageBadgeNav(usage);
     } else {
-      // En producción, no mostrar panel para guest
-      setVisible("usage-panel", false);
+      renderUsageBadgeNav(null);
     }
   }
 
   document.addEventListener("DOMContentLoaded", boot);
 
-  // Exponemos utilidades
+  // Exponer helpers mínimos
   window.PolyScribeAuth = {
-    // En prod, resolveUserId solo debe devolver sesión real.
-    // Si necesitas dev fallback, activa window.PS_ALLOW_DEV_USER_ID = true.
-    getSessionUserId: fetchWhoAmI,
+    boot,
   };
 })();
