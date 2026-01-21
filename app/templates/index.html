@@ -11,7 +11,8 @@
     window.dataLayer = window.dataLayer || [];
     function gtag(){ dataLayer.push(arguments); }
     gtag('js', new Date());
-    gtag('config', 'G-6TEFRMS8K0');
+    /* ✅ FIX: tenías un typo aquí (G-6TEFRMS8K0). Debe ser el mismo del script async */
+    gtag('config', 'G-6TFFRMS8K0');
   </script>
 
   <!-- Fuentes -->
@@ -371,6 +372,45 @@
       font-size:13px;
     }
 
+    /* ✅ Panel de uso (Opción B) */
+    .usage-panel{
+      display:none;
+      margin:10px 0 12px;
+      border-radius:16px;
+      border:1px solid #b9d9ff;
+      background:#ffffff;
+      box-shadow:0 10px 24px rgba(15,35,52,.10);
+      padding:12px 14px;
+    }
+    .usage-panel .top{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .usage-panel .title{
+      font-weight:800;
+      color:#0b1424;
+      font-size:14px;
+    }
+    .usage-panel .meta{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:8px;
+      font-size:13px;
+      color:#13406f;
+    }
+    .usage-panel .chip{
+      border:1px solid #c6d3ec;
+      background:#f6fbff;
+      border-radius:999px;
+      padding:5px 10px;
+      color:#0b1424;
+      font-weight:700;
+    }
+
     /* ============================
        ✅ DEMO SECTION
        ============================ */
@@ -493,6 +533,20 @@
     </div>
 
     <p class="details">Sube tu audio y recibe transcripción + resumen.</p>
+
+    <!-- ✅ Panel de uso (Opción B) -->
+    <div class="usage-panel" id="usage-panel">
+      <div class="top">
+        <div class="title">📊 Tu uso actual</div>
+        <a class="a11y-btn" href="/pricing" style="white-space:nowrap;">Ver planes</a>
+      </div>
+      <div class="meta">
+        <div class="chip">👤 <span id="usage-user">—</span></div>
+        <div class="chip">⏱️ Usado: <span id="usage-used">—</span></div>
+        <div class="chip">🟢 Disponible: <span id="usage-avail">—</span></div>
+        <div class="chip">📦 Límite archivo: <span id="usage-filelimit">—</span></div>
+      </div>
+    </div>
 
     <!-- ✅ DEMO -->
     <div class="demo-wrap">
@@ -663,6 +717,13 @@
     const usageText  = $("#usage-text");
     const usageTextNav = $("#usage-text-nav");
 
+    // Panel de uso (Opción B)
+    const usagePanel = $("#usage-panel");
+    const usageUser  = $("#usage-user");
+    const usageUsed  = $("#usage-used");
+    const usageAvail = $("#usage-avail");
+    const usageFile  = $("#usage-filelimit");
+
     // Banner saldo
     const creditsBanner = $("#credits-banner");
     const creditsMsg = $("#credits-msg");
@@ -671,29 +732,44 @@
     const MAX_MB = 100;
 
     // ============================
-    // USER ID (base)
+    // USER ID (Opción B, robusto)
     // ============================
-    let USER_ID = (document.body.dataset.userId || "").trim();
-    if (!USER_ID) USER_ID = localStorage.getItem("user_id") || "";
-    if (USER_ID) localStorage.setItem("user_id", USER_ID);
-    if (!USER_ID) USER_ID = "guest";
+    function resolveUserId(){
+      // 1) server (data-user-id)
+      let id = (document.body.dataset.userId || "").trim();
 
-    // ✅ tomar user_id/job_id del querystring
-    const qs = new URLSearchParams(window.location.search);
-    const qUser = (qs.get("user_id") || "").trim();
-    const qJob  = (qs.get("job_id") || "").trim();
-    if (qUser) {
-      USER_ID = qUser;
-      try{ localStorage.setItem("user_id", USER_ID); }catch{}
+      // 2) querystring user_id
+      const qs = new URLSearchParams(window.location.search);
+      const qUser = (qs.get("user_id") || "").trim();
+      if (qUser) id = qUser;
+
+      // 3) localStorage
+      if (!id) {
+        try { id = (localStorage.getItem("user_id") || "").trim(); } catch { id = ""; }
+      }
+
+      // Guardar si existe
+      if (id) {
+        try { localStorage.setItem("user_id", id); } catch {}
+      }
+
+      // ✅ No forzamos "guest". Si no hay id, devolvemos ""
+      return id;
     }
 
+    let USER_ID = resolveUserId();
+
+    // ✅ tomar job_id del querystring (para cargar historial)
+    const qs = new URLSearchParams(window.location.search);
+    const qJob  = (qs.get("job_id") || "").trim();
+
     // ============================
-    // API helper (con X-User-Id)
+    // API helper (con X-User-Id si existe)
     // ============================
     async function api(url, opts = {}){
       try{
         const h = opts.headers ? { ...opts.headers } : {};
-        if (USER_ID !== "guest" && !h["X-User-Id"]) h["X-User-Id"] = USER_ID;
+        if (USER_ID && !h["X-User-Id"]) h["X-User-Id"] = USER_ID;
         const res = await fetch(url, { ...opts, headers: h });
         const txt = await res.text();
         let body;
@@ -738,6 +814,13 @@
     function updateCreditsUI(remainMin){
       if (!creditsBanner || !creditsMsg) return;
 
+      // Si no hay usuario, ocultamos
+      if (!USER_ID){
+        creditsBanner.style.display = "none";
+        creditsBanner.classList.remove("zero");
+        return;
+      }
+
       if (remainMin === null || Number.isNaN(remainMin)){
         creditsBanner.style.display = "none";
         creditsBanner.classList.remove("zero");
@@ -765,30 +848,70 @@
     }
 
     // ============================
-    // BADGE USO
+    // Helpers UI
+    // ============================
+    function fmtMin(n){ return `${Number(n).toFixed(1)} min`; }
+    function fmtMB(bytes){
+      const b = Number(bytes || 0);
+      const mb = b / (1024*1024);
+      return `${Math.round(mb)} MB`;
+    }
+
+    function setUsageVisible(visible){
+      const v = !!visible;
+      if (usageBadge) usageBadge.style.display = v ? "inline-flex" : "none";
+      if (usageBadgeNav) usageBadgeNav.style.display = v ? "inline-flex" : "none";
+      if (usagePanel) usagePanel.style.display = v ? "block" : "none";
+    }
+
+    // ============================
+    // BADGE + PANEL (Opción B)
     // ============================
     async function refreshBadge(){
-      const url = `/api/usage/balance?user_id=${encodeURIComponent(USER_ID)}`;
-      const r = await api(url);
-      if (!r.ok){
-        if (usageBadge) usageBadge.style.display = "none";
-        if (usageBadgeNav) usageBadgeNav.style.display = "none";
+      // Re-resolver por si cambió localStorage (login)
+      const newId = resolveUserId();
+      if (newId !== USER_ID) USER_ID = newId;
+
+      // Si no hay usuario -> ocultar todo lo de créditos/uso
+      if (!USER_ID){
+        setUsageVisible(false);
         REMAIN_MIN = null;
         updateCreditsUI(REMAIN_MIN);
         return;
       }
+
+      const url = `/api/usage/balance?user_id=${encodeURIComponent(USER_ID)}`;
+      const r = await api(url);
+      if (!r.ok){
+        setUsageVisible(false);
+        REMAIN_MIN = null;
+        updateCreditsUI(REMAIN_MIN);
+        return;
+      }
+
       const data = r.body || {};
       const usedSec  = Number(data.used_seconds || 0);
       const allowSec = Number(data.allowance_seconds || 0);
       const usedMin  = usedSec / 60;
       const allowMin = allowSec / 60;
       const remain   = Math.max(0, allowMin - usedMin);
+      const fileLimitBytes = Number(data.file_limit_bytes || 0);
 
       REMAIN_MIN = remain;
 
+      // Badge texto
       const text = `${usedMin.toFixed(1)}/${allowMin.toFixed(0)} min · libre ${remain.toFixed(1)} min`;
       if (usageText) usageText.textContent = text;
       if (usageTextNav) usageTextNav.textContent = text;
+
+      // Panel pro
+      if (usagePanel){
+        setUsageVisible(true);
+        if (usageUser)  usageUser.textContent = USER_ID;
+        if (usageUsed)  usageUsed.textContent = fmtMin(usedMin);
+        if (usageAvail) usageAvail.textContent = fmtMin(remain);
+        if (usageFile)  usageFile.textContent = fileLimitBytes ? fmtMB(fileLimitBytes) : "—";
+      }
 
       updateCreditsUI(REMAIN_MIN);
     }
@@ -901,7 +1024,11 @@
     async function crearJob(){
       clearAlert();
 
-      if (REMAIN_MIN !== null && REMAIN_MIN <= 0.01){
+      // Revalidar user_id por si cambió en caliente
+      const newId = resolveUserId();
+      if (newId !== USER_ID) USER_ID = newId;
+
+      if (USER_ID && REMAIN_MIN !== null && REMAIN_MIN <= 0.01){
         updateCreditsUI(REMAIN_MIN);
         showError("No tienes minutos disponibles. Pulsa “Mejorar plan” para continuar.");
         if (creditsBanner && creditsBanner.style.display !== "none"){
