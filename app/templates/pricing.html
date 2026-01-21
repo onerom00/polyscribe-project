@@ -35,72 +35,71 @@
       color: var(--text);
     }
 
-    /* ✅ NAV unificada (izq/centro/der) */
-    header.ps-nav{
+    /* ✅ NAV: 3 zonas (izq/centro/der) */
+    .nav{
       padding: 12px 16px;
+      font-size: 14px;
       border-bottom: 1px solid rgba(0,0,0,0.04);
       background: transparent;
     }
-    header.ps-nav .inner{
+    .nav .nav-inner{
       width:100%;
       max-width:1100px;
       margin:0 auto;
       display:flex;
       align-items:center;
-      justify-content:space-between;
       gap:14px;
       flex-wrap:wrap;
       font-weight:700;
     }
-    header.ps-nav .left{
+    .nav-left{
       display:flex;
       align-items:center;
       gap:10px;
-      min-width:140px;
+      min-width: 140px;
     }
-    header.ps-nav .center{
+    .nav-center{
       display:flex;
-      justify-content:center;
       align-items:center;
+      justify-content:center;
       gap:14px;
-      flex-wrap:wrap;
       flex:1;
+      flex-wrap:wrap;
+      text-align:center;
     }
-    header.ps-nav .right{
+    .nav-right{
       display:flex;
       align-items:center;
       justify-content:flex-end;
-      gap:8px;
-      min-width:220px;
+      gap:10px;
+      min-width: 260px;
       flex-wrap:wrap;
     }
 
-    header.ps-nav a{
+    .nav a{
       text-decoration:none;
       color: var(--blue);
       font-weight:700;
     }
-    header.ps-nav .sep{color:#4b5563; opacity:.7}
-    header.ps-nav .active{
+    .nav .sep{color:#4b5563; opacity:.7}
+    .nav .active{
       color:#0b1424;
       font-weight:800;
       text-decoration:none;
     }
 
-    /* Botones header */
+    /* Botones mini del nav */
     .a11y-btn{
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      padding:7px 10px;
+      padding:6px 10px;
       border-radius:10px;
       border:1px solid #cddaf5;
       background:#f2f6ff;
       color:#0b1424;
       font-weight:800;
-      font-size:13px;
       text-decoration:none;
-      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
       line-height:1;
     }
     .a11y-btn.primary{
@@ -114,10 +113,8 @@
       color:#8a1c1c;
     }
 
+    /* Badge uso nav */
     .badge-usage{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
       background:#e8f3ff;
       border:1px solid #b9d9ff;
       border-radius:999px;
@@ -125,6 +122,9 @@
       color:#0b1424;
       font-size:12px;
       font-weight:900;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
       white-space:nowrap;
     }
 
@@ -218,7 +218,7 @@
       font-size:.95rem;
     }
 
-    /* ✅ Status mini (feedback) */
+    /* ✅ Status mini */
     .usage-status{
       display:none;
       margin-top:6px;
@@ -237,12 +237,13 @@
     }
     @media (max-width: 960px){
       .plans-grid{grid-template-columns: repeat(2, minmax(0, 1fr));}
-      header.ps-nav .left, header.ps-nav .right{min-width:auto}
+      .nav-left{min-width:auto}
+      .nav-right{min-width:auto}
     }
     @media (max-width: 640px){
       .plans-grid{grid-template-columns: minmax(0, 1fr);}
-      header.ps-nav .inner{justify-content:center}
-      header.ps-nav .left, header.ps-nav .right{justify-content:center}
+      .nav-inner{justify-content:center}
+      .nav-left, .nav-right{justify-content:center}
     }
 
     .plan{
@@ -372,14 +373,14 @@
 </head>
 
 <body data-user-id="{{ user_id|default('') }}">
-  <!-- ✅ NAV unificada -->
-  <header class="ps-nav">
-    <div class="inner">
-      <div class="left">
+  <!-- ✅ NAV 3 zonas -->
+  <div class="nav">
+    <div class="nav-inner">
+      <div class="nav-left">
         <a href="/">PolyScribe</a>
       </div>
 
-      <nav class="center" aria-label="Navegación">
+      <div class="nav-center">
         <a href="/">Transcribir</a>
         <span class="sep">·</span>
         <a href="/history">Historial</a>
@@ -387,22 +388,22 @@
         <span class="active">Precios</span>
         <span class="sep">·</span>
         <a href="/ayuda">Ayuda</a>
-      </nav>
+      </div>
 
-      <!-- ✅ Aquí nav_auth.js controla qué mostrar -->
-      <div class="right">
-        <span class="badge-usage" id="usage-badge-nav">
+      <!-- ✅ Esta es la pieza que faltaba -->
+      <div class="nav-right">
+        <span class="badge-usage" id="usage-badge-nav" style="display:none;">
           <span id="usage-text-nav">—/— min · libre —</span>
         </span>
 
-        <a class="a11y-btn" id="nav-login-link" href="/auth/login">Entrar</a>
-        <a class="a11y-btn primary" id="nav-signup-link" href="/auth/register">Registro</a>
+        <a id="nav-login-link" class="a11y-btn" href="/auth/login">Entrar</a>
+        <a id="nav-signup-link" class="a11y-btn primary" href="/auth/register">Registro</a>
 
-        <a class="a11y-btn" id="nav-account-link" href="/account" style="display:none">Mi cuenta</a>
-        <a class="a11y-btn danger" id="nav-logout-link" href="/auth/logout" style="display:none">Salir</a>
+        <a id="nav-account-link" class="a11y-btn" href="/account" style="display:none;">Mi cuenta</a>
+        <a id="nav-logout-link" class="a11y-btn danger" href="/auth/logout" style="display:none;">Salir</a>
       </div>
     </div>
-  </header>
+  </div>
 
   <div class="page">
     <h1>Planes y Precios</h1>
@@ -548,10 +549,22 @@
           </tr>
         </thead>
         <tbody>
-          <tr><td>MP3 / AAC 128 kbps</td><td>≈ 1 h 49 min</td></tr>
-          <tr><td>MP3 / AAC 192 kbps</td><td>≈ 1 h 13 min</td></tr>
-          <tr><td>WAV 16-bit 44.1 kHz estéreo</td><td>≈ 9 min 54 s</td></tr>
-          <tr><td>Opus voz 24–32 kbps</td><td>≈ entre 7–10 horas</td></tr>
+          <tr>
+            <td>MP3 / AAC 128 kbps</td>
+            <td>≈ 1 h 49 min</td>
+          </tr>
+          <tr>
+            <td>MP3 / AAC 192 kbps</td>
+            <td>≈ 1 h 13 min</td>
+          </tr>
+          <tr>
+            <td>WAV 16-bit 44.1 kHz estéreo</td>
+            <td>≈ 9 min 54 s</td>
+          </tr>
+          <tr>
+            <td>Opus voz 24–32 kbps</td>
+            <td>≈ entre 7–10 horas</td>
+          </tr>
         </tbody>
       </table>
       <p class="tip">
@@ -565,7 +578,6 @@
     </p>
   </div>
 
-  <!-- Tu JS de pricing queda igual -->
   <script>
     (function(){
       function track(eventName, params){
@@ -604,6 +616,10 @@
       const usageFile  = document.getElementById("usage-filelimit");
       const usageStatus = document.getElementById("usage-status");
 
+      // nav badge
+      const navBadge = document.getElementById("usage-badge-nav");
+      const navText  = document.getElementById("usage-text-nav");
+
       function fmtMin(n){ return `${Number(n).toFixed(1)} min`; }
       function fmtMB(bytes){
         const b = Number(bytes || 0);
@@ -615,7 +631,6 @@
         if (!usageStatus) return;
         usageStatus.style.display = "block";
         usageStatus.textContent = msg;
-
         if (mode === "ok") usageStatus.style.color = "#0f5132";
         else if (mode === "warn") usageStatus.style.color = "#92400e";
         else if (mode === "error") usageStatus.style.color = "#8a1c1c";
@@ -625,6 +640,7 @@
       function lockGuestUI(){
         if (guestLock) guestLock.style.display = "block";
         if (usagePanel) usagePanel.style.display = "none";
+        if (navBadge) navBadge.style.display = "none";
 
         payNodes.forEach(n => {
           n.innerHTML = "";
@@ -641,7 +657,6 @@
 
       function unlockLoggedUI(){
         if (guestLock) guestLock.style.display = "none";
-
         payNodes.forEach(n => {
           n.style.display = "block";
           const wrap = n.closest(".plan");
@@ -655,6 +670,7 @@
 
         if (usagePanel) usagePanel.style.display = "block";
         if (usageUser) usageUser.textContent = USER_ID;
+        if (navBadge) navBadge.style.display = "inline-flex";
       }
 
       async function refreshUsage(){
@@ -675,7 +691,10 @@
 
         try{
           const url = `/api/usage/balance?user_id=${encodeURIComponent(USER_ID)}`;
-          const res = await fetch(url, { method:"GET", headers: { "X-User-Id": USER_ID }});
+          const res = await fetch(url, {
+            method:"GET",
+            headers: { "X-User-Id": USER_ID }
+          });
           const txt = await res.text();
           let data = {};
           try{ data = JSON.parse(txt); }catch{ data = {}; }
@@ -684,6 +703,7 @@
             if (usageUsed) usageUsed.textContent = "—";
             if (usageAvail) usageAvail.textContent = "—";
             if (usageFile) usageFile.textContent = "—";
+            if (navText) navText.textContent = "—/— min · libre —";
             setStatus("No se pudo actualizar el saldo.", "error");
             return;
           }
@@ -699,11 +719,14 @@
           if (usageAvail) usageAvail.textContent = fmtMin(remain);
           if (usageFile) usageFile.textContent  = fileLimitBytes ? fmtMB(fileLimitBytes) : "—";
 
+          if (navText) navText.textContent = `${usedMin.toFixed(1)}/${allowMin.toFixed(0)} min · libre ${remain.toFixed(1)} min`;
+
           setStatus("Saldo actualizado ✅", "ok");
         }catch(e){
           if (usageUsed) usageUsed.textContent = "—";
           if (usageAvail) usageAvail.textContent = "—";
           if (usageFile) usageFile.textContent = "—";
+          if (navText) navText.textContent = "—/— min · libre —";
           setStatus("Error de red refrescando saldo.", "error");
         }finally{
           if (btnRefresh && original){
@@ -737,7 +760,8 @@
     })();
   </script>
 
-  <!-- ✅ nav_auth SIEMPRE -->
+  <!-- ✅ Nav auth (muestra/oculta Mi cuenta/Salir vs Entrar/Registro) -->
   <script src="{{ url_for('static', filename='js/nav_auth.js') }}"></script>
+
 </body>
 </html>
