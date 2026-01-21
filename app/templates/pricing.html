@@ -35,35 +35,97 @@
       color: var(--text);
     }
 
-    /* NAV centrada */
-    .nav{
+    /* ✅ NAV unificada (izq/centro/der) */
+    header.ps-nav{
       padding: 12px 16px;
-      font-size: 14px;
-      display:flex;
-      justify-content:center;
       border-bottom: 1px solid rgba(0,0,0,0.04);
       background: transparent;
     }
-    .nav .nav-inner{
+    header.ps-nav .inner{
       width:100%;
       max-width:1100px;
+      margin:0 auto;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:14px;
+      flex-wrap:wrap;
+      font-weight:700;
+    }
+    header.ps-nav .left{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width:140px;
+    }
+    header.ps-nav .center{
       display:flex;
       justify-content:center;
       align-items:center;
       gap:14px;
       flex-wrap:wrap;
-      font-weight:700;
+      flex:1;
     }
-    .nav a{
+    header.ps-nav .right{
+      display:flex;
+      align-items:center;
+      justify-content:flex-end;
+      gap:8px;
+      min-width:220px;
+      flex-wrap:wrap;
+    }
+
+    header.ps-nav a{
       text-decoration:none;
       color: var(--blue);
       font-weight:700;
     }
-    .nav .sep{color:#4b5563; opacity:.7}
-    .nav .active{
+    header.ps-nav .sep{color:#4b5563; opacity:.7}
+    header.ps-nav .active{
       color:#0b1424;
       font-weight:800;
       text-decoration:none;
+    }
+
+    /* Botones header */
+    .a11y-btn{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding:7px 10px;
+      border-radius:10px;
+      border:1px solid #cddaf5;
+      background:#f2f6ff;
+      color:#0b1424;
+      font-weight:800;
+      font-size:13px;
+      text-decoration:none;
+      cursor:pointer;
+      line-height:1;
+    }
+    .a11y-btn.primary{
+      background:#22c55e;
+      border-color:#16a34a;
+      color:#0b111d;
+    }
+    .a11y-btn.danger{
+      border-color:#f3abab;
+      background:#fde2e2;
+      color:#8a1c1c;
+    }
+
+    .badge-usage{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      background:#e8f3ff;
+      border:1px solid #b9d9ff;
+      border-radius:999px;
+      padding:6px 10px;
+      color:#0b1424;
+      font-size:12px;
+      font-weight:900;
+      white-space:nowrap;
     }
 
     .page{
@@ -175,9 +237,12 @@
     }
     @media (max-width: 960px){
       .plans-grid{grid-template-columns: repeat(2, minmax(0, 1fr));}
+      header.ps-nav .left, header.ps-nav .right{min-width:auto}
     }
     @media (max-width: 640px){
       .plans-grid{grid-template-columns: minmax(0, 1fr);}
+      header.ps-nav .inner{justify-content:center}
+      header.ps-nav .left, header.ps-nav .right{justify-content:center}
     }
 
     .plan{
@@ -307,19 +372,37 @@
 </head>
 
 <body data-user-id="{{ user_id|default('') }}">
-  <div class="nav">
-    <div class="nav-inner">
-      <a href="/">PolyScribe</a>
-      <span class="sep">·</span>
-      <a href="/">Transcribir</a>
-      <span class="sep">·</span>
-      <a href="/history">Historial</a>
-      <span class="sep">·</span>
-      <span class="active">Precios</span>
-      <span class="sep">·</span>
-      <a href="/ayuda">Ayuda</a>
+  <!-- ✅ NAV unificada -->
+  <header class="ps-nav">
+    <div class="inner">
+      <div class="left">
+        <a href="/">PolyScribe</a>
+      </div>
+
+      <nav class="center" aria-label="Navegación">
+        <a href="/">Transcribir</a>
+        <span class="sep">·</span>
+        <a href="/history">Historial</a>
+        <span class="sep">·</span>
+        <span class="active">Precios</span>
+        <span class="sep">·</span>
+        <a href="/ayuda">Ayuda</a>
+      </nav>
+
+      <!-- ✅ Aquí nav_auth.js controla qué mostrar -->
+      <div class="right">
+        <span class="badge-usage" id="usage-badge-nav">
+          <span id="usage-text-nav">—/— min · libre —</span>
+        </span>
+
+        <a class="a11y-btn" id="nav-login-link" href="/auth/login">Entrar</a>
+        <a class="a11y-btn primary" id="nav-signup-link" href="/auth/register">Registro</a>
+
+        <a class="a11y-btn" id="nav-account-link" href="/account" style="display:none">Mi cuenta</a>
+        <a class="a11y-btn danger" id="nav-logout-link" href="/auth/logout" style="display:none">Salir</a>
+      </div>
     </div>
-  </div>
+  </header>
 
   <div class="page">
     <h1>Planes y Precios</h1>
@@ -465,22 +548,10 @@
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td>MP3 / AAC 128 kbps</td>
-            <td>≈ 1 h 49 min</td>
-          </tr>
-          <tr>
-            <td>MP3 / AAC 192 kbps</td>
-            <td>≈ 1 h 13 min</td>
-          </tr>
-          <tr>
-            <td>WAV 16-bit 44.1 kHz estéreo</td>
-            <td>≈ 9 min 54 s</td>
-          </tr>
-          <tr>
-            <td>Opus voz 24–32 kbps</td>
-            <td>≈ entre 7–10 horas</td>
-          </tr>
+          <tr><td>MP3 / AAC 128 kbps</td><td>≈ 1 h 49 min</td></tr>
+          <tr><td>MP3 / AAC 192 kbps</td><td>≈ 1 h 13 min</td></tr>
+          <tr><td>WAV 16-bit 44.1 kHz estéreo</td><td>≈ 9 min 54 s</td></tr>
+          <tr><td>Opus voz 24–32 kbps</td><td>≈ entre 7–10 horas</td></tr>
         </tbody>
       </table>
       <p class="tip">
@@ -494,18 +565,13 @@
     </p>
   </div>
 
+  <!-- Tu JS de pricing queda igual -->
   <script>
     (function(){
-      // ✅ tracking helper
       function track(eventName, params){
         try{ if (typeof gtag === "function") gtag("event", eventName, params || {}); }catch{}
       }
 
-      // ============================
-      // USER ID (Opción B)
-      // data-user-id -> ?user_id -> localStorage
-      // Si no hay, queda vacío (NO forzamos "guest")
-      // ============================
       function resolveUserId(){
         let id = (document.body.dataset.userId || "").trim();
         const qs = new URLSearchParams(window.location.search);
@@ -521,11 +587,8 @@
       }
 
       let USER_ID = resolveUserId();
-
-      // GA: view pricing
       track("view_pricing", { user_type: USER_ID ? "logged" : "guest" });
 
-      // DOM
       const guestLock = document.getElementById("guest-lock");
       const payAlert = document.getElementById("pay-alert");
 
@@ -563,7 +626,6 @@
         if (guestLock) guestLock.style.display = "block";
         if (usagePanel) usagePanel.style.display = "none";
 
-        // Ocultamos los contenedores PayPal y bloqueamos los planes
         payNodes.forEach(n => {
           n.innerHTML = "";
           n.style.display = "none";
@@ -571,7 +633,6 @@
           if (wrap) wrap.classList.add("locked");
         });
 
-        // pay-alert
         if (payAlert){
           payAlert.style.display = "block";
           payAlert.textContent = "🔒 Inicia sesión para ver PayPal y comprar un plan.";
@@ -597,7 +658,6 @@
       }
 
       async function refreshUsage(){
-        // re-resolve por si el usuario inicia sesión en otra pestaña
         const newId = resolveUserId();
         if (newId !== USER_ID) USER_ID = newId;
 
@@ -609,17 +669,13 @@
 
         unlockLoggedUI();
 
-        // UX loading
         const original = btnRefresh ? btnRefresh.textContent : null;
         if (btnRefresh){ btnRefresh.disabled = true; btnRefresh.textContent = "Refrescando..."; }
         setStatus("Actualizando saldo…", "info");
 
         try{
           const url = `/api/usage/balance?user_id=${encodeURIComponent(USER_ID)}`;
-          const res = await fetch(url, {
-            method:"GET",
-            headers: { "X-User-Id": USER_ID }
-          });
+          const res = await fetch(url, { method:"GET", headers: { "X-User-Id": USER_ID }});
           const txt = await res.text();
           let data = {};
           try{ data = JSON.parse(txt); }catch{ data = {}; }
@@ -657,7 +713,6 @@
         }
       }
 
-      // Inicial
       refreshUsage();
 
       if (btnRefresh){
@@ -667,7 +722,6 @@
         });
       }
 
-      // Exponemos flag para condicionar carga de payments.js
       window.PS_IS_LOGGED = !!USER_ID;
     })();
   </script>
@@ -682,7 +736,8 @@
       document.body.appendChild(s);
     })();
   </script>
+
+  <!-- ✅ nav_auth SIEMPRE -->
   <script src="{{ url_for('static', filename='js/nav_auth.js') }}"></script>
- 
 </body>
 </html>
