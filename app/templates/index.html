@@ -818,3 +818,413 @@
       const v = !!visible;
       if (usageBadge) usageBadge.style.display = v ? "inline-flex" : "none";
       if (usageBadgeNav) usageBadgeNav.style.display = v ? "inline-flex" : "none";
+      if (usagePanel) usagePanel.style.display = v ? "block" : "none";
+    }
+
+    let _refreshing = false;
+
+    function setRefreshLoading(isLoading){
+      if (!btnRefresh) return;
+      if (isLoading){
+        btnRefresh.disabled = true;
+        btnRefresh.dataset._txt = btnRefresh.textContent || "Refrescar";
+        btnRefresh.textContent = "Refrescando…";
+      }else{
+        btnRefresh.disabled = false;
+        const back = btnRefresh.dataset._txt || "Refrescar";
+        btnRefresh.textContent = back;
+      }
+    }
+
+    async function fetchBalanceRobust(){
+      if (USER_ID){
+        const r1 = await api(`/api/usage/balance?user_id=${encodeURIComponent(USER_ID)}`, { method:"GET" });
+        if (r1.ok) return r1;
+      }
+      const r2 = await api(`/api/usage/balance`, { method:"GET" });
+      if (r2.ok) return r2;
+      return r2;
+    }
+
+    async function refreshBadge(opts = {}){
+      if (_refreshing) return;
+      _refreshing = true;
+
+      const silent = !!opts.silent;
+
+      try{
+        if (!silent) setRefreshLoading(true);
+
+        const newId = resolveUserId();
+        if (newId !== USER_ID) USER_ID = newId;
+
+        if (!USER_ID){
+          setUsageVisible(false);
+          REMAIN_MIN = null;
+          updateCreditsUI(REMAIN_MIN);
+          if (!silent) showInfo("🔒 Inicia sesión para ver tu saldo de minutos.");
+          return;
+        }
+
+        const r = await fetchBalanceRobust();
+        if (!r.ok){
+          REMAIN_MIN = null;
+          updateCreditsUI(REMAIN_MIN);
+          if (!silent){
+            const msg = (r.body && r.body.error) ? r.body.error : "No se pudo refrescar tu saldo.";
+            showError(msg);
+          }
+          return;
+        }
+
+        const data = r.body || {};
+        const usedSec  = Number(data.used_seconds || 0);
+        const allowSec = Number(data.allowance_seconds || 0);
+        const usedMin  = usedSec / 60;
+        const allowMin = allowSec / 60;
+        const remain   = Math.max(0, allowMin - usedMin);
+        const fileLimitBytes = Number(data.file_limit_bytes || 0);
+
+        REMAIN_MIN = remain;
+
+        const text = `${usedMin.toFixed(1)}/${allowMin.toFixed(0)} min · libre ${remain.toFixed(1)} min`;
+        if (usageText) usageText.textContent = text;
+        if (usageTextNav) usageTextNav.textContent = text;
+
+        setUsageVisible(true);
+        if (usageUser)  usageUser.textContent = USER_ID;
+        if (usageUsed)  usageUsed.textContent = fmtMin(usedMin);
+        if (usageAvail) usageAvail.textContent = fmtMin(remain);
+        if (usageFile)  usageFile.textContent = fileLimitBytes ? fmtMB(fileLimitBytes) : "—";
+
+        updateCreditsUI(REMAIN_MIN);
+
+        if (!silent) showOk("✅ Saldo actualizado.");
+      }catch(e){
+        if (!silent) showError("No se pudo refrescar. Revisa tu conexión.");
+      }finally{
+        if (!silent) setRefreshLoading(false);
+        _refreshing = false;
+      }
+    }
+
+    // ✅ Evita flicker
+    setUsageVisible(false);
+    refreshBadge({ silent:true });
+
+    if (btnRefresh) btnRefresh.addEventListener("click", (e) => {
+      e.preventDefault();
+      refreshBadge({ silent:false });
+    });
+
+    window.addEventListener("storage", (ev) => {
+      if (ev && ev.key === "user_id"){
+        const newId = resolveUserId();
+        if (newId !== USER_ID){
+          USER_ID = newId;
+          refreshBadge({ silent:true });
+        }
+      }
+    });
+
+    function applyDirection(code){
+      if (!taT || !taS) return;
+      const rtl = ["ar", "he", "fa", "ur", "ps"];
+      const c = (code || "").slice(0,2);
+      const dir = rtl.includes(c) ? "rtl" : "ltr";
+      taT.setAttribute("dir", dir);
+      taS.setAttribute("dir", dir);
+    }
+
+    if (drop && fileInput){
+      drop.onclick = () => fileInput.click();
+      drop.ondragover = e => { e.preventDefault(); drop.style.borderColor = "#60a5fa"; };
+      drop.ondragleave = () => { drop.style.borderColor = "#97bff7"; };
+      drop.ondrop = e => {
+        e.preventDefault();
+        drop.style.borderColor = "#97bff7";
+        if (e.dataTransfer.files[0]){
+          fileInput.files = e.dataTransfer.files;
+          if (dFile) dFile.textContent = e.dataTransfer.files[0].name;
+        }
+      };
+      fileInput.onchange = () => {
+        if (dFile) dFile.textContent = fileInput.files[0]?.name || "—";
+      };
+    }
+
+    if (idiomaSel){
+      idiomaSel.onchange = () => {
+        const code = idiomaSel.value || "auto";
+        if (dLang) dLang.textContent = code;
+        applyDirection(code);
+      };
+    }
+
+    if (btnHistory){
+      btnHistory.onclick = () => { window.location.href = "/history"; };
+    }
+
+    async function loadJobFromQuery(){
+      if (!qJob) return;
+
+      clearAlert();
+      showInfo("📄 Cargando resultado del historial…");
+      if (btnTrans) btnTrans.disabled = true;
+
+      try{
+        const r = await api(`/jobs/${encodeURIComponent(qJob)}`, { method:"GET" });
+        if (!r.ok){
+          const msg = (r.body && r.body.error) ? r.body.error : "No se pudo cargar el job.";
+          return showError(msg);
+        }
+
+        const job = r.body || {};
+        if (taT) taT.value = job.transcript || "";
+        if (taS) taS.value = job.summary || "";
+        if (dDet) dDet.textContent = job.language_detected || "—";
+        if (dJob) dJob.textContent = job.id || job.job_id || qJob;
+
+        if (job.filename && dFile) dFile.textContent = job.filename;
+
+        if (job.language) {
+          if (dLang) dLang.textContent = job.language;
+          if (idiomaSel) idiomaSel.value = job.language;
+          applyDirection(job.language);
+        }
+        if (job.language_detected){
+          applyDirection(job.language_detected);
+        }
+
+        try{ localStorage.setItem("ps_last_job_id", String((dJob && dJob.textContent) || qJob)); }catch{}
+
+        showOk("✅ Resultado cargado desde historial.");
+        refreshBadge({ silent:true });
+      }catch(e){
+        console.error(e);
+        showError("Error inesperado cargando el historial.");
+      }finally{
+        if (btnTrans) btnTrans.disabled = false;
+      }
+    }
+    loadJobFromQuery();
+
+    async function crearJob(){
+      clearAlert();
+
+      const newId = resolveUserId();
+      if (newId !== USER_ID) USER_ID = newId;
+
+      if (USER_ID && REMAIN_MIN !== null && REMAIN_MIN <= 0.01){
+        updateCreditsUI(REMAIN_MIN);
+        showError("No tienes minutos disponibles. Pulsa “Mejorar plan” para continuar.");
+        if (creditsBanner && creditsBanner.style.display !== "none"){
+          creditsBanner.scrollIntoView({behavior:"smooth", block:"center"});
+        }
+        return;
+      }
+
+      const file = fileInput && fileInput.files ? fileInput.files[0] : null;
+      if (!file) return showError("Selecciona un archivo.");
+      if (file.size > MAX_MB * 1024 * 1024){
+        return showError("El archivo supera el límite de 100 MB.");
+      }
+
+      const lang = (idiomaSel ? (idiomaSel.value || "auto") : "auto").trim().toLowerCase();
+      if (dFile) dFile.textContent = file.name;
+      if (dLang) dLang.textContent = lang;
+      applyDirection(lang);
+
+      if (taT) taT.value = "";
+      if (taS) taS.value = "";
+      if (dDet) dDet.textContent = "—";
+      if (dJob) dJob.textContent = "—";
+
+      showInfo("⏳ Procesando audio… por favor espera.");
+      if (btnTrans) btnTrans.disabled = true;
+
+      try{
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("language", lang);
+
+        const r = await api("/jobs", { method:"POST", body: fd });
+        if (!r.ok){
+          if (r.body && r.body.error === "NO_CREDITS"){
+            REMAIN_MIN = 0;
+            updateCreditsUI(REMAIN_MIN);
+            showError("No tienes minutos suficientes para este archivo. Pulsa “Mejorar plan” para continuar.");
+            if (creditsBanner && creditsBanner.style.display !== "none"){
+              creditsBanner.scrollIntoView({behavior:"smooth", block:"center"});
+            }
+            return;
+          }
+          const msg = (r.body && r.body.error) || "No se pudo procesar el archivo.";
+          return showError(msg);
+        }
+
+        const job = r.body || {};
+        if (taT) taT.value = job.transcript || "";
+        if (taS) taS.value = job.summary || "";
+        if (dDet) dDet.textContent = job.language_detected || "";
+        if (dJob) dJob.textContent = job.id || job.job_id || "—";
+
+        if (job.language_detected){
+          applyDirection(job.language_detected);
+        }
+
+        try{ localStorage.setItem("ps_last_job_id", String((dJob && dJob.textContent) || "")); }catch{}
+
+        showOk("✅ Transcripción y resumen listos.");
+        await refreshBadge({ silent:true });
+      }catch(e){
+        console.error(e);
+        showError("Ocurrió un error inesperado al procesar el archivo.");
+      }finally{
+        if (btnTrans) btnTrans.disabled = false;
+      }
+    }
+
+    if (btnTrans) btnTrans.onclick = crearJob;
+
+    if (btnReset){
+      btnReset.onclick = () => {
+        if (taT) taT.value = "";
+        if (taS) taS.value = "";
+        if (dFile) dFile.textContent = "—";
+        if (dLang) dLang.textContent = "auto";
+        if (dDet) dDet.textContent = "—";
+        if (dJob) dJob.textContent = "—";
+        if (fileInput) fileInput.value = "";
+        if (idiomaSel) idiomaSel.value = "auto";
+        applyDirection("auto");
+        clearAlert();
+      };
+    }
+
+    function downloadClient(baseName, ext, content, mime){
+      const safeName = baseName || "resultado";
+      const blob = new Blob([content || ""], { type: mime || "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${safeName}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function getBaseName(){
+      const name = (dFile && dFile.textContent) ? dFile.textContent : "";
+      if (!name || name === "—") return "resultado";
+      return name.replace(/\.[^.]+$/, "");
+    }
+
+    const btnCopyTrans = $("#copy-trans");
+    const btnDownloadTxt = $("#download-txt");
+    const btnDownloadSrt = $("#download-srt");
+    const btnDownloadVtt = $("#download-vtt");
+    const btnDownloadDocx = $("#download-docx");
+    const btnDownloadPdf = $("#download-pdf");
+
+    if (btnCopyTrans){
+      btnCopyTrans.onclick = async () => {
+        const txt = taT ? (taT.value || "") : "";
+        if (!txt) return;
+        try{ await navigator.clipboard.writeText(txt); showOk("✅ Transcripción copiada."); }
+        catch{ showError("No se pudo copiar la transcripción."); }
+      };
+    }
+
+    if (btnDownloadTxt){
+      btnDownloadTxt.onclick = () => {
+        if (!taT || !taT.value) return showError("No hay transcripción para exportar.");
+        const base = getBaseName() || "transcripcion";
+        downloadClient(base, "txt", taT.value, "text/plain;charset=utf-8");
+      };
+    }
+
+    async function exportServer(fmt){
+      if (!taT || !taT.value) return showError("No hay transcripción para exportar.");
+
+      const payload = {
+        transcript: taT.value || "",
+        summary: taS ? (taS.value || "") : "",
+        filename: (dFile && dFile.textContent) ? dFile.textContent : ""
+      };
+
+      try{
+        const res = await fetch(`/api/exports/${fmt}`, {
+          method: "POST",
+          headers: { "Content-Type":"application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok){
+          const txt = await res.text();
+          let data;
+          try{ data = JSON.parse(txt); }catch{ data = {}; }
+          const msg = (data && data.error) || `No se pudo exportar (${fmt}).`;
+          return showError(msg);
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        const base = getBaseName();
+        a.href = url;
+        a.download = `${base}.${fmt}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }catch(e){
+        console.error(e);
+        showError(`No se pudo exportar (${fmt}).`);
+      }
+    }
+
+    if (btnDownloadSrt)  btnDownloadSrt.onclick  = () => exportServer("srt");
+    if (btnDownloadVtt)  btnDownloadVtt.onclick  = () => exportServer("vtt");
+    if (btnDownloadDocx) btnDownloadDocx.onclick = () => exportServer("docx");
+    if (btnDownloadPdf)  btnDownloadPdf.onclick  = () => exportServer("pdf");
+
+    const btnCopySum = $("#copy-sum");
+    const btnDownloadSum = $("#download-sum");
+    const btnDownloadJson = $("#download-json");
+
+    if (btnCopySum){
+      btnCopySum.onclick = async () => {
+        const txt = taS ? (taS.value || "") : "";
+        if (!txt) return;
+        try{ await navigator.clipboard.writeText(txt); showOk("✅ Resumen copiado."); }
+        catch{ showError("No se pudo copiar el resumen."); }
+      };
+    }
+
+    if (btnDownloadSum){
+      btnDownloadSum.onclick = () => {
+        if (!taS || !taS.value) return showError("No hay resumen para exportar.");
+        const base = getBaseName() || "resumen";
+        downloadClient(base, "txt", taS.value, "text/plain;charset=utf-8");
+      };
+    }
+
+    if (btnDownloadJson){
+      btnDownloadJson.onclick = () => {
+        const obj = {
+          filename: (dFile && dFile.textContent) ? dFile.textContent : null,
+          language_selected: (dLang && dLang.textContent) ? dLang.textContent : null,
+          language_detected: (dDet && dDet.textContent) ? dDet.textContent : null,
+          job_id: (dJob && dJob.textContent) ? dJob.textContent : null,
+          transcript: taT ? (taT.value || "") : "",
+          summary: taS ? (taS.value || "") : ""
+        };
+        const json = JSON.stringify(obj, null, 2);
+        const base = getBaseName();
+        downloadClient(base, "json", json, "application/json;charset=utf-8");
+      };
+    }
+  })();
+  </script>
+</body>
+</html>
