@@ -1,0 +1,167 @@
+﻿<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Polyscribe – QA Panel</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body{font-family:system-ui,Arial,sans-serif;max-width:1000px;margin:40px auto;padding:0 16px;}
+    h1{margin-bottom:8px}
+    .g{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+    .card{border:1px solid #ddd;border-radius:12px;padding:14px}
+    button{cursor:pointer;padding:8px 12px;border-radius:8px;border:1px solid #999;background:#f5f5f5}
+    input,select{padding:7px 8px;border:1px solid #bbb;border-radius:8px;width:100%;box-sizing:border-box}
+    label{font-size:12px;color:#555}
+    .row{display:flex;gap:8px;align-items:center;margin:8px 0}
+    .row > *{flex:1}
+    pre{background:#0d1117;color:#e6edf3;padding:12px;border-radius:10px;overflow:auto;max-height:340px}
+    small{color:#666}
+  </style>
+</head>
+<body>
+<h1>Polyscribe — Panel de pruebas</h1>
+<small>Mismo origen (cookies de sesión incluidas). Si algo falla, abre la consola (F12).</small>
+
+<div class="g">
+
+  <div class="card">
+    <h3>Auth</h3>
+    <div class="row"><label>Email</label><input id="email" value="tu@correo.com"></div>
+    <div class="row"><label>Password</label><input id="pass" type="password" value="Secreta123!"></div>
+    <div class="row">
+      <button onclick="login()">Login</button>
+      <button onclick="me()">/auth/me</button>
+      <button onclick="ping()">/auth/ping</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>PayPal</h3>
+    <div class="row">
+      <select id="plan">
+        <option value="starter_60">starter_60 (4.99 USD / 60 min)</option>
+        <option value="pro_300">pro_300 (19 USD / 300 min)</option>
+        <option value="biz_1200">biz_1200 (59 USD / 1200 min)</option>
+      </select>
+    </div>
+    <div class="row">
+      <button onclick="ppDiag()">/api/paypal/diag</button>
+      <button onclick="createOrder()">Crear orden</button>
+    </div>
+    <div class="row">
+      <input id="orderId" placeholder="order_id para capturar" />
+      <button onclick="capture()">Capturar</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Uso / Saldo / Free tier</h3>
+    <div class="row">
+      <button onclick="balance()">/api/usage/balance</button>
+      <button onclick="freeTierGet()">Get Free Tier</button>
+    </div>
+    <div class="row">
+      <input id="freeMin" type="number" value="30" />
+      <button onclick="freeTierSet()">Set Free Tier</button>
+    </div>
+    <small>Para “Set Free Tier” el server debe arrancar con ALLOW_FREE_TIER_OVERRIDE=1.</small>
+  </div>
+
+  <div class="card">
+    <h3>Pagos e Historial</h3>
+    <div class="row">
+      <button onclick="listPays()">/api/payments (mine=1)</button>
+      <button onclick="history()">/api/history</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Transcribir (POST /jobs)</h3>
+    <div class="row"><input id="file" type="file" accept="audio/*,video/*"></div>
+    <div class="row">
+      <select id="lang">
+        <option value="auto">auto</option><option>es</option><option>en</option><option>pt</option>
+        <option>fr</option><option>it</option><option>de</option>
+      </select>
+      <button onclick="upload()">Subir y transcribir</button>
+    </div>
+  </div>
+
+</div>
+
+<h3>Salida</h3>
+<pre id="out">{ }</pre>
+
+<script>
+const out = (x) => { document.getElementById('out').textContent =
+  (typeof x === 'string') ? x : JSON.stringify(x, null, 2); };
+
+async function jfetch(url, opts={}) {
+  const res = await fetch(url, Object.assign({ credentials:'include' }, opts));
+  const text = await res.text();
+  try { var data = JSON.parse(text); } catch { data = {raw:text, status:res.status}; }
+  if (!res.ok) throw data;
+  return data;
+}
+
+// Auth
+async function login(){
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('pass').value;
+  try{
+    const body = new URLSearchParams({email, password});
+    const r = await jfetch('/auth/login', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body});
+    out(r);
+  }catch(e){ out(e); }
+}
+async function me(){ try{ out(await jfetch('/auth/me')); }catch(e){ out(e); } }
+async function ping(){ try{ out(await jfetch('/auth/ping')); }catch(e){ out(e); } }
+
+// PayPal
+async function ppDiag(){ try{ out(await jfetch('/api/paypal/diag')); }catch(e){ out(e); } }
+async function createOrder(){
+  try{
+    const plan_id = document.getElementById('plan').value;
+    const r = await jfetch('/api/paypal/create_order', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({plan_id})
+    });
+    out(r);
+    if (r?.order?.approve_url){ window.open(r.order.approve_url, '_blank'); document.getElementById('orderId').value = r.order.id; }
+  }catch(e){ out(e); }
+}
+async function capture(){
+  try{
+    const order_id = document.getElementById('orderId').value.trim();
+    out(await jfetch('/api/paypal/capture', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({order_id})}));
+  }catch(e){ out(e); }
+}
+
+// Usage
+async function balance(){ try{ out(await jfetch('/api/usage/balance')); }catch(e){ out(e); } }
+async function freeTierGet(){ try{ out(await jfetch('/api/usage/free_tier')); }catch(e){ out(e); } }
+async function freeTierSet(){
+  try{
+    const minutes = parseInt(document.getElementById('freeMin').value || '0', 10);
+    out(await jfetch('/api/usage/free_tier', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({minutes})}));
+  }catch(e){ out(e); }
+}
+
+// Historial y pagos
+async function listPays(){ try{ out(await jfetch('/api/payments?mine=1&limit=50')); }catch(e){ out(e); } }
+async function history(){ try{ out(await jfetch('/api/history?limit=50')); }catch(e){ out(e); } }
+
+// Subir audio
+async function upload(){
+  try{
+    const f = document.getElementById('file').files[0];
+    if(!f){ out({error:'Selecciona un archivo'}); return; }
+    const fd = new FormData();
+    fd.append('file', f);
+    fd.append('language', document.getElementById('lang').value);
+    out(await jfetch('/jobs', {method:'POST', body: fd}));
+  }catch(e){ out(e); }
+}
+</script>
+</body>
+</html>

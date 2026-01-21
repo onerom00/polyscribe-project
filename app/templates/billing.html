@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Facturación • PolyScribe</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/nav.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme_light.css') }}">
+  <style>
+    .wrap{ max-width:1120px; margin:0 auto; padding:28px 16px 72px; }
+    .panel{ background:var(--card); border:1px solid var(--border); border-radius:16px; padding:16px; }
+    table{ width:100%; border-collapse:separate; border-spacing:0; }
+    thead th{ text-align:left; padding:12px; border-bottom:1px solid var(--border); color:#0b1a33; font-weight:800; background:var(--panel); position:sticky; top:0; }
+    tbody td{ padding:12px; border-bottom:1px solid rgba(0,0,0,.06); }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:#23395d; }
+    .title{ font-size:1.6rem; margin:12px 0; }
+    .sub{ color:#405a7a; margin-bottom:16px; }
+    .btn{ display:inline-block; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:#fff; color:#0b1a33; text-decoration:none; font-weight:800; }
+  </style>
+</head>
+<body class="theme-light">
+  <!-- NAV -->
+  <header class="ps-nav">
+    <div class="inner">
+      <a class="brand" href="/">PolyScribe</a>
+      <input id="ps-nav-toggle" type="checkbox" hidden>
+      <label class="ps-burger" for="ps-nav-toggle"><span></span></label>
+      <nav class="links ps-nav-links">
+        <a href="/" data-path="/">Transcribir</a>
+        <a href="/history" data-path="/history">Historial</a>
+        <a href="/pricing" data-path="/pricing">Precios</a>
+        <a href="/billing" data-path="/billing">Facturación</a>
+        <a href="/ayuda" data-path="/ayuda">Ayuda</a>
+      </nav>
+      <div class="right">
+        <span id="usage-badge" class="ps-badge"><span id="usage-text">—/— min · libre —</span></span>
+      </div>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+      <div>
+        <div class="title">Facturación</div>
+        <div class="sub">Pagos procesados por PayPal. Haz clic en “Precios” para comprar más minutos.</div>
+      </div>
+      <div>
+        <a class="btn" href="/pricing?user_id={{ user_id }}">Comprar minutos</a>
+      </div>
+    </div>
+
+    <section class="panel" style="overflow:auto; max-height:70vh;">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:80px;">ID</th>
+            <th style="width:160px;">Fecha</th>
+            <th style="width:140px;">Orden PayPal</th>
+            <th style="width:120px;">Monto</th>
+            <th style="width:100px;">Minutos</th>
+            <th style="width:120px;">Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if not items %}
+          <tr><td colspan="6" style="padding:16px;color:#405a7a;">Sin pagos aún.</td></tr>
+          {% else %}
+          {% for p in items %}
+          <tr>
+            <td class="mono">{{ p.id }}</td>
+            <td class="mono">{{ p.created_at.strftime('%d/%m/%Y, %H:%M') if p.created_at else '' }}</td>
+            <td class="mono">{{ p.paypal_order_id }}</td>
+            <td class="mono">{{ '%.2f'|format(p.amount or 0) }} {{ (p.currency or 'USD') }}</td>
+            <td class="mono">{{ p.minutes }}</td>
+            <td>{{ p.status }}</td>
+          </tr>
+          {% endfor %}
+          {% endif %}
+        </tbody>
+      </table>
+    </section>
+  </div>
+
+  <script>
+    // Marcar activo en nav y preservar ?user_id
+    (function(){
+      var path = location.pathname.replace(/\/+$/,''); if (!path) path = '/';
+      document.querySelectorAll('.ps-nav-links a').forEach(function(a){
+        var ap = a.getAttribute('data-path') || a.getAttribute('href');
+        if (ap === path) a.classList.add('active');
+      });
+      var uid = new URLSearchParams(location.search).get('user_id');
+      if (uid){
+        document.querySelectorAll('.ps-nav a[href^="/"]').forEach(function(a){
+          try{
+            var u = new URL(a.href, location.origin);
+            if (!u.searchParams.get('user_id')){
+              u.searchParams.set('user_id', uid);
+              a.href = u.pathname + '?' + u.searchParams.toString();
+            }
+          }catch(e){}
+        });
+      }
+    })();
+  </script>
+</body>
+</html>
