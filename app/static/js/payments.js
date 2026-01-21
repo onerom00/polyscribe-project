@@ -8,6 +8,13 @@
 
   const alertBox = document.getElementById("pay-alert");
 
+  // Guard global para evitar doble init/renders
+  if (window.__PS_PAYMENTS_INITED__) return;
+  window.__PS_PAYMENTS_INITED__ = true;
+
+  // ============================
+  // UI helpers
+  // ============================
   function showAlert(msg) {
     if (!alertBox) return;
     alertBox.textContent = msg;
@@ -39,6 +46,20 @@
     );
   }
 
+  function clearPayContainers() {
+    plans.forEach(({ elId }) => {
+      const el = document.getElementById(elId);
+      if (el) el.innerHTML = "";
+    });
+  }
+
+  function goLogin() {
+    window.location.href = "/auth/login";
+  }
+
+  // ============================
+  // Config
+  // ============================
   async function getConfig() {
     try {
       const r = await fetch("/api/paypal/config", { credentials: "same-origin" });
@@ -89,6 +110,9 @@
     return resolveUserIdFromFront();
   }
 
+  // ============================
+  // PayPal SDK injection
+  // ============================
   function injectSdk(clientId, currency) {
     return new Promise((resolve, reject) => {
       if (window.paypal) return resolve();
@@ -108,17 +132,9 @@
     });
   }
 
-  function clearPayContainers() {
-    plans.forEach(({ elId }) => {
-      const el = document.getElementById(elId);
-      if (el) el.innerHTML = "";
-    });
-  }
-
-  function goLogin() {
-    window.location.href = "/auth/login";
-  }
-
+  // ============================
+  // API
+  // ============================
   async function apiCreateOrder(planKey, userId) {
     const r = await fetch("/api/paypal/create-order", {
       method: "POST",
@@ -177,20 +193,27 @@
     return { ok: s === "COMPLETED", status: s };
   }
 
+  // ============================
+  // Render
+  // ============================
   async function renderButtons() {
     if (!window.paypal) {
       showAlert("SDK de PayPal no cargado.");
       return;
     }
 
-    const userId = await getBackendUserId();
+    // ⚠️ Guard para evitar renders múltiples
+    if (window.__PS_PAYPAL_RENDERED__) return;
+    window.__PS_PAYPAL_RENDERED__ = true;
+
+    // Tomamos userId desde backend, y lo revalidamos antes de cada compra
+    let userId = await getBackendUserId();
 
     // ✅ No renderizar PayPal si no hay login real
     if (isGuestUserId(userId)) {
       clearPayContainers();
       showAlert("🔒 Para comprar minutos debes iniciar sesión.");
       track("paywall_guest_blocked", { page: "pricing" });
-      // No redirección agresiva: el pricing ya muestra CTA “Entrar/Registro”
       return;
     }
 
@@ -199,7 +222,11 @@
     plans.forEach(({ elId, planKey }) => {
       const el = document.getElementById(elId);
       if (!el) return;
+
+      // Si ya tiene algo renderizado, no repetimos
+      if (el.dataset && el.dataset.ppRendered === "1") return;
       el.innerHTML = "";
+      if (el.dataset) el.dataset.ppRendered = "1";
 
       const priceAttr = el.getAttribute("data-price") || "";
       const minutesAttr = el.getAttribute("data-minutes") || "";
@@ -208,7 +235,21 @@
         .Buttons({
           style: { layout: "vertical", color: "gold", shape: "rect", label: "paypal" },
 
-          createOrder: function () {
+          // ============================
+          // createOrder (revalida userId siempre)
+          // ============================
+          createOrder: async function () {
+            // Revalidación por si cambió sesión/user_id
+            userId = await getBackendUserId();
+
+            if (isGuestUserId(userId)) {
+              clearPayContainers();
+              showAlert("🔒 Debes iniciar sesión para comprar.");
+              track("paypal_guest_blocked_createorder", { plan: planKey });
+              // No iniciar flujo de pago sin login
+              throw new Error("login_required");
+            }
+
             track("begin_checkout", {
               method: "paypal",
               plan: planKey,
@@ -216,7 +257,9 @@
               minutes: minutesAttr,
             });
 
-            return apiCreateOrder(planKey, userId).catch((err) => {
+            try {
+              return await apiCreateOrder(planKey, userId);
+            } catch (err) {
               if (String(err.message) === "login_required") {
                 showAlert("Debes iniciar sesión para comprar.");
                 track("paypal_login_required", { at: "createOrder", plan: planKey });
@@ -228,12 +271,26 @@
                 message: String(err.message || err),
               });
               throw err;
-            });
+            }
           },
 
+          // ============================
+          // onApprove
+          // ============================
           onApprove: function (data) {
-            return apiCaptureOrder(data.orderID, userId)
-              .then((resp) => {
+            return (async () => {
+              // Revalidación por si cambió sesión/user_id
+              userId = await getBackendUserId();
+
+              if (isGuestUserId(userId)) {
+                showAlert("Debes iniciar sesión para acreditar tu compra.");
+                track("paypal_guest_blocked_onapprove", { plan: planKey });
+                goLogin();
+                return;
+              }
+
+              try {
+                const resp = await apiCaptureOrder(data.orderID, userId);
                 const check = requireCompletedStatus(resp);
 
                 if (!check.ok) {
@@ -259,8 +316,7 @@
                 });
 
                 window.location.href = "/history?paid=1";
-              })
-              .catch((err) => {
+              } catch (err) {
                 if (String(err.message) === "login_required") {
                   showAlert("Debes iniciar sesión para comprar.");
                   track("paypal_login_required", { at: "onApprove", plan: planKey });
@@ -273,9 +329,13 @@
                   message: String(err.message || err),
                 });
                 showAlert("Pago aprobado pero no se pudo acreditar. Contacta soporte.");
-              });
+              }
+            })();
           },
 
+          // ============================
+          // onError
+          // ============================
           onError: function (err) {
             console.error("PayPal error:", err);
             track("paypal_sdk_error", {
@@ -288,13 +348,33 @@
     });
   }
 
+  // ============================
+  // Init
+  // ============================
   (async function init() {
+    // Si el template setea flag (pricing.html), respetarlo
+    if (typeof window.PS_IS_LOGGED === "boolean" && window.PS_IS_LOGGED === false) {
+      clearPayContainers();
+      showAlert("🔒 Inicia sesión para ver PayPal y comprar un plan.");
+      track("paypal_blocked_by_template_flag", { page: "pricing" });
+      return;
+    }
+
     const cfg = await getConfig();
 
     if (!cfg || !cfg.enabled || !cfg.client_id) {
       showAlert("PayPal no está configurado por el momento. Puedes continuar con el plan Free.");
       track("paypal_disabled", { page: "pricing" });
       clearPayContainers();
+      return;
+    }
+
+    // Antes de cargar SDK, chequeamos que haya login (hard block)
+    const uid = await getBackendUserId();
+    if (isGuestUserId(uid)) {
+      clearPayContainers();
+      showAlert("🔒 Para comprar minutos debes iniciar sesión.");
+      track("paypal_guest_blocked_pre_sdk", { page: "pricing" });
       return;
     }
 
