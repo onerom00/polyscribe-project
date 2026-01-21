@@ -5,10 +5,10 @@
   // =========================================================
   // PolyScribe NAV + Auth helper (Opción B)
   // - resolveUserId: body[data-user-id] -> ?user_id -> localStorage
-  // - NO bindea botones (para evitar doble listener con scripts de cada página)
-  // - Ajusta links del nav (active)
-  // - Alterna botones Entrar/Registro si hay sesión/uid
-  // - Expone helpers para otros scripts (payments.js, etc.)
+  // - NO bindea botones de refresh (evita doble listener)
+  // - Marca link activo
+  // - Muestra Entrar/Registro si guest
+  // - Muestra Mi cuenta/Salir si logged
   // =========================================================
 
   // -------------------------
@@ -36,7 +36,9 @@
 
   function setUserIdToLocalStorage(userId) {
     try {
-      if (userId && String(userId).trim()) localStorage.setItem("user_id", String(userId).trim());
+      if (userId && String(userId).trim()) {
+        localStorage.setItem("user_id", String(userId).trim());
+      }
     } catch (_) {}
   }
 
@@ -79,32 +81,100 @@
   }
 
   // -------------------------
-  // UI: login/register toggles
+  // Helpers UI
   // -------------------------
   function setVisible(el, visible) {
     if (!el) return;
     el.style.display = visible ? "" : "none";
   }
 
+  // -------------------------
+  // Crear botones "Mi cuenta" y "Salir" si no existen
+  // -------------------------
+  function ensureAccountButtons() {
+    const right = document.querySelector(".ps-nav .inner .right");
+    if (!right) return;
+
+    // Botón Mi cuenta
+    let btnAccount = document.getElementById("nav-account-link");
+    if (!btnAccount) {
+      btnAccount = document.createElement("a");
+      btnAccount.id = "nav-account-link";
+      btnAccount.href = "/history";
+      btnAccount.className = "a11y-btn";
+      btnAccount.textContent = "Mi cuenta";
+      btnAccount.style.display = "none";
+      right.appendChild(btnAccount);
+    }
+
+    // Botón Salir
+    let btnLogout = document.getElementById("nav-logout-link");
+    if (!btnLogout) {
+      btnLogout = document.createElement("button");
+      btnLogout.id = "nav-logout-link";
+      btnLogout.type = "button";
+      btnLogout.className = "a11y-btn";
+      btnLogout.textContent = "Salir";
+      btnLogout.style.display = "none";
+      btnLogout.style.background = "#ffe5e5";
+      btnLogout.style.borderColor = "#f3abab";
+      btnLogout.style.color = "#8a1c1c";
+      btnLogout.style.fontWeight = "800";
+      right.appendChild(btnLogout);
+    }
+
+    // Acción logout (frontend safe)
+    btnLogout.addEventListener("click", async () => {
+      try {
+        // 1) borrar localStorage
+        try {
+          localStorage.removeItem("user_id");
+        } catch (_) {}
+
+        // 2) intentar cerrar sesión backend si existe
+        // (si no existe, no pasa nada)
+        try {
+          await fetch("/auth/logout", { method: "POST", credentials: "same-origin" });
+        } catch (_) {}
+
+        // 3) volver a home limpio
+        window.location.href = "/";
+      } catch (_) {
+        window.location.href = "/";
+      }
+    });
+  }
+
+  // -------------------------
+  // UI: login/register vs account/logout
+  // -------------------------
   function updateAuthButtons() {
+    ensureAccountButtons();
+
     const uid = resolveUserId();
+
     const loginLink = document.getElementById("nav-login-link");
     const signupLink = document.getElementById("nav-signup-link");
+    const accountLink = document.getElementById("nav-account-link");
+    const logoutLink = document.getElementById("nav-logout-link");
 
-    // Si está logueado, ocultamos Entrar/Registro (tu web puede mostrar perfil luego)
     if (uid) {
+      // LOGGED
       setVisible(loginLink, false);
       setVisible(signupLink, false);
+      setVisible(accountLink, true);
+      setVisible(logoutLink, true);
     } else {
+      // GUEST
       setVisible(loginLink, true);
       setVisible(signupLink, true);
+      setVisible(accountLink, false);
+      setVisible(logoutLink, false);
     }
   }
 
   // -------------------------
   // Optional: Sync con backend (si existe /api/usage/whoami)
-  // - Si backend confirma sesión, guardamos user_id en localStorage
-  // - No rompe si endpoint no existe
   // -------------------------
   async function trySyncWhoAmI() {
     try {
@@ -123,125 +193,33 @@
   }
 
   // -------------------------
-  // Optional: refresh usage badge (helpers)
-  // NO lo ejecutamos automáticamente para no duplicar fetch en páginas
-  // -------------------------
-  async function fetchUsageBalanceRobust(userId) {
-    // 1) query + header
-    if (userId) {
-      const r1 = await fetch(`/api/usage/balance?user_id=${encodeURIComponent(userId)}`, {
-        method: "GET",
-        headers: { "X-User-Id": userId },
-        credentials: "same-origin",
-      });
-      if (r1.ok) return await r1.json();
-    }
-
-    // 2) fallback sin query (por si backend usa sesión/header)
-    const r2 = await fetch(`/api/usage/balance`, {
-      method: "GET",
-      headers: userId ? { "X-User-Id": userId } : {},
-      credentials: "same-origin",
-    });
-    if (!r2.ok) {
-      const t = await r2.text().catch(() => "");
-      throw new Error(`balance_failed_${r2.status}:${t}`);
-    }
-    return await r2.json();
-  }
-
-  function fmtBadgeText(data) {
-    // Esperado: { used_seconds, allowance_seconds, file_limit_bytes }
-    const usedSec = Number(data?.used_seconds || 0);
-    const allowSec = Number(data?.allowance_seconds || 0);
-
-    const usedMin = usedSec / 60;
-    const allowMin = allowSec / 60;
-    const remain = Math.max(0, allowMin - usedMin);
-
-    // usado/limite (limite lo mostramos entero)
-    return `${usedMin.toFixed(1)}/${allowMin.toFixed(0)} min · libre ${remain.toFixed(1)} min`;
-  }
-
-  async function refreshUsageBadge(options) {
-    const opts = options || {};
-    const silent = !!opts.silent;
-
-    // Re-resolver por si cambió localStorage en caliente
-    let uid = resolveUserId();
-
-    // Si no hay uid, intentamos backend whoami (sesión)
-    if (!uid) {
-      const synced = await trySyncWhoAmI();
-      if (synced) uid = synced;
-    }
-
-    // Si sigue vacío, ocultamos badges si existen
-    const badge = document.getElementById("usage-badge");
-    const badgeNav = document.getElementById("usage-badge-nav");
-    if (!uid) {
-      if (badge) badge.style.display = "none";
-      if (badgeNav) badgeNav.style.display = "none";
-      if (!silent) console.warn("[nav_auth] No user_id. Badges ocultos.");
-      updateAuthButtons();
-      return { ok: false, user_id: "" };
-    }
-
-    try {
-      const data = await fetchUsageBalanceRobust(uid);
-      const text = fmtBadgeText(data);
-
-      const t1 = document.getElementById("usage-text");
-      const t2 = document.getElementById("usage-text-nav");
-      if (t1) t1.textContent = text;
-      if (t2) t2.textContent = text;
-
-      if (badge) badge.style.display = "inline-flex";
-      if (badgeNav) badgeNav.style.display = "inline-flex";
-
-      updateAuthButtons();
-      return { ok: true, user_id: uid, data };
-    } catch (e) {
-      if (!silent) console.warn("[nav_auth] refreshUsageBadge error:", e);
-      updateAuthButtons();
-      return { ok: false, user_id: uid, error: String(e?.message || e) };
-    }
-  }
-
-  // -------------------------
   // Boot
   // -------------------------
   async function boot() {
     setActiveNavLink();
 
-    // Si backend puso data-user-id, ya quedará en localStorage por resolveUserId()
+    // Guardar user_id si backend lo mandó en data-user-id
     resolveUserId();
 
-    // Sincroniza sesión si existe endpoint (no rompe)
+    // Intentar sincronizar sesión real (si existe endpoint)
     await trySyncWhoAmI();
 
     updateAuthButtons();
-
-    // Nota: NO llamamos refreshUsageBadge() aquí para evitar duplicar fetch.
-    // Cada página (index/history/pricing) ya maneja su propio refresh.
   }
 
   document.addEventListener("DOMContentLoaded", boot);
 
-  // Mantener en sync si user_id cambia desde otra pestaña (login/register)
+  // Sync si cambia user_id en otra pestaña
   window.addEventListener("storage", (ev) => {
     if (ev && ev.key === "user_id") {
       updateAuthButtons();
-      // NO hacemos refresh automático aquí para evitar doble fetch;
-      // La página principal ya escucha storage y refresca su UI.
     }
   });
 
-  // Exponemos helpers (payments.js y otros)
+  // Exponemos helpers para otros scripts
   window.PolyScribeAuth = {
     resolveUserId,
     isLoggedIn,
     trySyncWhoAmI,
-    refreshUsageBadge, // opcional para páginas que quieran usarlo
   };
 })();
