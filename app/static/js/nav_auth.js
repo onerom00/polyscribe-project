@@ -2,34 +2,42 @@
 (function () {
   "use strict";
 
-  // =========================
-  // Helpers: USER_ID robusto
-  // =========================
-  function getUserIdFromDOM() {
-    const el = document.querySelector("[data-user-id]");
-    const uid = el?.getAttribute("data-user-id");
-    return uid && uid.trim() !== "" ? uid.trim() : null;
+  // =========================================================
+  // PolyScribe NAV + Auth helper (Opción B)
+  // - resolveUserId: body[data-user-id] -> ?user_id -> localStorage
+  // - NO bindea botones (para evitar doble listener con scripts de cada página)
+  // - Ajusta links del nav (active)
+  // - Alterna botones Entrar/Registro si hay sesión/uid
+  // - Expone helpers para otros scripts (payments.js, etc.)
+  // =========================================================
+
+  // -------------------------
+  // USER ID helpers
+  // -------------------------
+  function getUserIdFromBody() {
+    const id = (document.body?.dataset?.userId || "").trim();
+    return id || null;
   }
 
   function getUserIdFromQuery() {
     const params = new URLSearchParams(window.location.search);
-    const uid = params.get("user_id");
-    return uid && uid.trim() !== "" ? uid.trim() : null;
+    const uid = (params.get("user_id") || "").trim();
+    return uid || null;
   }
 
   function getUserIdFromLocalStorage() {
     try {
-      const uid = localStorage.getItem("user_id");
-      return uid && uid.trim() !== "" ? uid.trim() : null;
-    } catch {
+      const uid = (localStorage.getItem("user_id") || "").trim();
+      return uid || null;
+    } catch (_) {
       return null;
     }
   }
 
   function setUserIdToLocalStorage(userId) {
     try {
-      localStorage.setItem("user_id", userId);
-    } catch {}
+      if (userId && String(userId).trim()) localStorage.setItem("user_id", String(userId).trim());
+    } catch (_) {}
   }
 
   // Regla final:
@@ -37,10 +45,10 @@
   // 2) ?user_id
   // 3) localStorage
   function resolveUserId() {
-    const fromDOM = getUserIdFromDOM();
-    if (fromDOM) {
-      setUserIdToLocalStorage(fromDOM);
-      return fromDOM;
+    const fromBody = getUserIdFromBody();
+    if (fromBody) {
+      setUserIdToLocalStorage(fromBody);
+      return fromBody;
     }
 
     const fromQuery = getUserIdFromQuery();
@@ -56,177 +64,184 @@
     return !!resolveUserId();
   }
 
-  // =========================
-  // UI: actualizar badge/panel
-  // =========================
-  function setText(id, value) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = value;
+  // -------------------------
+  // NAV: active link
+  // -------------------------
+  function setActiveNavLink() {
+    const path = (window.location.pathname || "/").replace(/\/+$/, "") || "/";
+    const links = document.querySelectorAll(".ps-nav-links a[data-path]");
+    links.forEach((a) => {
+      const p = (a.getAttribute("data-path") || "").trim() || "/";
+      const norm = p.replace(/\/+$/, "") || "/";
+      if (norm === path) a.classList.add("active");
+      else a.classList.remove("active");
+    });
   }
 
-  function setHTML(id, html) {
-    const el = document.getElementById(id);
-    if (el) el.innerHTML = html;
-  }
-
-  function setVisible(id, visible) {
-    const el = document.getElementById(id);
+  // -------------------------
+  // UI: login/register toggles
+  // -------------------------
+  function setVisible(el, visible) {
     if (!el) return;
     el.style.display = visible ? "" : "none";
   }
 
-  function setDisabled(id, disabled) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.disabled = !!disabled;
+  function updateAuthButtons() {
+    const uid = resolveUserId();
+    const loginLink = document.getElementById("nav-login-link");
+    const signupLink = document.getElementById("nav-signup-link");
+
+    // Si está logueado, ocultamos Entrar/Registro (tu web puede mostrar perfil luego)
+    if (uid) {
+      setVisible(loginLink, false);
+      setVisible(signupLink, false);
+    } else {
+      setVisible(loginLink, true);
+      setVisible(signupLink, true);
+    }
   }
 
-  function showRefreshStatus(type, msg) {
-    // Si existe un contenedor tipo "toast/status", lo usamos.
-    // Si no existe, no rompemos nada.
-    const el = document.getElementById("refresh-status");
-    if (!el) return;
-
-    el.className = ""; // reset
-    el.classList.add("refresh-status", `status-${type}`);
-    el.textContent = msg;
-    el.style.display = "block";
+  // -------------------------
+  // Optional: Sync con backend (si existe /api/usage/whoami)
+  // - Si backend confirma sesión, guardamos user_id en localStorage
+  // - No rompe si endpoint no existe
+  // -------------------------
+  async function trySyncWhoAmI() {
+    try {
+      const r = await fetch("/api/usage/whoami", { credentials: "same-origin" });
+      if (!r.ok) return null;
+      const j = await r.json().catch(() => ({}));
+      const uid = (j && j.user_id ? String(j.user_id) : "").trim();
+      if (uid) {
+        setUserIdToLocalStorage(uid);
+        return uid;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
-  function hideRefreshStatus() {
-    const el = document.getElementById("refresh-status");
-    if (!el) return;
-    el.style.display = "none";
-  }
+  // -------------------------
+  // Optional: refresh usage badge (helpers)
+  // NO lo ejecutamos automáticamente para no duplicar fetch en páginas
+  // -------------------------
+  async function fetchUsageBalanceRobust(userId) {
+    // 1) query + header
+    if (userId) {
+      const r1 = await fetch(`/api/usage/balance?user_id=${encodeURIComponent(userId)}`, {
+        method: "GET",
+        headers: { "X-User-Id": userId },
+        credentials: "same-origin",
+      });
+      if (r1.ok) return await r1.json();
+    }
 
-  // =========================
-  // Fetch: usage balance
-  // =========================
-  async function fetchUsageBalance(userId) {
-    // IMPORTANTE:
-    // Tu backend ya acepta X-User-Id o user_id (según tu config)
-    // Vamos con querystring por seguridad, y header como extra.
-    const url = `/api/usage/balance?user_id=${encodeURIComponent(userId)}`;
-
-    const res = await fetch(url, {
+    // 2) fallback sin query (por si backend usa sesión/header)
+    const r2 = await fetch(`/api/usage/balance`, {
       method: "GET",
-      headers: {
-        "X-User-Id": userId,
-      },
+      headers: userId ? { "X-User-Id": userId } : {},
       credentials: "same-origin",
     });
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(`Error ${res.status}: ${text || "No response body"}`);
+    if (!r2.ok) {
+      const t = await r2.text().catch(() => "");
+      throw new Error(`balance_failed_${r2.status}:${t}`);
     }
-
-    return await res.json();
+    return await r2.json();
   }
 
-  function applyUsageToUI(data) {
-    // Esperamos un JSON tipo:
-    // { used_minutes, remaining_minutes, limit_minutes, max_file_mb, plan }
-    // Si tu backend devuelve nombres distintos, me lo dices y lo ajusto.
+  function fmtBadgeText(data) {
+    // Esperado: { used_seconds, allowance_seconds, file_limit_bytes }
+    const usedSec = Number(data?.used_seconds || 0);
+    const allowSec = Number(data?.allowance_seconds || 0);
 
-    const used = Number(data.used_minutes ?? 0);
-    const remaining = Number(data.remaining_minutes ?? 0);
-    const limit = Number(data.limit_minutes ?? data.monthly_limit_minutes ?? 0);
-    const maxFile = Number(data.max_file_mb ?? 25);
+    const usedMin = usedSec / 60;
+    const allowMin = allowSec / 60;
+    const remain = Math.max(0, allowMin - usedMin);
 
-    // Badge mini (si existe)
-    setText("usage-badge-used", `${used}`);
-    setText("usage-badge-remaining", `${remaining}`);
-
-    // Panel detallado (si existe)
-    setText("usage-used-minutes", `${used}`);
-    setText("usage-remaining-minutes", `${remaining}`);
-    setText("usage-limit-minutes", `${limit}`);
-    setText("usage-max-file", `${maxFile} MB`);
-
-    // Banner bajo saldo (si existe)
-    // Regla: si remaining <= 0 => mostrar banner crítico
-    if (remaining <= 0) {
-      setVisible("usage-banner-zero", true);
-      setVisible("usage-banner-low", false);
-    } else if (remaining <= 2) {
-      setVisible("usage-banner-zero", false);
-      setVisible("usage-banner-low", true);
-    } else {
-      setVisible("usage-banner-zero", false);
-      setVisible("usage-banner-low", false);
-    }
+    // usado/limite (limite lo mostramos entero)
+    return `${usedMin.toFixed(1)}/${allowMin.toFixed(0)} min · libre ${remain.toFixed(1)} min`;
   }
 
-  // =========================
-  // Refrescar usage (botón)
-  // =========================
-  async function refreshUsageUI() {
-    const userId = resolveUserId();
+  async function refreshUsageBadge(options) {
+    const opts = options || {};
+    const silent = !!opts.silent;
 
-    if (!userId) {
-      // No está logueado: ocultamos panel si aplica
-      showRefreshStatus("warn", "Debes iniciar sesión para ver tu saldo.");
-      setVisible("usage-panel", false);
-      return;
+    // Re-resolver por si cambió localStorage en caliente
+    let uid = resolveUserId();
+
+    // Si no hay uid, intentamos backend whoami (sesión)
+    if (!uid) {
+      const synced = await trySyncWhoAmI();
+      if (synced) uid = synced;
     }
 
-    hideRefreshStatus();
-    setDisabled("btn-refresh", true);
-
-    // Si tienes un spinner o texto del botón, lo manejamos sin romper
-    const btn = document.getElementById("btn-refresh");
-    const originalText = btn ? btn.textContent : null;
-    if (btn) btn.textContent = "Refrescando...";
+    // Si sigue vacío, ocultamos badges si existen
+    const badge = document.getElementById("usage-badge");
+    const badgeNav = document.getElementById("usage-badge-nav");
+    if (!uid) {
+      if (badge) badge.style.display = "none";
+      if (badgeNav) badgeNav.style.display = "none";
+      if (!silent) console.warn("[nav_auth] No user_id. Badges ocultos.");
+      updateAuthButtons();
+      return { ok: false, user_id: "" };
+    }
 
     try {
-      const data = await fetchUsageBalance(userId);
-      applyUsageToUI(data);
-      setVisible("usage-panel", true);
-      showRefreshStatus("ok", "Saldo actualizado ✅");
-    } catch (err) {
-      console.error("refreshUsageUI error:", err);
-      showRefreshStatus("error", "No se pudo refrescar el saldo. Intenta de nuevo.");
-    } finally {
-      setDisabled("btn-refresh", false);
-      if (btn && originalText) btn.textContent = originalText;
+      const data = await fetchUsageBalanceRobust(uid);
+      const text = fmtBadgeText(data);
+
+      const t1 = document.getElementById("usage-text");
+      const t2 = document.getElementById("usage-text-nav");
+      if (t1) t1.textContent = text;
+      if (t2) t2.textContent = text;
+
+      if (badge) badge.style.display = "inline-flex";
+      if (badgeNav) badgeNav.style.display = "inline-flex";
+
+      updateAuthButtons();
+      return { ok: true, user_id: uid, data };
+    } catch (e) {
+      if (!silent) console.warn("[nav_auth] refreshUsageBadge error:", e);
+      updateAuthButtons();
+      return { ok: false, user_id: uid, error: String(e?.message || e) };
     }
   }
 
-  // =========================
-  // Inicialización
-  // =========================
-  function bindRefreshButton() {
-    const btn = document.getElementById("btn-refresh");
-    if (!btn) return;
+  // -------------------------
+  // Boot
+  // -------------------------
+  async function boot() {
+    setActiveNavLink();
 
-    btn.addEventListener("click", function (e) {
-      e.preventDefault();
-      refreshUsageUI();
-    });
-  }
+    // Si backend puso data-user-id, ya quedará en localStorage por resolveUserId()
+    resolveUserId();
 
-  function boot() {
-    // Si está logueado, intentamos cargar el saldo una vez al entrar
-    // (pero sin obligar nada si falla)
-    bindRefreshButton();
+    // Sincroniza sesión si existe endpoint (no rompe)
+    await trySyncWhoAmI();
 
-    const uid = resolveUserId();
-    if (uid) {
-      // Intento inicial silencioso
-      refreshUsageUI();
-    } else {
-      // Guest: ocultar panel si existe
-      setVisible("usage-panel", false);
-    }
+    updateAuthButtons();
+
+    // Nota: NO llamamos refreshUsageBadge() aquí para evitar duplicar fetch.
+    // Cada página (index/history/pricing) ya maneja su propio refresh.
   }
 
   document.addEventListener("DOMContentLoaded", boot);
 
-  // Exponemos por si otros scripts lo necesitan (payments.js)
+  // Mantener en sync si user_id cambia desde otra pestaña (login/register)
+  window.addEventListener("storage", (ev) => {
+    if (ev && ev.key === "user_id") {
+      updateAuthButtons();
+      // NO hacemos refresh automático aquí para evitar doble fetch;
+      // La página principal ya escucha storage y refresca su UI.
+    }
+  });
+
+  // Exponemos helpers (payments.js y otros)
   window.PolyScribeAuth = {
     resolveUserId,
     isLoggedIn,
-    refreshUsageUI,
+    trySyncWhoAmI,
+    refreshUsageBadge, // opcional para páginas que quieran usarlo
   };
 })();
