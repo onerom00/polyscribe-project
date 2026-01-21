@@ -24,7 +24,63 @@
     *{box-sizing:border-box}
     body{margin:0;background:#cfe5ff;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--text)}
     .container{max-width:980px;margin:24px auto;padding:0 16px}
-    header{display:flex;align-items:center;justify-content:space-between;margin:8px 0 16px;gap:12px;flex-wrap:wrap}
+
+    /* ✅ NAV unificado */
+    header.ps-nav{
+      background:#fff;
+      border-bottom:1px solid var(--border);
+    }
+    .ps-nav .inner{
+      max-width:980px;
+      margin:0 auto;
+      padding:10px 16px;
+      display:flex;
+      gap:12px;
+      align-items:center;
+      justify-content:space-between;
+      flex-wrap:wrap;
+    }
+    .ps-nav .brand{
+      font-weight:900;
+      color:#0b1424;
+      text-decoration:none;
+      font-size:1.05rem;
+    }
+    .ps-nav .links a{
+      margin-right:14px;
+      text-decoration:none;
+      color:#13406f;
+      font-weight:800;
+      font-size:0.95rem;
+    }
+    .ps-nav .links a.active{ color:#0b62e0; }
+    .badge-usage{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      background:#e8f3ff;
+      color:#0b1424;
+      border:1px solid #b9d9ff;
+      border-radius:999px;
+      padding:5px 10px;
+      font-size:13px;
+      font-weight:800;
+    }
+    .a11y-btn{
+      background:#f2f6ff;
+      border:1px solid #cddaf5;
+      color:#0b1424;
+      padding:6px 10px;
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:700;
+      font-size:.95rem;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+    }
+
     a{color:var(--accent);text-decoration:none}
     .cards{display:grid;grid-template-columns:1fr;gap:12px}
     .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -34,75 +90,60 @@
     .actions{display:flex;gap:8px;flex-wrap:wrap}
     .btn{background:#0b62e0;border:1px solid #0a59c9;color:#fff;font-weight:700;padding:8px 12px;border-radius:10px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}
     .btn-secondary{background:#f2f6ff;color:#0b1424;border:1px solid #cddaf5}
-    h1{font-size:20px;margin:8px 0 16px}
-    nav{display:flex;gap:12px;font-weight:700;flex-wrap:wrap}
-    .topbar{display:flex;gap:8px;justify-content:flex-end;margin-bottom:8px;align-items:center;flex-wrap:wrap}
-    .badge{background:#e8f3ff;border:1px solid #b9d9ff;border-radius:999px;padding:6px 10px;color:#0b1424;font-size:12px;font-weight:700}
+    h1{font-size:20px;margin:18px 0 10px}
+    .topbar{display:flex;gap:8px;justify-content:flex-end;margin:12px 0;align-items:center;flex-wrap:wrap}
     .muted{color:var(--muted);font-size:13px}
     .alert{display:none;margin:10px 0 12px;background:#fff4e5;border:1px solid #f4c08a;color:#7b3d00;padding:10px;border-radius:12px;font-size:14px}
     .alert.ok{background:#e2f7e9;border-color:#8ad19d;color:#125325}
-
-    /* ✅ Auth CTA box */
-    .auth-box{
-      display:none;
-      margin:14px 0 12px;
-      background:#ffffff;
-      border:1px solid #b9d9ff;
-      border-radius:14px;
-      padding:12px 12px;
-      box-shadow:0 10px 24px rgba(15,35,52,.10);
-    }
-    .auth-box .t{font-weight:800;margin-bottom:6px}
-    .auth-box .s{color:#13406f;font-size:13px;margin-bottom:10px}
-    .auth-box .row{display:flex;gap:10px;flex-wrap:wrap}
-    .btnx{
-      background:#0b62e0;border:1px solid #0a59c9;color:#fff;
-      font-weight:800;padding:8px 12px;border-radius:10px;
-      text-decoration:none;display:inline-flex;align-items:center
-    }
-    .btnx.secondary{
-      background:#22c55e;border-color:#16a34a;color:#0b111d;
-    }
-
     @media (max-width:700px){.card{flex-direction:column;align-items:flex-start;gap:10px}}
   </style>
 </head>
 
 <body data-user-id="{{ user_id|default('') }}">
-  <div class="container">
-    <header>
-      <nav>
-        <a href="/">PolyScribe</a>
-        <a href="/">Transcribir</a>
-        <a href="/history">Historial</a>
-        <a href="/pricing">Precios</a>
-        <a href="/ayuda">Ayuda</a>
+  <!-- ✅ NAV UNIFICADO -->
+  <header class="ps-nav">
+    <div class="inner">
+      <a class="brand" href="/">PolyScribe</a>
+
+      <nav class="links ps-nav-links">
+        <a href="/" data-path="/">Transcribir</a>
+        <a href="/history" data-path="/history">Historial</a>
+        <a href="/pricing" data-path="/pricing">Precios</a>
+        <a href="/ayuda" data-path="/ayuda">Ayuda</a>
       </nav>
-      <div class="topbar">
-        <span class="badge" id="usage-text">—/— min · libre —</span>
-        <a class="btn btn-secondary" href="/" id="btn-back">Volver</a>
-      </div>
-    </header>
 
-    <h1>Historial</h1>
-    <div class="muted">Tus transcripciones recientes (según tu cuenta).</div>
+      <div class="right">
+        <span id="usage-badge-nav" class="badge-usage" style="display:none;">
+          <span id="usage-text-nav">—/— min · libre —</span>
+        </span>
 
-    <!-- alert-box sirve para warnings y para confirmación post-pago -->
-    <div class="alert" id="alert-box"></div>
+        <a href="/auth/login" class="a11y-btn" id="nav-login-link">Entrar</a>
+        <a href="/auth/register" class="a11y-btn" id="nav-signup-link"
+           style="background:#22c55e;border-color:#16a34a;color:#0b111d">
+          Registro
+        </a>
 
-    <!-- ✅ CTA si no hay sesión -->
-    <div class="auth-box" id="auth-box">
-      <div class="t">🔒 Inicia sesión para ver tu historial</div>
-      <div class="s">Esto evita que se mezclen transcripciones entre usuarios.</div>
-      <div class="row">
-        <a class="btnx" href="/auth/login">Entrar</a>
-        <a class="btnx secondary" href="/auth/register">Registro</a>
+        <a href="/account" class="a11y-btn" id="nav-account-link" style="display:none;">Mi cuenta</a>
+        <a href="/auth/logout" class="a11y-btn" id="nav-logout-link" style="display:none;">Salir</a>
       </div>
     </div>
+  </header>
 
+  <div class="container">
+    <div class="topbar">
+      <a class="btn btn-secondary" href="/" id="btn-back">Volver</a>
+    </div>
+
+    <h1>Historial</h1>
+    <div class="muted">Tus transcripciones recientes (según tu usuario actual).</div>
+
+    <div class="alert" id="alert-box"></div>
     <div class="cards" id="cards"></div>
     <p class="muted" id="empty" style="display:none;margin-top:14px;">No hay registros.</p>
   </div>
+
+  <!-- ✅ NAV AUTH UNIFICADO -->
+  <script src="{{ url_for('static', filename='js/nav_auth.js') }}"></script>
 
   <script>
     (function(){
@@ -112,8 +153,6 @@
       const empty = $("#empty");
       const alertBox = $("#alert-box");
       const btnBack = $("#btn-back");
-      const usageText = $("#usage-text");
-      const authBox = $("#auth-box");
 
       function showWarn(msg){
         if (!alertBox) return;
@@ -134,40 +173,38 @@
         alertBox.classList.remove("ok");
       }
 
-      // ============================
-      // ✅ SESIÓN REAL: whoami
-      // ============================
-      async function getSessionUserId(){
-        try{
-          const r = await fetch("/api/usage/whoami", {
-            method:"GET",
-            credentials:"same-origin",
-            headers: { "Accept":"application/json" }
-          });
-          if (!r.ok) return "";
-          const j = await r.json().catch(()=> ({}));
-          if (j && j.user_id) return String(j.user_id).trim();
-          return "";
-        }catch(_){
-          return "";
+      function resolveUserId(){
+        let id = (document.body.dataset.userId || "").trim();
+        const qs = new URLSearchParams(window.location.search);
+        const qUser = (qs.get("user_id") || "").trim();
+        if (qUser) id = qUser;
+        if (!id){
+          try{ id = (localStorage.getItem("user_id") || "").trim(); }catch{ id = ""; }
         }
+        if (id){
+          try{ localStorage.setItem("user_id", id); }catch{}
+        }
+        return id;
       }
 
-      function clearLocalUserId(){
-        try{ localStorage.removeItem("user_id"); }catch(_){}
+      let USER_ID = resolveUserId();
+
+      async function api(url, opts = {}){
+        const h = opts.headers ? {...opts.headers} : {};
+        if (USER_ID && !h["X-User-Id"]) h["X-User-Id"] = USER_ID;
+        const res = await fetch(url, {...opts, headers: h});
+        const txt = await res.text();
+        let body;
+        try{ body = JSON.parse(txt); }catch{ body = txt; }
+        return { ok: res.ok, status: res.status, body };
       }
 
-      // ============================
-      // ✅ Post-pago: /history?paid=1
-      // (sin user_id en URL)
-      // ============================
       function handlePaidQuery(){
         const qs = new URLSearchParams(window.location.search);
         const paid = (qs.get("paid") || "").trim();
 
         if (paid === "1") {
           showOk("✅ Pago confirmado. Tus minutos fueron acreditados. (Si no ves el saldo actualizado, refresca en 2–3s).");
-
           try{
             if (typeof gtag === "function") {
               gtag("event", "purchase_completed", { page: "history" });
@@ -175,59 +212,24 @@
           }catch(_){}
 
           try{
-            window.history.replaceState({}, "", window.location.pathname);
+            const clean = window.location.pathname + (USER_ID ? ("?user_id=" + encodeURIComponent(USER_ID)) : "");
+            window.history.replaceState({}, "", clean);
           }catch(_){}
         }
       }
 
-      // VOLVER INTELIGENTE (sin depender de referrer)
-      function setBackLink(sessionUserId){
+      function setBackLink(){
         const lastJob = (localStorage.getItem("ps_last_job_id") || "").trim();
+        const base = USER_ID ? (`?user_id=${encodeURIComponent(USER_ID)}`) : "";
 
-        // ✅ Solo añadimos user_id si la sesión existe
         if (lastJob) {
-          const q = sessionUserId
-            ? `?job_id=${encodeURIComponent(lastJob)}&user_id=${encodeURIComponent(sessionUserId)}`
+          const q = USER_ID
+            ? `?job_id=${encodeURIComponent(lastJob)}&user_id=${encodeURIComponent(USER_ID)}`
             : `?job_id=${encodeURIComponent(lastJob)}`;
           btnBack.href = `/${q}`;
           return;
         }
-
-        btnBack.href = sessionUserId
-          ? `/?user_id=${encodeURIComponent(sessionUserId)}`
-          : `/`;
-      }
-
-      async function api(url, opts = {}, sessionUserId){
-        const h = opts.headers ? {...opts.headers} : {};
-        if (sessionUserId && !h["X-User-Id"]) h["X-User-Id"] = sessionUserId;
-        const res = await fetch(url, {...opts, headers: h, credentials:"same-origin"});
-        const txt = await res.text();
-        let body;
-        try{ body = JSON.parse(txt); }catch{ body = txt; }
-        return { ok: res.ok, status: res.status, body };
-      }
-
-      // Badge de uso
-      async function refreshBadge(sessionUserId){
-        try{
-          if (!sessionUserId){
-            if (usageText) usageText.textContent = "—/— min · libre —";
-            return;
-          }
-
-          const r = await api(`/api/usage/balance?user_id=${encodeURIComponent(sessionUserId)}`, {}, sessionUserId);
-          if(!r.ok) return;
-
-          const j = r.body || {};
-          const usedMin  = (Number(j.used_seconds||0) / 60);
-          const allowMin = (Number(j.allowance_seconds||0) / 60);
-          const remain   = Math.max(0, allowMin - usedMin);
-
-          if (usageText){
-            usageText.textContent = `${usedMin.toFixed(1)}/${allowMin.toFixed(0)} min · libre ${remain.toFixed(1)} min`;
-          }
-        }catch(_){}
+        btnBack.href = `/${base}`;
       }
 
       function esc(s){
@@ -243,7 +245,7 @@
         return sp;
       }
 
-      function buildCard(it, sessionUserId){
+      function buildCard(it){
         const id = it.id || it.job_id || "";
         const filename = it.filename || (id ? ("job " + id) : "job");
         const langSel = it.language || "auto";
@@ -275,16 +277,20 @@
 
         const aVer = document.createElement("a");
         aVer.className = "btn";
-        aVer.href = `/?job_id=${encodeURIComponent(id)}&user_id=${encodeURIComponent(sessionUserId)}`;
+        aVer.href = USER_ID
+          ? `/?job_id=${encodeURIComponent(id)}&user_id=${encodeURIComponent(USER_ID)}`
+          : `/?job_id=${encodeURIComponent(id)}`;
         aVer.textContent = "Ver";
         aVer.addEventListener("click", () => {
-          try{ localStorage.setItem("ps_last_job_id", String(id||"")); }catch(_){}
+          try{ localStorage.setItem("ps_last_job_id", String(id||"")); }catch{}
         });
         actions.appendChild(aVer);
 
         const aJson = document.createElement("a");
         aJson.className = "btn btn-secondary";
-        aJson.href = `/jobs/${encodeURIComponent(id)}?user_id=${encodeURIComponent(sessionUserId)}`;
+        aJson.href = USER_ID
+          ? `/jobs/${encodeURIComponent(id)}?user_id=${encodeURIComponent(USER_ID)}`
+          : `/jobs/${encodeURIComponent(id)}`;
         aJson.target = "_blank";
         aJson.rel = "noopener";
         aJson.textContent = "JSON";
@@ -295,21 +301,18 @@
         return card;
       }
 
-      async function loadHistory(sessionUserId){
+      async function loadHistory(){
         hideAlert();
         if (cards) cards.innerHTML = "";
         if (empty) empty.style.display = "none";
 
-        if (!sessionUserId){
-          if (authBox) authBox.style.display = "block";
+        if (!USER_ID){
           showWarn("🔒 Inicia sesión para ver tu historial.");
           if (empty) empty.style.display = "block";
           return;
         }
 
-        if (authBox) authBox.style.display = "none";
-
-        const r = await api(`/api/history?limit=100&user_id=${encodeURIComponent(sessionUserId)}`, {}, sessionUserId);
+        const r = await api(`/api/history?limit=100&user_id=${encodeURIComponent(USER_ID)}`);
         if(!r.ok){
           showWarn("No se pudo cargar el historial. Verifica que /api/history esté activo.");
           if (empty) empty.style.display = "block";
@@ -322,36 +325,13 @@
           return;
         }
 
-        items.forEach(it => cards.appendChild(buildCard(it, sessionUserId)));
+        items.forEach(it => cards.appendChild(buildCard(it)));
       }
 
-      // ============================
-      // INIT
-      // ============================
-      (async function init(){
-        handlePaidQuery();
-
-        // ✅ Usuario SOLO por sesión real
-        const sessionUserId = await getSessionUserId();
-
-        // Si no hay sesión, limpiamos cualquier user_id “pegajoso”
-        if (!sessionUserId) clearLocalUserId();
-
-        setBackLink(sessionUserId);
-        refreshBadge(sessionUserId);
-
-        // Si vienes de pago, refresca badge otra vez (latencia DB)
-        const qs = new URLSearchParams(window.location.search);
-        if ((qs.get("paid") || "").trim() === "1") {
-          setTimeout(() => refreshBadge(sessionUserId), 2500);
-        }
-
-        loadHistory(sessionUserId);
-      })();
-
+      setBackLink();
+      handlePaidQuery();
+      loadHistory();
     })();
   </script>
-  <script src="{{ url_for('static', filename='js/nav_auth.js') }}"></script>
-
 </body>
 </html>
