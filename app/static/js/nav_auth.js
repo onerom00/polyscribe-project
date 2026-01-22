@@ -1,173 +1,89 @@
 // static/js/nav_auth.js
 (function () {
-  "use strict";
+  const $ = (s) => document.querySelector(s);
 
-  // =========================
-  // USER_ID robusto (body[data-user-id] -> ?user_id -> localStorage)
-  // =========================
-  function getUserIdFromBody() {
-    try {
-      const uid = (document.body && document.body.dataset && document.body.dataset.userId) ? document.body.dataset.userId : "";
-      const v = String(uid || "").trim();
-      return v ? v : "";
-    } catch {
-      return "";
-    }
+  // ---------- helpers ----------
+  function safeGetLS(k) {
+    try { return (localStorage.getItem(k) || "").trim(); } catch { return ""; }
+  }
+  function safeSetLS(k, v) {
+    try { localStorage.setItem(k, v); } catch {}
   }
 
-  function getUserIdFromQuery() {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const uid = String(params.get("user_id") || "").trim();
-      return uid ? uid : "";
-    } catch {
-      return "";
-    }
-  }
-
-  function getUserIdFromLocalStorage() {
-    try {
-      const uid = String(localStorage.getItem("user_id") || "").trim();
-      return uid ? uid : "";
-    } catch {
-      return "";
-    }
-  }
-
-  function setUserIdToLocalStorage(userId) {
-    try {
-      if (userId) localStorage.setItem("user_id", userId);
-    } catch {}
-  }
-
+  // ---------- resolve user ----------
   function resolveUserId() {
-    // 1) backend -> data-user-id
-    let id = getUserIdFromBody();
+    // 1) server-rendered
+    let id = ((document.body && document.body.dataset && document.body.dataset.userId) ? document.body.dataset.userId : "").trim();
 
-    // 2) querystring user_id (si viene, manda)
-    const q = getUserIdFromQuery();
-    if (q) id = q;
+    // 2) querystring
+    const qs = new URLSearchParams(window.location.search);
+    const qUser = (qs.get("user_id") || "").trim();
+    if (qUser) id = qUser;
 
     // 3) localStorage
-    if (!id) id = getUserIdFromLocalStorage();
+    if (!id) id = safeGetLS("user_id");
 
-    // persistimos si hay
-    if (id) setUserIdToLocalStorage(id);
+    // Normaliza: guest NO es login real
+    if ((id || "").toLowerCase() === "guest") id = "";
 
-    // ✅ IMPORTANTE: NO forzar "guest"
-    return id; // "" si no hay
+    // Persist
+    if (id) safeSetLS("user_id", id);
+
+    return id; // "" => anonymous
   }
 
-  function isLoggedIn() {
-    return !!resolveUserId();
-  }
+  let USER_ID = resolveUserId();
+  const IS_LOGGED = !!USER_ID;
 
-  // =========================
-  // UI helpers
-  // =========================
-  function show(el, visible) {
-    if (!el) return;
-    el.style.display = visible ? "" : "none";
-  }
-
-  // =========================
-  // NAV: link activo
-  // =========================
-  function setActiveNav() {
+  // ---------- active nav link ----------
+  (function setActiveNav() {
     const path = window.location.pathname || "/";
     const links = document.querySelectorAll(".ps-nav-links a[data-path]");
-    if (!links || !links.length) return;
-
     links.forEach(a => {
-      const p = a.getAttribute("data-path") || "";
+      const p = a.getAttribute("data-path");
       if (!p) return;
       if (p === path) a.classList.add("active");
       else a.classList.remove("active");
     });
+  })();
+
+  // ---------- toggle auth buttons ----------
+  // Opcionales (si existen, los usa)
+  const loginLink = $("#nav-login-link");
+  const signupLink = $("#nav-signup-link");
+  const accountLink = $("#nav-account-link");
+  const logoutLink = $("#nav-logout-link");
+
+  // Si no existen, no rompe.
+  function show(el, yes) {
+    if (!el) return;
+    el.style.display = yes ? "inline-flex" : "none";
   }
 
-  // =========================
-  // Auth UI: Entrar/Registro vs Badge
-  // =========================
-  function syncAuthUI() {
-    const uid = resolveUserId();
+  // Reglas:
+  // - Anonymous: Entrar + Registro visibles
+  // - Logged: Mi cuenta + Salir visibles
+  show(loginLink, !IS_LOGGED);
+  show(signupLink, !IS_LOGGED);
+  show(accountLink, IS_LOGGED);
+  show(logoutLink, IS_LOGGED);
 
-    // Elementos que ya tienes en index.html
-    const loginLink  = document.getElementById("nav-login-link");
-    const signupLink = document.getElementById("nav-signup-link");
-    const usageNav   = document.getElementById("usage-badge-nav"); // badge del header
+  // ---------- optional: expose user in window ----------
+  window.PS_USER_ID = USER_ID || "";
+  window.PS_IS_LOGGED = IS_LOGGED;
 
-    // Si NO hay usuario: mostrar Entrar/Registro, ocultar badge nav
-    if (!uid) {
-      show(loginLink, true);
-      show(signupLink, true);
-      show(usageNav, false);
-      return;
-    }
+  // ---------- storage sync (otra pestaña) ----------
+  window.addEventListener("storage", (ev) => {
+    if (!ev || ev.key !== "user_id") return;
+    const newId = resolveUserId();
+    const newLogged = !!newId;
 
-    // Si SÍ hay usuario: ocultar Entrar/Registro, mostrar badge nav
-    show(loginLink, false);
-    show(signupLink, false);
-    show(usageNav, true);
-  }
+    show(loginLink, !newLogged);
+    show(signupLink, !newLogged);
+    show(accountLink, newLogged);
+    show(logoutLink, newLogged);
 
-  // =========================
-  // (Opcional) refrescar saldo NAV 1 sola vez (sin loops)
-  // =========================
-  async function refreshNavBalanceOnce() {
-    const uid = resolveUserId();
-    if (!uid) return;
-
-    const el = document.getElementById("usage-text-nav");
-    if (!el) return; // si no existe, no hacemos nada
-
-    try {
-      const url = `/api/usage/balance?user_id=${encodeURIComponent(uid)}`;
-      const res = await fetch(url, { method: "GET", headers: { "X-User-Id": uid } });
-      if (!res.ok) return;
-
-      const data = await res.json().catch(() => ({}));
-      const usedSec = Number(data.used_seconds || 0);
-      const allowSec = Number(data.allowance_seconds || 0);
-
-      const usedMin = usedSec / 60;
-      const allowMin = allowSec / 60;
-      const remain = Math.max(0, allowMin - usedMin);
-
-      el.textContent = `${usedMin.toFixed(1)}/${allowMin.toFixed(0)} min · libre ${remain.toFixed(1)} min`;
-    } catch {
-      // silencioso
-    }
-  }
-
-  // =========================
-  // Boot
-  // =========================
-  function boot() {
-    setActiveNav();
-    syncAuthUI();
-    refreshNavBalanceOnce();
-
-    // Si en otra pestaña cambia user_id (login/logout), sincroniza sin romper
-    window.addEventListener("storage", (ev) => {
-      if (ev && ev.key === "user_id") {
-        syncAuthUI();
-        refreshNavBalanceOnce();
-      }
-    });
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", boot);
-  } else {
-    boot();
-  }
-
-  // Exponemos por si lo necesitas en payments.js o debugging
-  window.PolyScribeAuth = {
-    resolveUserId,
-    isLoggedIn,
-    syncAuthUI,
-    refreshNavBalanceOnce,
-  };
+    window.PS_USER_ID = newId || "";
+    window.PS_IS_LOGGED = newLogged;
+  });
 })();
