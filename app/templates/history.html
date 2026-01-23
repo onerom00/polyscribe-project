@@ -6,7 +6,6 @@
   <title>Historial · PolyScribe</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
 
-  <!-- ✅ Google Analytics (GA4) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-6TFFRMS8K0"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
@@ -28,7 +27,6 @@
     body{margin:0;background:#cfe5ff;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--text)}
     .container{max-width:980px;margin:24px auto;padding:0 16px}
 
-    /* NAV estilo home */
     header.ps-nav{background:#fff;border-bottom:1px solid var(--border)}
     .ps-nav .inner{
       max-width:980px;margin:0 auto;padding:10px 16px;
@@ -40,8 +38,7 @@
     .right{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 
     .badge-usage{
-      display:none;
-      align-items:center;gap:8px;
+      display:none;align-items:center;gap:8px;
       background:#e8f3ff;color:#0b1424;border:1px solid #b9d9ff;border-radius:999px;
       padding:5px 10px;font-size:13px;font-weight:800
     }
@@ -70,14 +67,13 @@
 </head>
 
 <body>
-  <!-- NAV -->
   <header class="ps-nav">
     <div class="inner">
       <a class="brand" href="/">PolyScribe</a>
 
       <nav class="links ps-nav-links">
         <a href="/" data-path="/">Transcribir</a>
-        <a href="/history" data-path="/history" class="active">Historial</a>
+        <a href="/history" data-path="/history">Historial</a>
         <a href="/pricing" data-path="/pricing">Precios</a>
         <a href="/ayuda" data-path="/ayuda">Ayuda</a>
       </nav>
@@ -87,7 +83,6 @@
           <span id="usage-text-nav">—/— min · libre —</span>
         </span>
 
-        <!-- auth buttons (los controla nav_auth.js) -->
         <a href="/auth/login" class="a11y-btn" id="nav-login-link">Entrar</a>
         <a href="/auth/register" class="a11y-btn" id="nav-signup-link"
            style="background:#22c55e;border-color:#16a34a;color:#0b111d">Registro</a>
@@ -95,7 +90,6 @@
         <a href="/account" class="a11y-btn" id="nav-account-link" style="display:none">Mi cuenta</a>
         <a href="/auth/logout" class="a11y-btn" id="nav-logout-link" style="display:none">Salir</a>
 
-        <!-- volver inteligente -->
         <a class="a11y-btn" href="/" id="btn-back">Volver</a>
       </div>
     </div>
@@ -110,35 +104,22 @@
     <p class="muted" id="empty" style="display:none;margin-top:14px;">No hay registros.</p>
   </div>
 
-  <!-- Este script solo muestra/oculta botones del nav y puede setear dataset -->
   <script src="{{ url_for('static', filename='js/nav_auth.js') }}"></script>
 
   <script>
     (function(){
       const $ = (s) => document.querySelector(s);
-
       const cards = $("#cards");
       const empty = $("#empty");
       const alertBox = $("#alert-box");
       const btnBack = $("#btn-back");
 
-      const usageBadge = $("#usage-badge-nav");
-      const usageTextNav = $("#usage-text-nav");
-
       function showWarn(msg){
-        if (!alertBox) return;
         alertBox.textContent = msg;
         alertBox.classList.remove("ok");
         alertBox.style.display = "block";
       }
-      function showOk(msg){
-        if (!alertBox) return;
-        alertBox.textContent = msg;
-        alertBox.classList.add("ok");
-        alertBox.style.display = "block";
-      }
       function hideAlert(){
-        if (!alertBox) return;
         alertBox.style.display = "none";
         alertBox.textContent = "";
         alertBox.classList.remove("ok");
@@ -210,117 +191,47 @@
 
       function setBackLink(){
         const lastJob = (localStorage.getItem("ps_last_job_id") || "").trim();
-        if (lastJob) {
-          btnBack.href = `/?job_id=${encodeURIComponent(lastJob)}`;
-          return;
-        }
-        btnBack.href = `/`;
+        btnBack.href = lastJob ? `/?job_id=${encodeURIComponent(lastJob)}` : `/`;
       }
 
-      async function fetchMe(){
-        try{
-          const res = await fetch("/api/auth/me", { method:"GET", credentials:"include" });
-          const txt = await res.text();
-          let data = {};
-          try{ data = JSON.parse(txt); }catch{ data = {}; }
-          if (!res.ok) return { authenticated:false };
-          return data || { authenticated:false };
-        }catch{
-          return { authenticated:false };
-        }
-      }
-
-      async function refreshBadge(isLogged){
-        try{
-          if (!usageBadge || !usageTextNav) return;
-
-          if (!isLogged){
-            usageBadge.style.display = "none";
-            usageTextNav.textContent = "—/— min · libre —";
-            return;
-          }
-
-          const res = await fetch("/api/usage/balance", { method:"GET", credentials:"include" });
-          const txt = await res.text();
-          let j = {};
-          try{ j = JSON.parse(txt); }catch{ j = {}; }
-
-          if (!res.ok){
-            // si por alguna razón no deja leer balance, ocultamos badge sin romper UI
-            usageBadge.style.display = "none";
-            return;
-          }
-
-          const usedMin  = (Number(j.used_seconds||0) / 60);
-          const allowMin = (Number(j.allowance_seconds||0) / 60);
-          const remain   = Math.max(0, allowMin - usedMin);
-
-          usageTextNav.textContent = `${usedMin.toFixed(1)}/${allowMin.toFixed(0)} min · libre ${remain.toFixed(1)} min`;
-          usageBadge.style.display = "inline-flex";
-        }catch{
-          if (usageBadge) usageBadge.style.display = "none";
-        }
-      }
-
-      async function loadHistory(isLogged){
-        hideAlert();
-        if (cards) cards.innerHTML = "";
-        if (empty) empty.style.display = "none";
-
-        if (!isLogged){
-          showWarn("🔒 Inicia sesión para ver tu historial.");
-          if (empty) empty.style.display = "block";
-          return;
-        }
-
-        // ✅ HISTORIAL por sesión (sin headers X-User-Id)
-        const res = await fetch("/api/history?limit=100", { method:"GET", credentials:"include" });
+      async function api(url, opts = {}){
+        const res = await fetch(url, { ...opts, credentials: "include" });
         const txt = await res.text();
-        let body = {};
-        try{ body = JSON.parse(txt); }catch{ body = {}; }
+        let body;
+        try{ body = JSON.parse(txt); }catch{ body = txt; }
+        return { ok: res.ok, status: res.status, body };
+      }
 
-        if (!res.ok){
-          if (res.status === 401){
-            showWarn("🔒 Tu sesión expiró. Inicia sesión de nuevo.");
-          } else {
-            showWarn("No se pudo cargar el historial. Verifica que /api/history esté activo.");
-          }
-          if (empty) empty.style.display = "block";
+      async function loadHistory(){
+        hideAlert();
+        cards.innerHTML = "";
+        empty.style.display = "none";
+
+        const r = await api(`/api/history?limit=100`);
+        if (r.status === 401){
+          showWarn("🔒 Inicia sesión para ver tu historial.");
+          empty.style.display = "block";
+          return;
+        }
+        if(!r.ok){
+          showWarn("No se pudo cargar el historial.");
+          empty.style.display = "block";
           return;
         }
 
-        const items = (body && body.items) ? body.items : [];
+        const items = (r.body && r.body.items) ? r.body.items : [];
         if(!items.length){
-          if (empty) empty.style.display = "block";
+          empty.style.display = "block";
           return;
         }
 
         items.forEach(it => cards.appendChild(buildCard(it)));
       }
 
-      async function boot(){
-        setBackLink();
+      setBackLink();
+      loadHistory();
 
-        const me = await fetchMe();
-        const isLogged = !!(me && me.authenticated);
-
-        await refreshBadge(isLogged);
-        await loadHistory(isLogged);
-
-        // (opcional) tracking
-        try{
-          if (typeof gtag === "function"){
-            gtag("event", "view_history", { user_type: isLogged ? "logged" : "guest" });
-          }
-        }catch{}
-      }
-
-      // init
-      if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", boot);
-      } else {
-        boot();
-      }
+      window.addEventListener("storage", () => setBackLink());
     })();
   </script>
 </body>
