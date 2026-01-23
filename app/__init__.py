@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from flask import Flask, jsonify, session, g
+from flask import Flask, jsonify, session, g, request, redirect
 
 from app.extensions import db, migrate
 
@@ -18,7 +18,6 @@ def _fix_database_url(url: str) -> str:
 
     # Caso típico de error: alguien pegó texto tipo "Internal Database URL"
     if url.lower().startswith("internal database url"):
-        # Mejor fallar claro a que crashee más adelante con un parse raro
         raise ValueError(
             "DATABASE_URL inválida: parece contener el texto 'Internal Database URL'. "
             "Debes pegar la URL completa real (postgresql://...)."
@@ -39,14 +38,30 @@ def create_app() -> Flask:
 
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
 
-    # IMPORTANTÍSIMO: .strip() para matar el '\n' fantasma
+    # DB
     raw_db_url = os.getenv("DATABASE_URL", "sqlite:///polyscribe.db")
     raw_db_url = (raw_db_url or "").strip()
     app.config["SQLALCHEMY_DATABASE_URI"] = _fix_database_url(raw_db_url)
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-    app.config["APP_BASE_URL"] = os.getenv("APP_BASE_URL", "https://www.getpolyscribe.com")
+    # Base URL
+    app.config["APP_BASE_URL"] = os.getenv("APP_BASE_URL", "https://www.getpolyscribe.com").strip()
 
+    # ✅ Cookies de sesión robustas (HTTPS + cross-subdomain)
+    # IMPORTANTÍSIMO para que no “pierdas login” entre www y sin-www.
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
+    app.config["SESSION_COOKIE_SECURE"] = (
+        os.getenv("SESSION_COOKIE_SECURE", "1") == "1"
+        if app.config["APP_BASE_URL"].startswith("https://")
+        else False
+    )
+
+    # ✅ Esto es el FIX clave:
+    # permite que la cookie aplique tanto a www.getpolyscribe.com como getpolyscribe.com
+    app.config["SESSION_COOKIE_DOMAIN"] = os.getenv("SESSION_COOKIE_DOMAIN", ".getpolyscribe.com")
+
+    # Auth flags
     app.config["AUTH_REQUIRE_VERIFIED_EMAIL"] = os.getenv("AUTH_REQUIRE_VERIFIED_EMAIL", "1") == "1"
     app.config["DISABLE_DEVLOGIN"] = os.getenv("DISABLE_DEVLOGIN", "1") == "1"
 
@@ -73,7 +88,7 @@ def create_app() -> Flask:
     db.init_app(app)
     migrate.init_app(app, db)
 
-    # Importar modelos (para que Alembic los vea)
+    # Import models (alembic)
     from app import models  # noqa: F401
     from app import models_auth  # noqa: F401
     from app import models_payment  # noqa: F401
@@ -83,53 +98,62 @@ def create_app() -> Flask:
         pass
 
     # ============================================================
-    # ✅ AUTH BRIDGE (SESIÓN -> g.user_id -> templates + /api/auth/me)
+    # ✅ Canonical domain (evita login perdido por www vs no-www)
+    # ============================================================
+    CANONICAL_HOST = os.getenv("CANONICAL_HOST", "www.getpolyscribe.com").strip().lower()
+
+    @app.before_request
+    def _force_canonical_host():
+        # Evita redirect en local/dev
+        if os.getenv("DISABLE_CANONICAL_REDIRECT", "0") == "1":
+            return None
+
+        host = (request.host or "").split(":")[0].lower()
+        if not host:
+            return None
+
+        # Permite health checks internos
+        if request.path.startswith("/healthz"):
+            return None
+
+        # Si ya está en el canónico, ok
+        if host == CANONICAL_HOST:
+            return None
+
+        # Solo redirigimos si estamos en los dominios esperados
+        if host in ("getpolyscribe.com", "www.getpolyscribe.com"):
+            scheme = "https" if app.config["APP_BASE_URL"].startswith("https://") else request.scheme
+            new_url = f"{scheme}://{CANONICAL_HOST}{request.full_path}"
+            # full_path suele terminar en "?" si no hay query
+            if new_url.endswith("?"):
+                new_url = new_url[:-1]
+            return redirect(new_url, code=301)
+
+        return None
+
+    # ============================================================
+    # ✅ AUTH BRIDGE (sesión -> g.user_id -> templates + /api/auth/me)
     # ============================================================
 
     def _get_session_user_id() -> str | None:
-        """
-        Devuelve un ID de usuario estable si existe sesión real.
-        Ajustaremos la prioridad cuando me pegues el route de login.
-        """
-        # 1) la clave más común
         uid = session.get("user_id")
-
-        # 2) variantes típicas
-        if not uid:
-            uid = session.get("uid") or session.get("user")
-
-        # 3) si guardas email como identidad (mientras no tengas id numérico)
-        if not uid:
-            uid = session.get("email") or session.get("user_email")
-
-        # 4) casos donde guardas un dict
-        if not uid:
-            uobj = session.get("user_obj") or session.get("user_data")
-            if isinstance(uobj, dict):
-                uid = uobj.get("id") or uobj.get("user_id") or uobj.get("email")
-
         if not uid:
             return None
-
         uid = str(uid).strip()
-        if not uid:
+        if not uid or uid.lower() == "guest":
             return None
-
-        # ✅ Normaliza: jamás devolvemos "guest"
-        if uid.lower() == "guest":
-            return None
-
         return uid
 
     @app.before_request
     def _load_user_into_g():
-        # g.user_id será la fuente de verdad de "está logueado"
         g.user_id = _get_session_user_id()
 
     @app.context_processor
     def _inject_user_into_templates():
-        # Esto hace que TODOS los templates tengan {{ user_id }}
-        return {"user_id": getattr(g, "user_id", None) or ""}
+        return {
+            "user_id": getattr(g, "user_id", None) or "",
+            "paypal_enabled": bool(app.config.get("PAYPAL_ENABLED", False)),
+        }
 
     @app.get("/api/auth/me")
     def api_auth_me():
