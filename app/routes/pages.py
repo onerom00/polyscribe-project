@@ -19,9 +19,7 @@ bp = Blueprint("pages", __name__)
 def _try_render(template_name: str, **context):
     """
     Intenta renderizar un template si existe; si no, busca un archivo estático.
-
-    Ahora acepta **context para poder pasar variables al template
-    (por ejemplo, paypal_enabled en pricing.html).
+    Acepta **context para pasar variables al template.
     """
     tmpl_folder = (
         current_app.jinja_loader.searchpath
@@ -50,16 +48,11 @@ def _try_render(template_name: str, **context):
 
 @bp.get("/")
 def index():
-    # Página principal: transcriptor
     return _try_render("index.html")
 
 
 @bp.get("/transcribir")
 def transcribir():
-    """
-    Pestaña 'Transcribir' del menú.
-    La hacemos apuntar SIEMPRE a la página principal del transcriptor.
-    """
     return redirect(url_for("pages.index"))
 
 
@@ -70,7 +63,6 @@ def history():
 
 @bp.get("/pricing")
 def pricing():
-    # Le pasamos al template si PayPal está habilitado según la config
     paypal_enabled = current_app.config.get("PAYPAL_ENABLED", False)
     return _try_render("pricing.html", paypal_enabled=paypal_enabled)
 
@@ -86,9 +78,6 @@ def ayuda():
 
 @bp.get("/dev-login")
 def dev_login():
-    """
-    Pantalla de login/registro de prueba para guardar ps_user_id en localStorage.
-    """
     is_signup = request.args.get("signup") == "1"
     return render_template("dev_login.html", is_signup=is_signup)
 
