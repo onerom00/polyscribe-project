@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from flask import Flask, session, g, request, redirect
+from flask import Flask, jsonify, session, g, request, redirect
 
 from app.extensions import db, migrate
 
@@ -143,10 +143,8 @@ def create_app() -> Flask:
 
     @app.context_processor
     def _inject_user_into_templates():
-        uid = getattr(g, "user_id", None)
         return {
-            "user_id": uid or "",
-            "is_authenticated": bool(uid),  # ✅ FIX: bandera para JS/UI
+            "user_id": getattr(g, "user_id", None) or "",
             "paypal_enabled": bool(app.config.get("PAYPAL_ENABLED", False)),
         }
 
@@ -159,7 +157,7 @@ def create_app() -> Flask:
     from app.routes.auth import bp as auth_bp
     app.register_blueprint(auth_bp)
 
-    # ✅ /api/auth/me (sesión como fuente de verdad)
+    # ✅ /api/auth/me
     from app.routes.auth_api import bp as auth_api_bp
     app.register_blueprint(auth_api_bp)
 
@@ -181,6 +179,10 @@ def create_app() -> Flask:
 
     from app.routes.pricing_page import bp as pricing_page_bp
     app.register_blueprint(pricing_page_bp)
+
+    # ✅ NUEVO: /account (para el botón “Mi cuenta”)
+    from app.routes.account_page import bp as account_page_bp
+    app.register_blueprint(account_page_bp)
 
     @app.get("/healthz")
     def healthz():
