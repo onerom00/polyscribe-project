@@ -53,6 +53,13 @@ def _send_email(to_email: str, subject: str, html_body: str) -> None:
 
 
 def _login_user(user: User) -> None:
+    # ✅ blindaje: sesión persistente (evita “me logueé y luego soy guest”)
+    session.permanent = True
+
+    # ✅ limpia posibles valores viejos
+    session.pop("uid", None)
+    session.pop("user", None)
+
     session["user_id"] = str(user.id)
 
 
