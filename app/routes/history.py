@@ -2,32 +2,22 @@
 from __future__ import annotations
 
 from flask import Blueprint, jsonify, request, session
-
 from app import db
 from app.models import AudioJob
 
 bp = Blueprint("history", __name__, url_prefix="/api/history")
 
 
-def _require_user_id() -> str | None:
-    """
-    Historial debe ser 100% por sesión real.
-    Si no hay sesión => None.
-    """
-    uid = session.get("user_id")
-    if not uid:
-        return None
-    s = str(uid).strip()
-    if not s:
-        return None
-    return s
+def _require_session_user_id() -> str:
+    raw = session.get("user_id") or session.get("uid")
+    uid = str(raw).strip() if raw else ""
+    return uid
 
 
 @bp.get("")
 def history_list():
-    user_id = _require_user_id()
+    user_id = _require_session_user_id()
     if not user_id:
-        # ✅ frontend debe mostrar: “Inicia sesión...”
         return jsonify({"ok": False, "error": "auth_required"}), 401
 
     limit = int(request.args.get("limit", "100") or 100)
@@ -39,6 +29,5 @@ def history_list():
         .order_by(AudioJob.created_at.desc())
         .limit(limit)
     )
-
     items = [j.to_dict() for j in q.all()]
-    return jsonify({"ok": True, "items": items, "count": len(items)})
+    return jsonify({"ok": True, "items": items, "count": len(items)}), 200
