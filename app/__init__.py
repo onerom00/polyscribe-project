@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from flask import Flask
+from flask import Flask, jsonify, session, g
 
 from app.extensions import db, migrate
 
@@ -81,6 +81,64 @@ def create_app() -> Flask:
         from app import models_user  # noqa: F401
     except Exception:
         pass
+
+    # ============================================================
+    # ✅ AUTH BRIDGE (SESIÓN -> g.user_id -> templates + /api/auth/me)
+    # ============================================================
+
+    def _get_session_user_id() -> str | None:
+        """
+        Devuelve un ID de usuario estable si existe sesión real.
+        Ajustaremos la prioridad cuando me pegues el route de login.
+        """
+        # 1) la clave más común
+        uid = session.get("user_id")
+
+        # 2) variantes típicas
+        if not uid:
+            uid = session.get("uid") or session.get("user")
+
+        # 3) si guardas email como identidad (mientras no tengas id numérico)
+        if not uid:
+            uid = session.get("email") or session.get("user_email")
+
+        # 4) casos donde guardas un dict
+        if not uid:
+            uobj = session.get("user_obj") or session.get("user_data")
+            if isinstance(uobj, dict):
+                uid = uobj.get("id") or uobj.get("user_id") or uobj.get("email")
+
+        if not uid:
+            return None
+
+        uid = str(uid).strip()
+        if not uid:
+            return None
+
+        # ✅ Normaliza: jamás devolvemos "guest"
+        if uid.lower() == "guest":
+            return None
+
+        return uid
+
+    @app.before_request
+    def _load_user_into_g():
+        # g.user_id será la fuente de verdad de "está logueado"
+        g.user_id = _get_session_user_id()
+
+    @app.context_processor
+    def _inject_user_into_templates():
+        # Esto hace que TODOS los templates tengan {{ user_id }}
+        return {"user_id": getattr(g, "user_id", None) or ""}
+
+    @app.get("/api/auth/me")
+    def api_auth_me():
+        uid = getattr(g, "user_id", None)
+        if not uid:
+            return jsonify({"authenticated": False}), 200
+        return jsonify({"authenticated": True, "user_id": uid}), 200
+
+    # ============================================================
 
     # Blueprints
     from app.routes.pages import bp as pages_bp
