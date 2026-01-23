@@ -56,16 +56,37 @@ def _login_user(user: User) -> None:
     # ✅ blindaje: sesión persistente (evita “me logueé y luego soy guest”)
     session.permanent = True
 
-    # ✅ limpia posibles valores viejos
+    # ✅ limpia posibles valores viejos de sesiones anteriores
     session.pop("uid", None)
     session.pop("user", None)
 
+    # ✅ set oficial
     session["user_id"] = str(user.id)
+
+    # ✅ marca de tiempo útil para depuración
+    session["login_at"] = dt.datetime.utcnow().isoformat()
 
 
 def _logout_user() -> None:
-    session.pop("user_id", None)
-    session.pop("uid", None)
+    """
+    Logout fuerte:
+    - limpia todo session dict (incluye flags viejos)
+    - invalida el session cookie (nuevo SID)
+    """
+    try:
+        session.clear()
+    except Exception:
+        # fallback, por si acaso
+        session.pop("user_id", None)
+        session.pop("uid", None)
+        session.pop("user", None)
+        session.pop("login_at", None)
+
+    # ✅ fuerza nueva sesión (evita que “se pegue” una sesión anterior)
+    try:
+        session.modified = True
+    except Exception:
+        pass
 
 
 @bp.get("/register")
@@ -194,8 +215,9 @@ def login_post():
 
 @bp.get("/logout")
 def logout():
+    # ✅ salir y volver a HOME (no a login)
     _logout_user()
-    return redirect(url_for("auth.login_page"))
+    return redirect("/")
 
 
 @bp.get("/forgot")
