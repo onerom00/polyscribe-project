@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 
-from flask import Blueprint, current_app, jsonify, request, session
+from flask import Blueprint, current_app, jsonify, session
 
 from app import db
 from app.models import AudioJob
@@ -15,11 +15,10 @@ MB = 1024 * 1024
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "100") or 100)
 
 
-def _require_session_user_id() -> str:
+def _session_user_id() -> str:
     """
     ✅ Fuente de verdad: sesión.
-    En producción NO aceptamos X-User-Id, ni ?user_id, ni DEV_USER_ID,
-    porque rompe unicidad entre cuentas.
+    NO aceptamos X-User-Id, ni ?user_id, ni DEV_USER_ID (rompe unicidad).
     """
     raw = session.get("user_id") or session.get("uid")
     uid = str(raw).strip() if raw else ""
@@ -44,13 +43,28 @@ def _user_id_variants(user_id: str) -> list[str]:
     return list(variants)
 
 
+def _guest_balance_payload():
+    """
+    ✅ Guest limpio:
+    - usado 0
+    - allowance 0 (para que el UI muestre “—” o 0 sin inventar)
+    - sin muñequito (eso lo controla el front al ver authenticated=false)
+    """
+    return {
+        "ok": True,
+        "authenticated": False,
+        "used_seconds": 0,
+        "allowance_seconds": 0,
+        "file_limit_bytes": int(MAX_UPLOAD_MB * MB),
+    }
+
+
 @bp.get("/whoami")
 def whoami():
     """
-    Devuelve el user_id REAL de sesión (si existe).
-    Útil para depurar y para que el front sepa si hay login.
+    Devuelve el estado real de sesión.
     """
-    uid = _require_session_user_id()
+    uid = _session_user_id()
     if not uid:
         return jsonify({"ok": True, "authenticated": False, "user_id": None}), 200
     return jsonify({"ok": True, "authenticated": True, "user_id": uid}), 200
@@ -59,16 +73,17 @@ def whoami():
 @bp.get("/balance")
 def usage_balance():
     """
-    ✅ Balance SOLO para usuarios autenticados (sesión).
-    Si no hay sesión => 401.
+    ✅ Balance estable:
+    - Si NO hay sesión => devolvemos guest limpio (NO 401)
+    - Si hay sesión => devolvemos balance real
     """
-    user_id = _require_session_user_id()
+    user_id = _session_user_id()
     if not user_id:
-        return jsonify({"ok": False, "error": "auth_required"}), 401
+        return jsonify(_guest_balance_payload()), 200
 
     free_min = int(current_app.config.get("FREE_TIER_MINUTES", 10))
 
-    # Solo variantes derivadas del user_id de sesión (compatibilidad)
+    # Variantes derivadas del user_id de sesión (compatibilidad)
     uid_variants = _user_id_variants(user_id)
 
     # ---- Paid minutes ----
@@ -86,7 +101,6 @@ def usage_balance():
     # ---- Used seconds (jobs) ----
     used_seconds = 0
     try:
-        # Si en algún momento guardaste jobs con id- prefix, aquí también cubrimos variantes.
         qj = db.session.query(AudioJob).filter(AudioJob.user_id.in_(uid_variants))
         used_seconds = sum(int(j.duration_seconds or 0) for j in qj.all())
     except Exception as e:
@@ -109,6 +123,8 @@ def usage_balance():
     return jsonify(
         {
             "ok": True,
+            "authenticated": True,
+            "user_id": user_id,
             "used_seconds": int(used_seconds),
             "allowance_seconds": int(allowance_seconds),
             "file_limit_bytes": int(MAX_UPLOAD_MB * MB),
