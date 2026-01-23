@@ -2,88 +2,92 @@
 (function () {
   const $ = (s) => document.querySelector(s);
 
-  // ---------- helpers ----------
-  function safeGetLS(k) {
-    try { return (localStorage.getItem(k) || "").trim(); } catch { return ""; }
-  }
-  function safeSetLS(k, v) {
-    try { localStorage.setItem(k, v); } catch {}
-  }
-
-  // ---------- resolve user ----------
-  function resolveUserId() {
-    // 1) server-rendered
-    let id = ((document.body && document.body.dataset && document.body.dataset.userId) ? document.body.dataset.userId : "").trim();
-
-    // 2) querystring
-    const qs = new URLSearchParams(window.location.search);
-    const qUser = (qs.get("user_id") || "").trim();
-    if (qUser) id = qUser;
-
-    // 3) localStorage
-    if (!id) id = safeGetLS("user_id");
-
-    // Normaliza: guest NO es login real
-    if ((id || "").toLowerCase() === "guest") id = "";
-
-    // Persist
-    if (id) safeSetLS("user_id", id);
-
-    return id; // "" => anonymous
+  async function fetchMe() {
+    try {
+      const res = await fetch("/api/auth/me", { method: "GET", credentials: "include" });
+      const txt = await res.text();
+      let data = {};
+      try { data = JSON.parse(txt); } catch { data = {}; }
+      if (!res.ok) return { authenticated: false };
+      return data || { authenticated: false };
+    } catch {
+      return { authenticated: false };
+    }
   }
 
-  let USER_ID = resolveUserId();
-  const IS_LOGGED = !!USER_ID;
+  function setNavAuthUI(authenticated) {
+    // Soportamos IDs usados en tus páginas
+    const loginLink  = $("#nav-login-link");
+    const signupLink = $("#nav-signup-link");
+    const logoutLink = $("#nav-logout-link");
 
-  // ---------- active nav link ----------
-  (function setActiveNav() {
-    const path = window.location.pathname || "/";
-    const links = document.querySelectorAll(".ps-nav-links a[data-path]");
-    links.forEach(a => {
-      const p = a.getAttribute("data-path");
-      if (!p) return;
-      if (p === path) a.classList.add("active");
-      else a.classList.remove("active");
-    });
-  })();
+    // algunas pantallas pueden usar estos ids alternos
+    const loginAlt  = $("#btn-login") || $("#login-link");
+    const signupAlt = $("#btn-register") || $("#register-link");
 
-  // ---------- toggle auth buttons ----------
-  // Opcionales (si existen, los usa)
-  const loginLink = $("#nav-login-link");
-  const signupLink = $("#nav-signup-link");
-  const accountLink = $("#nav-account-link");
-  const logoutLink = $("#nav-logout-link");
+    const show = (el) => { if (el) el.style.display = "inline-flex"; };
+    const hide = (el) => { if (el) el.style.display = "none"; };
 
-  // Si no existen, no rompe.
-  function show(el, yes) {
-    if (!el) return;
-    el.style.display = yes ? "inline-flex" : "none";
+    if (authenticated) {
+      hide(loginLink); hide(signupLink);
+      hide(loginAlt);  hide(signupAlt);
+      show(logoutLink);
+    } else {
+      show(loginLink); show(signupLink);
+      show(loginAlt);  show(signupAlt);
+      hide(logoutLink);
+    }
   }
 
-  // Reglas:
-  // - Anonymous: Entrar + Registro visibles
-  // - Logged: Mi cuenta + Salir visibles
-  show(loginLink, !IS_LOGGED);
-  show(signupLink, !IS_LOGGED);
-  show(accountLink, IS_LOGGED);
-  show(logoutLink, IS_LOGGED);
+  // Opcional: actualizar badges si existen (sin romper nada)
+  function setUsageText(text) {
+    const t1 = document.getElementById("usage-text");
+    const t2 = document.getElementById("usage-text-nav");
+    if (t1) t1.textContent = text;
+    if (t2) t2.textContent = text;
+    const b1 = document.getElementById("usage-badge");
+    const b2 = document.getElementById("usage-badge-nav");
+    if (b1) b1.style.display = "inline-flex";
+    if (b2) b2.style.display = "inline-flex";
+  }
 
-  // ---------- optional: expose user in window ----------
-  window.PS_USER_ID = USER_ID || "";
-  window.PS_IS_LOGGED = IS_LOGGED;
+  async function boot() {
+    const me = await fetchMe();
+    const isLogged = !!(me && me.authenticated);
 
-  // ---------- storage sync (otra pestaña) ----------
-  window.addEventListener("storage", (ev) => {
-    if (!ev || ev.key !== "user_id") return;
-    const newId = resolveUserId();
-    const newLogged = !!newId;
+    // ✅ UI auth consistente
+    setNavAuthUI(isLogged);
 
-    show(loginLink, !newLogged);
-    show(signupLink, !newLogged);
-    show(accountLink, newLogged);
-    show(logoutLink, newLogged);
+    // ✅ Si el servidor sabe tu user_id, lo ponemos en body dataset (para scripts existentes)
+    try {
+      if (isLogged && me.user_id) {
+        document.body.dataset.userId = String(me.user_id);
+      }
+      document.body.dataset.auth = isLogged ? "1" : "0";
+    } catch {}
 
-    window.PS_USER_ID = newId || "";
-    window.PS_IS_LOGGED = newLogged;
-  });
+    // ✅ (Opcional) Badge de uso solo si logueado
+    // OJO: aquí no usamos localStorage ni querystring.
+    if (isLogged) {
+      try {
+        const res = await fetch("/api/usage/balance", { method: "GET", credentials: "include" });
+        const txt = await res.text();
+        let data = {};
+        try { data = JSON.parse(txt); } catch { data = {}; }
+        if (res.ok) {
+          const usedMin = Number(data.used_seconds || 0) / 60;
+          const allowMin = Number(data.allowance_seconds || 0) / 60;
+          const remain = Math.max(0, allowMin - usedMin);
+          setUsageText(`${usedMin.toFixed(1)}/${allowMin.toFixed(0)} min · libre ${remain.toFixed(1)} min`);
+        }
+      } catch {}
+    }
+  }
+
+  // ✅ correr después del DOM
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
+    boot();
+  }
 })();
