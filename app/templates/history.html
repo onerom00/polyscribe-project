@@ -40,7 +40,8 @@
     .right{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 
     .badge-usage{
-      display:inline-flex;align-items:center;gap:8px;
+      display:none;
+      align-items:center;gap:8px;
       background:#e8f3ff;color:#0b1424;border:1px solid #b9d9ff;border-radius:999px;
       padding:5px 10px;font-size:13px;font-weight:800
     }
@@ -68,7 +69,7 @@
   </style>
 </head>
 
-<body data-user-id="{{ user_id|default('') }}">
+<body>
   <!-- NAV -->
   <header class="ps-nav">
     <div class="inner">
@@ -76,7 +77,7 @@
 
       <nav class="links ps-nav-links">
         <a href="/" data-path="/">Transcribir</a>
-        <a href="/history" data-path="/history">Historial</a>
+        <a href="/history" data-path="/history" class="active">Historial</a>
         <a href="/pricing" data-path="/pricing">Precios</a>
         <a href="/ayuda" data-path="/ayuda">Ayuda</a>
       </nav>
@@ -102,13 +103,14 @@
 
   <div class="container">
     <h1>Historial</h1>
-    <div class="muted">Tus transcripciones recientes (según tu usuario actual).</div>
+    <div class="muted">Tus transcripciones recientes (de tu cuenta).</div>
 
     <div class="alert" id="alert-box"></div>
     <div class="cards" id="cards"></div>
     <p class="muted" id="empty" style="display:none;margin-top:14px;">No hay registros.</p>
   </div>
 
+  <!-- Este script solo muestra/oculta botones del nav y puede setear dataset -->
   <script src="{{ url_for('static', filename='js/nav_auth.js') }}"></script>
 
   <script>
@@ -119,6 +121,8 @@
       const empty = $("#empty");
       const alertBox = $("#alert-box");
       const btnBack = $("#btn-back");
+
+      const usageBadge = $("#usage-badge-nav");
       const usageTextNav = $("#usage-text-nav");
 
       function showWarn(msg){
@@ -138,19 +142,6 @@
         alertBox.style.display = "none";
         alertBox.textContent = "";
         alertBox.classList.remove("ok");
-      }
-
-      // USER_ID desde nav_auth (si existe)
-      let USER_ID = (window.PS_USER_ID || "").trim();
-
-      async function api(url, opts = {}){
-        const h = opts.headers ? {...opts.headers} : {};
-        if (USER_ID && !h["X-User-Id"]) h["X-User-Id"] = USER_ID;
-        const res = await fetch(url, {...opts, headers: h});
-        const txt = await res.text();
-        let body;
-        try{ body = JSON.parse(txt); }catch{ body = txt; }
-        return { ok: res.ok, status: res.status, body };
       }
 
       function esc(s){
@@ -226,47 +217,79 @@
         btnBack.href = `/`;
       }
 
-      async function refreshBadge(){
+      async function fetchMe(){
         try{
-          // si no hay usuario logueado => mostramos placeholder limpio
-          if (!USER_ID){
-            if (usageTextNav) usageTextNav.textContent = "—/— min · libre —";
+          const res = await fetch("/api/auth/me", { method:"GET", credentials:"include" });
+          const txt = await res.text();
+          let data = {};
+          try{ data = JSON.parse(txt); }catch{ data = {}; }
+          if (!res.ok) return { authenticated:false };
+          return data || { authenticated:false };
+        }catch{
+          return { authenticated:false };
+        }
+      }
+
+      async function refreshBadge(isLogged){
+        try{
+          if (!usageBadge || !usageTextNav) return;
+
+          if (!isLogged){
+            usageBadge.style.display = "none";
+            usageTextNav.textContent = "—/— min · libre —";
             return;
           }
-          const r = await api(`/api/usage/balance`);
-          if(!r.ok) return;
 
-          const j = r.body || {};
+          const res = await fetch("/api/usage/balance", { method:"GET", credentials:"include" });
+          const txt = await res.text();
+          let j = {};
+          try{ j = JSON.parse(txt); }catch{ j = {}; }
+
+          if (!res.ok){
+            // si por alguna razón no deja leer balance, ocultamos badge sin romper UI
+            usageBadge.style.display = "none";
+            return;
+          }
+
           const usedMin  = (Number(j.used_seconds||0) / 60);
           const allowMin = (Number(j.allowance_seconds||0) / 60);
           const remain   = Math.max(0, allowMin - usedMin);
 
-          if (usageTextNav){
-            usageTextNav.textContent = `${usedMin.toFixed(1)}/${allowMin.toFixed(0)} min · libre ${remain.toFixed(1)} min`;
-          }
-        }catch{}
+          usageTextNav.textContent = `${usedMin.toFixed(1)}/${allowMin.toFixed(0)} min · libre ${remain.toFixed(1)} min`;
+          usageBadge.style.display = "inline-flex";
+        }catch{
+          if (usageBadge) usageBadge.style.display = "none";
+        }
       }
 
-      async function loadHistory(){
+      async function loadHistory(isLogged){
         hideAlert();
         if (cards) cards.innerHTML = "";
         if (empty) empty.style.display = "none";
 
-        // si no hay login real, no mostramos historial (evitamos mezclar)
-        if (!USER_ID){
+        if (!isLogged){
           showWarn("🔒 Inicia sesión para ver tu historial.");
           if (empty) empty.style.display = "block";
           return;
         }
 
-        const r = await api(`/api/history?limit=100`);
-        if(!r.ok){
-          showWarn("No se pudo cargar el historial. Verifica que /api/history esté activo.");
+        // ✅ HISTORIAL por sesión (sin headers X-User-Id)
+        const res = await fetch("/api/history?limit=100", { method:"GET", credentials:"include" });
+        const txt = await res.text();
+        let body = {};
+        try{ body = JSON.parse(txt); }catch{ body = {}; }
+
+        if (!res.ok){
+          if (res.status === 401){
+            showWarn("🔒 Tu sesión expiró. Inicia sesión de nuevo.");
+          } else {
+            showWarn("No se pudo cargar el historial. Verifica que /api/history esté activo.");
+          }
           if (empty) empty.style.display = "block";
           return;
         }
 
-        const items = (r.body && r.body.items) ? r.body.items : [];
+        const items = (body && body.items) ? body.items : [];
         if(!items.length){
           if (empty) empty.style.display = "block";
           return;
@@ -275,20 +298,29 @@
         items.forEach(it => cards.appendChild(buildCard(it)));
       }
 
-      // init
-      setBackLink();
-      refreshBadge();
-      loadHistory();
-
-      // si se loguea en otra pestaña
-      window.addEventListener("storage", (ev) => {
-        if (!ev || ev.key !== "user_id") return;
-        USER_ID = (window.PS_USER_ID || (localStorage.getItem("user_id")||"")).trim();
-        if (USER_ID.toLowerCase() === "guest") USER_ID = "";
-        refreshBadge();
-        loadHistory();
+      async function boot(){
         setBackLink();
-      });
+
+        const me = await fetchMe();
+        const isLogged = !!(me && me.authenticated);
+
+        await refreshBadge(isLogged);
+        await loadHistory(isLogged);
+
+        // (opcional) tracking
+        try{
+          if (typeof gtag === "function"){
+            gtag("event", "view_history", { user_type: isLogged ? "logged" : "guest" });
+          }
+        }catch{}
+      }
+
+      // init
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", boot);
+      } else {
+        boot();
+      }
     })();
   </script>
 </body>
