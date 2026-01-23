@@ -57,8 +57,7 @@ def create_app() -> Flask:
         else False
     )
 
-    # ✅ Esto es el FIX clave:
-    # permite que la cookie aplique tanto a www.getpolyscribe.com como getpolyscribe.com
+    # ✅ permite que la cookie aplique tanto a www.getpolyscribe.com como getpolyscribe.com
     app.config["SESSION_COOKIE_DOMAIN"] = os.getenv("SESSION_COOKIE_DOMAIN", ".getpolyscribe.com")
 
     # Auth flags
@@ -132,11 +131,11 @@ def create_app() -> Flask:
         return None
 
     # ============================================================
-    # ✅ AUTH BRIDGE (sesión -> g.user_id -> templates + /api/auth/me)
+    # ✅ AUTH BRIDGE (sesión -> g.user_id -> templates)
     # ============================================================
 
     def _get_session_user_id() -> str | None:
-        uid = session.get("user_id")
+        uid = session.get("user_id") or session.get("uid")
         if not uid:
             return None
         uid = str(uid).strip()
@@ -155,13 +154,6 @@ def create_app() -> Flask:
             "paypal_enabled": bool(app.config.get("PAYPAL_ENABLED", False)),
         }
 
-    @app.get("/api/auth/me")
-    def api_auth_me():
-        uid = getattr(g, "user_id", None)
-        if not uid:
-            return jsonify({"authenticated": False}), 200
-        return jsonify({"authenticated": True, "user_id": uid}), 200
-
     # ============================================================
 
     # Blueprints
@@ -171,6 +163,10 @@ def create_app() -> Flask:
     from app.routes.auth import bp as auth_bp
     app.register_blueprint(auth_bp)
 
+    # ✅ NUEVO: /api/auth/me (sesión como fuente de verdad)
+    from app.routes.auth_api import bp as auth_api_bp
+    app.register_blueprint(auth_api_bp)
+
     from app.routes.jobs import bp as jobs_bp
     app.register_blueprint(jobs_bp)
 
@@ -179,6 +175,9 @@ def create_app() -> Flask:
 
     from app.routes.usage import bp as usage_bp
     app.register_blueprint(usage_bp)
+
+    from app.routes.history import bp as history_bp
+    app.register_blueprint(history_bp)
 
     from app.routes.paypal import bp as paypal_bp, api_bp as paypal_api_bp
     app.register_blueprint(paypal_bp)
