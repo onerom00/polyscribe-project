@@ -35,7 +35,7 @@
       color: var(--text);
     }
 
-    /* NAV centrada */
+    /* NAV (izq links + der status/auth) */
     .nav{
       padding: 12px 16px;
       font-size: 14px;
@@ -48,11 +48,19 @@
       width:100%;
       max-width:1100px;
       display:flex;
-      justify-content:center;
       align-items:center;
       gap:14px;
       flex-wrap:wrap;
       font-weight:700;
+    }
+    .nav .nav-left{
+      display:flex;
+      align-items:center;
+      gap:14px;
+      flex-wrap:wrap;
+      justify-content:center;
+      flex: 1 1 auto;
+      min-width: 260px;
     }
     .nav a{
       text-decoration:none;
@@ -66,34 +74,48 @@
       text-decoration:none;
     }
 
-    /* ✅ Auth buttons in nav */
-    .nav-auth{
-      display:inline-flex;
+    .nav .nav-right{
+      display:flex;
+      align-items:center;
       gap:10px;
-      align-items:center;
-      margin-left: 10px;
+      margin-left:auto;
+      flex: 0 0 auto;
+      justify-content:flex-end;
     }
-    .btnx{
-      background:#0b62e0;
-      border:1px solid #0a59c9;
-      color:#fff;
+
+    .badge-usage{
+      display:none; /* se prende por JS cuando hay datos */
+      align-items:center;
+      gap:8px;
+      background:#e8f3ff;
+      color:#0b1424;
+      border:1px solid #b9d9ff;
+      border-radius:999px;
+      padding:5px 10px;
+      font-size:13px;
       font-weight:800;
-      padding:8px 12px;
-      border-radius:10px;
-      text-decoration:none;
-      display:inline-flex;
-      align-items:center;
-      line-height:1;
+      white-space:nowrap;
     }
-    .btnx.secondary{
-      background:#22c55e;
-      border-color:#16a34a;
-      color:#0b111d;
-    }
-    .btnx.ghost{
+
+    .a-btn{
       background:#f2f6ff;
       border:1px solid #cddaf5;
       color:#0b1424;
+      padding:6px 10px;
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:800;
+      font-size:.95rem;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      white-space:nowrap;
+    }
+    .a-btn.primary{
+      background:#22c55e;
+      border-color:#16a34a;
+      color:#0b111d;
     }
 
     .page{
@@ -137,7 +159,7 @@
     }
     #pay-alert{display:none}
 
-    /* ✅ Panel de uso (Opción B) */
+    /* ✅ Panel de uso */
     .usage-panel{
       display:none;
       background:#ffffff;
@@ -182,7 +204,7 @@
       padding:6px 10px;
       border-radius:10px;
       cursor:pointer;
-      font-weight:700;
+      font-weight:800;
       font-size:.95rem;
     }
 
@@ -199,6 +221,9 @@
     }
     @media (max-width: 640px){
       .plans-grid{grid-template-columns: minmax(0, 1fr);}
+      .nav .nav-inner{justify-content:center}
+      .nav .nav-right{width:100%; justify-content:center}
+      .nav .nav-left{width:100%}
     }
 
     .plan{
@@ -211,7 +236,29 @@
       justify-content:space-between;
       border: 1px solid rgba(0,0,0,0.03);
       min-height: 320px;
+      position: relative;
     }
+
+    /* overlay de bloqueo SOLO visual */
+    .plan .lock-overlay{
+      display:none;
+      position:absolute;
+      inset:0;
+      border-radius: var(--radius);
+      background: rgba(255,255,255,.65);
+      backdrop-filter: blur(1px);
+      border: 1px dashed rgba(138,28,28,.22);
+      align-items:center;
+      justify-content:center;
+      text-align:center;
+      padding:14px;
+      color:#8a1c1c;
+      font-weight:900;
+      font-size:13px;
+    }
+    .plan.locked .lock-overlay{display:flex;}
+    .plan.locked .plan-footer{opacity:.35; filter:grayscale(.25);}
+
     .plan-header{margin-bottom: 12px;}
     .plan-name{
       font-size: 16px;
@@ -296,41 +343,58 @@
       color: #555;
     }
 
-    /* ✅ Lock paywall for guest */
-    .locked{
-      opacity:.55;
-      filter:grayscale(0.25);
-      pointer-events:none;
-    }
+    /* CTA login */
     .login-cta{
       display:flex;
       gap:10px;
       flex-wrap:wrap;
       margin-top:8px;
     }
+    .btnx{
+      background:#0b62e0;
+      border:1px solid #0a59c9;
+      color:#fff;
+      font-weight:900;
+      padding:8px 12px;
+      border-radius:10px;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+    }
+    .btnx.secondary{
+      background:#22c55e;
+      border-color:#16a34a;
+      color:#0b111d;
+    }
   </style>
 </head>
 
-<body data-user-id="{{ user_id|default('') }}">
+<body
+  data-user-id="{{ user_id|default('') }}"
+  data-auth="{{ '1' if (user_id|default('')|trim) else '0' }}"
+>
   <div class="nav">
     <div class="nav-inner">
-      <a href="/">PolyScribe</a>
-      <span class="sep">·</span>
-      <a href="/">Transcribir</a>
-      <span class="sep">·</span>
-      <a href="/history">Historial</a>
-      <span class="sep">·</span>
-      <span class="active">Precios</span>
-      <span class="sep">·</span>
-      <a href="/ayuda">Ayuda</a>
+      <div class="nav-left">
+        <a href="/">PolyScribe</a>
+        <span class="sep">·</span>
+        <a href="/">Transcribir</a>
+        <span class="sep">·</span>
+        <a href="/history">Historial</a>
+        <span class="sep">·</span>
+        <span class="active">Precios</span>
+        <span class="sep">·</span>
+        <a href="/ayuda">Ayuda</a>
+      </div>
 
-      <!-- ✅ Credibilidad: botones auth SIEMPRE visibles (según login real) -->
-      <span class="nav-auth">
-        <a href="/auth/login" class="btnx ghost" id="nav-login-link">Entrar</a>
-        <a href="/auth/register" class="btnx secondary" id="nav-signup-link">Registro</a>
-        <a href="/account" class="btnx ghost" id="nav-account-link" style="display:none">Mi cuenta</a>
-        <a href="/auth/logout" class="btnx ghost" id="nav-logout-link" style="display:none">Salir</a>
-      </span>
+      <div class="nav-right">
+        <span class="badge-usage" id="usage-badge-nav">
+          <span id="usage-text-nav">—/— min · libre —</span>
+        </span>
+        <a href="/auth/login" class="a-btn" id="nav-login-link">Entrar</a>
+        <a href="/auth/register" class="a-btn primary" id="nav-signup-link">Registro</a>
+        <a href="/auth/logout" class="a-btn" id="nav-logout-link" style="display:none">Salir</a>
+      </div>
     </div>
   </div>
 
@@ -350,7 +414,7 @@
     </div>
     {% endif %}
 
-    <!-- ✅ Panel de uso (Opción B) -->
+    <!-- ✅ Panel de uso -->
     <div class="usage-panel" id="usage-panel">
       <div class="top">
         <div class="title">📊 Tu uso actual</div>
@@ -369,7 +433,7 @@
       <strong>🔒 Para comprar un plan debes iniciar sesión.</strong><br>
       Esto evita que se pierdan créditos si pagas sin estar logueado.
       <div class="login-cta">
-        <a class="btnx ghost" href="/auth/login">Entrar</a>
+        <a class="btnx" href="/auth/login">Entrar</a>
         <a class="btnx secondary" href="/auth/register">Registro</a>
       </div>
     </div>
@@ -378,7 +442,8 @@
 
     <div class="plans-grid">
       <!-- Free -->
-      <div class="plan">
+      <div class="plan" id="plan-free">
+        <div class="lock-overlay" aria-hidden="true"></div>
         <div>
           <div class="plan-header">
             <div class="plan-name">Free</div>
@@ -399,6 +464,9 @@
 
       <!-- Starter -->
       <div class="plan" id="plan-60">
+        <div class="lock-overlay">
+          Inicia sesión para activar PayPal y comprar este plan.
+        </div>
         <div>
           <div class="plan-header">
             <span class="plan-tag">Recomendado</span>
@@ -422,6 +490,9 @@
 
       <!-- Pro -->
       <div class="plan" id="plan-300">
+        <div class="lock-overlay">
+          Inicia sesión para activar PayPal y comprar este plan.
+        </div>
         <div>
           <div class="plan-header">
             <div class="plan-name">Pro</div>
@@ -444,6 +515,9 @@
 
       <!-- Business -->
       <div class="plan" id="plan-1200">
+        <div class="lock-overlay">
+          Inicia sesión para activar PayPal y comprar este plan.
+        </div>
         <div>
           <div class="plan-header">
             <div class="plan-name">Business</div>
@@ -504,53 +578,51 @@
     </p>
   </div>
 
-  <!-- ✅ IMPORTANTE: nav_auth primero para normalizar "guest" y botones -->
-  <script src="{{ url_for('static', filename='js/nav_auth.js') }}"></script>
-
   <script>
     (function(){
-      // ✅ tracking helper
+      // ============================
+      // Tracking helper
+      // ============================
       function track(eventName, params){
         try{ if (typeof gtag === "function") gtag("event", eventName, params || {}); }catch{}
       }
 
       // ============================
-      // USER ID (Opción B)
-      // data-user-id -> ?user_id -> localStorage
-      // Normaliza: "guest" NO es login real
+      // Identidad (SEPARADA):
+      // - AUTH_USER_ID: SOLO si viene del servidor (sesión real)
+      // - DEVICE_ID: para invitado (no se usa para compras)
+      // Evita el bug de "estoy logueado pero sale guest".
       // ============================
-      function resolveUserId(){
-        let id = (document.body.dataset.userId || "").trim();
-
-        const qs = new URLSearchParams(window.location.search);
-        const qUser = (qs.get("user_id") || "").trim();
-        if (qUser) id = qUser;
-
-        if (!id){
-          try{ id = (localStorage.getItem("user_id") || "").trim(); }catch{ id = ""; }
-        }
-
-        // ✅ "guest" => anonymous
-        if ((id || "").toLowerCase() === "guest") id = "";
-
-        if (id){
-          try{ localStorage.setItem("user_id", id); }catch{}
-        }
-        return id;
+      function getAuthUserId(){
+        const id = (document.body.dataset.userId || "").trim();
+        return id; // si está logueado, el backend debe inyectar esto
       }
 
-      let USER_ID = resolveUserId();
+      function getOrCreateDeviceId(){
+        const KEY = "ps_device_id";
+        try{
+          let v = (localStorage.getItem(KEY) || "").trim();
+          if (v) return v;
+          // uuid simple
+          v = "dev_" + Math.random().toString(16).slice(2) + Date.now().toString(16);
+          localStorage.setItem(KEY, v);
+          return v;
+        }catch{
+          return "";
+        }
+      }
 
-      // GA: view pricing
-      track("view_pricing", { user_type: USER_ID ? "logged" : "guest" });
+      const AUTH_USER_ID = getAuthUserId();
+      const IS_LOGGED = !!AUTH_USER_ID;
+      const DEVICE_ID = getOrCreateDeviceId();
 
+      track("view_pricing", { user_type: IS_LOGGED ? "logged" : "guest" });
+
+      // ============================
       // DOM
+      // ============================
       const guestLock = document.getElementById("guest-lock");
-      const payAlert = document.getElementById("pay-alert");
-
-      const payNodes = ["pp-60","pp-300","pp-1200"]
-        .map(id => document.getElementById(id))
-        .filter(Boolean);
+      const payAlert  = document.getElementById("pay-alert");
 
       const usagePanel = document.getElementById("usage-panel");
       const btnRefresh = document.getElementById("btn-refresh-usage");
@@ -559,6 +631,23 @@
       const usageAvail = document.getElementById("usage-avail");
       const usageFile  = document.getElementById("usage-filelimit");
 
+      const badgeNav = document.getElementById("usage-badge-nav");
+      const badgeNavText = document.getElementById("usage-text-nav");
+
+      const navLogin  = document.getElementById("nav-login-link");
+      const navSignup = document.getElementById("nav-signup-link");
+      const navLogout = document.getElementById("nav-logout-link");
+
+      const payNodes = ["pp-60","pp-300","pp-1200"]
+        .map(id => document.getElementById(id))
+        .filter(Boolean);
+
+      const planCards = [
+        document.getElementById("plan-60"),
+        document.getElementById("plan-300"),
+        document.getElementById("plan-1200"),
+      ].filter(Boolean);
+
       function fmtMin(n){ return `${Number(n).toFixed(1)} min`; }
       function fmtMB(bytes){
         const b = Number(bytes || 0);
@@ -566,66 +655,87 @@
         return `${Math.round(mb)} MB`;
       }
 
+      function setAuthButtons(){
+        // Si estás logueado, ocultamos Entrar/Registro y mostramos Salir
+        if (IS_LOGGED){
+          if (navLogin)  navLogin.style.display = "none";
+          if (navSignup) navSignup.style.display = "none";
+          if (navLogout) navLogout.style.display = "inline-flex";
+        }else{
+          if (navLogin)  navLogin.style.display = "inline-flex";
+          if (navSignup) navSignup.style.display = "inline-flex";
+          if (navLogout) navLogout.style.display = "none";
+        }
+      }
+
       function lockGuestUI(){
         if (guestLock) guestLock.style.display = "block";
-        if (usagePanel) usagePanel.style.display = "none";
-
-        payNodes.forEach(n => {
-          const wrap = n.closest(".plan");
-          if (wrap) wrap.classList.add("locked");
-        });
-
         if (payAlert){
           payAlert.style.display = "block";
-          payAlert.textContent = "🔒 Inicia sesión para ver PayPal y comprar un plan.";
+          payAlert.textContent = "🔒 Inicia sesión para activar PayPal y comprar un plan.";
         }
+
+        planCards.forEach(c => c.classList.add("locked"));
+
+        // Panel: lo mostramos igual pero indicando invitado (para que haya “credibilidad” de que existe algo)
+        if (usagePanel) usagePanel.style.display = "block";
+        if (usageUser) usageUser.textContent = "Invitado";
       }
 
       function unlockLoggedUI(){
         if (guestLock) guestLock.style.display = "none";
-
-        payNodes.forEach(n => {
-          const wrap = n.closest(".plan");
-          if (wrap) wrap.classList.remove("locked");
-        });
-
         if (payAlert){
           payAlert.style.display = "none";
           payAlert.textContent = "";
         }
-
+        planCards.forEach(c => c.classList.remove("locked"));
         if (usagePanel) usagePanel.style.display = "block";
-        if (usageUser) usageUser.textContent = USER_ID;
+        if (usageUser) usageUser.textContent = AUTH_USER_ID;
       }
 
       async function refreshUsage(){
-        // re-resolve por si el usuario inicia sesión en otra pestaña
-        const newId = resolveUserId();
-        if (newId !== USER_ID) USER_ID = newId;
+        // UI state según auth
+        setAuthButtons();
 
-        if (!USER_ID){
+        if (!IS_LOGGED){
           lockGuestUI();
-          return;
+        }else{
+          unlockLoggedUI();
         }
 
-        unlockLoggedUI();
+        // Loading UX
+        const original = btnRefresh ? (btnRefresh.textContent || "Refrescar") : null;
+        if (btnRefresh){
+          btnRefresh.disabled = true;
+          btnRefresh.textContent = "Refrescando…";
+        }
 
         try{
-          // robusto: tu backend suele aceptar query + header
-          const url = `/api/usage/balance?user_id=${encodeURIComponent(USER_ID)}`;
-          const res = await fetch(url, {
-            method:"GET",
-            headers: { "X-User-Id": USER_ID }
-          });
+          // ✅ Lógica de balance:
+          // - Si logueado: header X-User-Id + query user_id (para compatibilidad)
+          // - Si NO logueado: intentamos sin user_id (si tu backend soporta “guest” automático)
+          //   (si no lo soporta, al menos no rompe la UI)
+          const url = IS_LOGGED
+            ? `/api/usage/balance?user_id=${encodeURIComponent(AUTH_USER_ID)}`
+            : `/api/usage/balance`;
 
+          const headers = {};
+          if (IS_LOGGED) headers["X-User-Id"] = AUTH_USER_ID;
+
+          // Nota: DEVICE_ID NO se usa para comprar; si quieres, luego lo usamos para “modo invitado”
+          // headers["X-Device-Id"] = DEVICE_ID;
+
+          const res = await fetch(url, { method:"GET", headers });
           const txt = await res.text();
           let data = {};
           try{ data = JSON.parse(txt); }catch{ data = {}; }
 
           if (!res.ok){
-            if (usageUsed) usageUsed.textContent = "—";
+            // Mantener UI estable
+            if (usageUsed)  usageUsed.textContent  = "—";
             if (usageAvail) usageAvail.textContent = "—";
-            if (usageFile) usageFile.textContent = "—";
+            if (usageFile)  usageFile.textContent  = "—";
+            if (badgeNav) badgeNav.style.display = "none";
             return;
           }
 
@@ -636,13 +746,25 @@
           const remain   = Math.max(0, allowMin - usedMin);
           const fileLimitBytes = Number(data.file_limit_bytes || 0);
 
-          if (usageUsed) usageUsed.textContent  = fmtMin(usedMin);
+          if (usageUsed)  usageUsed.textContent  = fmtMin(usedMin);
           if (usageAvail) usageAvail.textContent = fmtMin(remain);
-          if (usageFile) usageFile.textContent  = fileLimitBytes ? fmtMB(fileLimitBytes) : "—";
+          if (usageFile)  usageFile.textContent  = fileLimitBytes ? fmtMB(fileLimitBytes) : "—";
+
+          // Badge nav
+          if (badgeNav && badgeNavText){
+            badgeNav.style.display = "inline-flex";
+            badgeNavText.textContent = `${usedMin.toFixed(1)}/${allowMin.toFixed(0)} min · libre ${remain.toFixed(1)} min`;
+          }
         }catch(e){
-          if (usageUsed) usageUsed.textContent = "—";
+          if (usageUsed)  usageUsed.textContent  = "—";
           if (usageAvail) usageAvail.textContent = "—";
-          if (usageFile) usageFile.textContent = "—";
+          if (usageFile)  usageFile.textContent  = "—";
+          if (badgeNav) badgeNav.style.display = "none";
+        }finally{
+          if (btnRefresh && original){
+            btnRefresh.disabled = false;
+            btnRefresh.textContent = original;
+          }
         }
       }
 
@@ -653,39 +775,37 @@
         refreshUsage();
       });
 
-      // ✅ track click intent (cuando user toca zona PayPal)
+      // track begin_checkout (solo si está logueado; si no, el overlay impide “falsa compra”)
       payNodes.forEach(n => {
         n.addEventListener("click", () => {
           const plan = n.getAttribute("data-plan") || "unknown";
           const price = n.getAttribute("data-price") || "";
-          track("begin_checkout", { plan, price });
+          track("begin_checkout", { plan, price, user_type: IS_LOGGED ? "logged" : "guest" });
         });
       });
 
-      // ✅ important: si cambia user_id (login/logout) en otra pestaña
-      window.addEventListener("storage", (ev) => {
-        if (!ev || ev.key !== "user_id") return;
-        refreshUsage();
-      });
-
-      // Exponemos flag para condicionar carga de payments.js
-      window.PS_IS_LOGGED = !!USER_ID;
+      // Exponer flag para cargar PayPal solo cuando de verdad corresponde
+      window.PS_IS_LOGGED = IS_LOGGED;
     })();
   </script>
 
-  <!-- ✅ Cargar payments.js SOLO si está logueado (evita ruido/errores cuando guest) -->
+  <!-- ✅ Cargar payments.js SOLO si:
+       - PayPal está habilitado en backend
+       - el usuario está logueado (user_id real viene del servidor)
+  -->
+  {% if paypal_enabled %}
   <script>
     (function(){
-      // Si nav_auth ya lo puso, usamos ese; si no, fallback a window.PS_IS_LOGGED
-      var logged = (typeof window.PS_IS_LOGGED === "boolean") ? window.PS_IS_LOGGED : false;
-      if (!logged) return;
-
+      if (!window.PS_IS_LOGGED) return;
       var s = document.createElement("script");
       s.src = "{{ url_for('static', filename='js/payments.js') }}";
       s.defer = true;
       document.body.appendChild(s);
     })();
   </script>
+  {% endif %}
 
+  <!-- ✅ Mantén esto: ayuda a que el header quede consistente en TODO el sitio si ya lo usas -->
+  <script src="{{ url_for('static', filename='js/nav_auth.js') }}"></script>
 </body>
 </html>
