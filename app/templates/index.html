@@ -11,7 +11,6 @@
     window.dataLayer = window.dataLayer || [];
     function gtag(){ dataLayer.push(arguments); }
     gtag('js', new Date());
-    /* ✅ FIX: tenías un typo aquí (G-6TEFRMS8K0). Debe ser el mismo del script async */
     gtag('config', 'G-6TFFRMS8K0');
   </script>
 
@@ -270,7 +269,7 @@
     }
 
     .badge-usage{
-      display:inline-flex;
+      display:none;
       align-items:center;
       gap:8px;
       background:#e8f3ff;
@@ -486,7 +485,7 @@
   </style>
 </head>
 
-<body data-user-id="{{ user_id|default('') }}">
+<body>
 
   <!-- HEADER -->
   <header class="ps-nav">
@@ -502,11 +501,15 @@
         <span id="usage-badge-nav" class="badge-usage">
           <span id="usage-text-nav">—/— min · libre —</span>
         </span>
+
         <a href="/auth/login" class="a11y-btn" id="nav-login-link">Entrar</a>
         <a href="/auth/register" class="a11y-btn" id="nav-signup-link"
            style="background:#22c55e;border-color:#16a34a;color:#0b111d">
           Registro
         </a>
+
+        <a href="/account" class="a11y-btn" id="nav-account-link" style="display:none">Mi cuenta</a>
+        <a href="/auth/logout" class="a11y-btn" id="nav-logout-link" style="display:none">Salir</a>
       </div>
     </div>
   </header>
@@ -534,7 +537,7 @@
 
     <p class="details">Sube tu audio y recibe transcripción + resumen.</p>
 
-    <!-- ✅ Panel de uso (Opción B) -->
+    <!-- ✅ Panel de uso -->
     <div class="usage-panel" id="usage-panel">
       <div class="top">
         <div class="title">📊 Tu uso actual</div>
@@ -672,13 +675,24 @@
     </div>
   </div>
 
-  <!-- Script nav (activo en el menú, etc.) -->
+  <!-- Script nav (maneja login/logout y badge via sesión) -->
   <script src="{{ url_for('static', filename='js/nav_auth.js') }}"></script>
 
   <!-- Lógica principal + exportaciones -->
   <script>
   (function(){
     const $ = s => document.querySelector(s);
+
+    // ============================
+    // API helper (SESSION ONLY)
+    // ============================
+    async function api(url, opts = {}){
+      const res = await fetch(url, { ...opts, credentials: "include" });
+      const txt = await res.text();
+      let body;
+      try { body = JSON.parse(txt); } catch { body = txt; }
+      return { ok: res.ok, status: res.status, body };
+    }
 
     // ✅ Tracking clicks a pricing (funnel)
     function track(eventName, params){
@@ -712,12 +726,13 @@
     const alertBox   = $("#alert-box");
     const btnRefresh = $("#btn-refresh");
     const btnHistory = $("#btn-history");
+
     const usageBadge = $("#usage-badge");
     const usageBadgeNav = $("#usage-badge-nav");
     const usageText  = $("#usage-text");
     const usageTextNav = $("#usage-text-nav");
 
-    // Panel de uso (Opción B)
+    // Panel de uso
     const usagePanel = $("#usage-panel");
     const usageUser  = $("#usage-user");
     const usageUsed  = $("#usage-used");
@@ -727,58 +742,12 @@
     // Banner saldo
     const creditsBanner = $("#credits-banner");
     const creditsMsg = $("#credits-msg");
-    const btnUpgrade = $("#btn-upgrade");
 
     const MAX_MB = 100;
 
-    // ============================
-    // USER ID (Opción B, robusto)
-    // ============================
-    function resolveUserId(){
-      // 1) server (data-user-id)
-      let id = (document.body.dataset.userId || "").trim();
-
-      // 2) querystring user_id
-      const qs = new URLSearchParams(window.location.search);
-      const qUser = (qs.get("user_id") || "").trim();
-      if (qUser) id = qUser;
-
-      // 3) localStorage
-      if (!id) {
-        try { id = (localStorage.getItem("user_id") || "").trim(); } catch { id = ""; }
-      }
-
-      // Guardar si existe
-      if (id) {
-        try { localStorage.setItem("user_id", id); } catch {}
-      }
-
-      // ✅ No forzamos "guest". Si no hay id, devolvemos ""
-      return id;
-    }
-
-    let USER_ID = resolveUserId();
-
-    // ✅ tomar job_id del querystring (para cargar historial)
+    // job_id del querystring (para cargar historial)
     const qs = new URLSearchParams(window.location.search);
     const qJob  = (qs.get("job_id") || "").trim();
-
-    // ============================
-    // API helper (con X-User-Id si existe)
-    // ============================
-    async function api(url, opts = {}){
-      try{
-        const h = opts.headers ? { ...opts.headers } : {};
-        if (USER_ID && !h["X-User-Id"]) h["X-User-Id"] = USER_ID;
-        const res = await fetch(url, { ...opts, headers: h });
-        const txt = await res.text();
-        let body;
-        try { body = JSON.parse(txt); } catch { body = txt; }
-        return { ok: res.ok, status: res.status, body };
-      }catch(e){
-        return { ok:false, status:0, body:{ error: String(e) } };
-      }
-    }
 
     // ============================
     // ALERTAS
@@ -806,6 +775,28 @@
     }
 
     // ============================
+    // Helpers UI
+    // ============================
+    function fmtMin(n){ return `${Number(n).toFixed(1)} min`; }
+    function fmtMB(bytes){
+      const b = Number(bytes || 0);
+      const mb = b / (1024*1024);
+      return `${Math.round(mb)} MB`;
+    }
+
+    function setUsageVisible(visible){
+      const v = !!visible;
+      if (usageBadge) usageBadge.style.display = v ? "inline-flex" : "none";
+      if (usageBadgeNav) usageBadgeNav.style.display = v ? "inline-flex" : "none";
+      if (usagePanel) usagePanel.style.display = v ? "block" : "none";
+    }
+
+    function setCreditsBannerVisible(visible){
+      if (!creditsBanner) return;
+      creditsBanner.style.display = visible ? "block" : "none";
+    }
+
+    // ============================
     // SALDO: LOW / ZERO
     // ============================
     const LOW_THRESHOLD_MIN = 5;
@@ -814,8 +805,8 @@
     function updateCreditsUI(remainMin){
       if (!creditsBanner || !creditsMsg) return;
 
-      // Si no hay usuario, ocultamos
-      if (!USER_ID){
+      // Si NO hay sesión => ocultar
+      if (document.body.dataset.auth !== "1"){
         creditsBanner.style.display = "none";
         creditsBanner.classList.remove("zero");
         return;
@@ -848,40 +839,26 @@
     }
 
     // ============================
-    // Helpers UI
-    // ============================
-    function fmtMin(n){ return `${Number(n).toFixed(1)} min`; }
-    function fmtMB(bytes){
-      const b = Number(bytes || 0);
-      const mb = b / (1024*1024);
-      return `${Math.round(mb)} MB`;
-    }
-
-    function setUsageVisible(visible){
-      const v = !!visible;
-      if (usageBadge) usageBadge.style.display = v ? "inline-flex" : "none";
-      if (usageBadgeNav) usageBadgeNav.style.display = v ? "inline-flex" : "none";
-      if (usagePanel) usagePanel.style.display = v ? "block" : "none";
-    }
-
-    // ============================
-    // BADGE + PANEL (Opción B)
+    // BADGE + PANEL (SESSION)
     // ============================
     async function refreshBadge(){
-      // Re-resolver por si cambió localStorage (login)
-      const newId = resolveUserId();
-      if (newId !== USER_ID) USER_ID = newId;
-
-      // Si no hay usuario -> ocultar todo lo de créditos/uso
-      if (!USER_ID){
+      // Si no hay sesión => ocultar todo
+      if (document.body.dataset.auth !== "1"){
         setUsageVisible(false);
         REMAIN_MIN = null;
         updateCreditsUI(REMAIN_MIN);
         return;
       }
 
-      const url = `/api/usage/balance?user_id=${encodeURIComponent(USER_ID)}`;
-      const r = await api(url);
+      const r = await api("/api/usage/balance", { method: "GET" });
+
+      if (r.status === 401){
+        setUsageVisible(false);
+        REMAIN_MIN = null;
+        updateCreditsUI(REMAIN_MIN);
+        return;
+      }
+
       if (!r.ok){
         setUsageVisible(false);
         REMAIN_MIN = null;
@@ -904,20 +881,21 @@
       if (usageText) usageText.textContent = text;
       if (usageTextNav) usageTextNav.textContent = text;
 
-      // Panel pro
-      if (usagePanel){
-        setUsageVisible(true);
-        if (usageUser)  usageUser.textContent = USER_ID;
-        if (usageUsed)  usageUsed.textContent = fmtMin(usedMin);
-        if (usageAvail) usageAvail.textContent = fmtMin(remain);
-        if (usageFile)  usageFile.textContent = fileLimitBytes ? fmtMB(fileLimitBytes) : "—";
-      }
+      // Panel
+      setUsageVisible(true);
+
+      if (usageUser)  usageUser.textContent = "Cuenta activa";
+      if (usageUsed)  usageUsed.textContent = fmtMin(usedMin);
+      if (usageAvail) usageAvail.textContent = fmtMin(remain);
+      if (usageFile)  usageFile.textContent = fileLimitBytes ? fmtMB(fileLimitBytes) : "—";
 
       updateCreditsUI(REMAIN_MIN);
     }
 
     if (btnRefresh) btnRefresh.addEventListener("click", refreshBadge);
-    refreshBadge();
+
+    // Inicial: nav_auth.js setea dataset.auth, pero por timing igual refrescamos luego
+    setTimeout(refreshBadge, 120);
 
     // ============================
     // DIRECCIÓN (RTL/LTR)
@@ -1024,11 +1002,13 @@
     async function crearJob(){
       clearAlert();
 
-      // Revalidar user_id por si cambió en caliente
-      const newId = resolveUserId();
-      if (newId !== USER_ID) USER_ID = newId;
+      // Si NO hay sesión => bloquear (evita consumo “fantasma”)
+      if (document.body.dataset.auth !== "1"){
+        showError("🔒 Inicia sesión para transcribir y guardar tu historial.");
+        return;
+      }
 
-      if (USER_ID && REMAIN_MIN !== null && REMAIN_MIN <= 0.01){
+      if (REMAIN_MIN !== null && REMAIN_MIN <= 0.01){
         updateCreditsUI(REMAIN_MIN);
         showError("No tienes minutos disponibles. Pulsa “Mejorar plan” para continuar.");
         if (creditsBanner && creditsBanner.style.display !== "none"){
@@ -1062,6 +1042,7 @@
         fd.append("language", lang);
 
         const r = await api("/jobs", { method:"POST", body: fd });
+
         if (!r.ok){
           if (r.body && r.body.error === "NO_CREDITS"){
             REMAIN_MIN = 0;
@@ -1162,6 +1143,7 @@
       if (!taT.value){
         return showError("No hay transcripción para exportar.");
       }
+
       const payload = {
         transcript: taT.value || "",
         summary: taS.value || "",
@@ -1171,9 +1153,11 @@
       try{
         const res = await fetch(`/api/exports/${fmt}`, {
           method: "POST",
+          credentials: "include",
           headers: { "Content-Type":"application/json" },
           body: JSON.stringify(payload)
         });
+
         if (!res.ok){
           const txt = await res.text();
           let data;
@@ -1181,6 +1165,7 @@
           const msg = (data && data.error) || `No se pudo exportar (${fmt}).`;
           return showError(msg);
         }
+
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from flask import Flask, jsonify, session, g, request, redirect
+from flask import Flask, session, g, request, redirect
 
 from app.extensions import db, migrate
 
@@ -48,7 +48,6 @@ def create_app() -> Flask:
     app.config["APP_BASE_URL"] = os.getenv("APP_BASE_URL", "https://www.getpolyscribe.com").strip()
 
     # ✅ Cookies de sesión robustas (HTTPS + cross-subdomain)
-    # IMPORTANTÍSIMO para que no “pierdas login” entre www y sin-www.
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
     app.config["SESSION_COOKIE_SECURE"] = (
@@ -103,7 +102,6 @@ def create_app() -> Flask:
 
     @app.before_request
     def _force_canonical_host():
-        # Evita redirect en local/dev
         if os.getenv("DISABLE_CANONICAL_REDIRECT", "0") == "1":
             return None
 
@@ -111,19 +109,15 @@ def create_app() -> Flask:
         if not host:
             return None
 
-        # Permite health checks internos
         if request.path.startswith("/healthz"):
             return None
 
-        # Si ya está en el canónico, ok
         if host == CANONICAL_HOST:
             return None
 
-        # Solo redirigimos si estamos en los dominios esperados
         if host in ("getpolyscribe.com", "www.getpolyscribe.com"):
             scheme = "https" if app.config["APP_BASE_URL"].startswith("https://") else request.scheme
             new_url = f"{scheme}://{CANONICAL_HOST}{request.full_path}"
-            # full_path suele terminar en "?" si no hay query
             if new_url.endswith("?"):
                 new_url = new_url[:-1]
             return redirect(new_url, code=301)
@@ -149,8 +143,10 @@ def create_app() -> Flask:
 
     @app.context_processor
     def _inject_user_into_templates():
+        uid = getattr(g, "user_id", None)
         return {
-            "user_id": getattr(g, "user_id", None) or "",
+            "user_id": uid or "",
+            "is_authenticated": bool(uid),  # ✅ FIX: bandera para JS/UI
             "paypal_enabled": bool(app.config.get("PAYPAL_ENABLED", False)),
         }
 
@@ -163,7 +159,7 @@ def create_app() -> Flask:
     from app.routes.auth import bp as auth_bp
     app.register_blueprint(auth_bp)
 
-    # ✅ NUEVO: /api/auth/me (sesión como fuente de verdad)
+    # ✅ /api/auth/me (sesión como fuente de verdad)
     from app.routes.auth_api import bp as auth_api_bp
     app.register_blueprint(auth_api_bp)
 
