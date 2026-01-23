@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mi cuenta · PolyScribe</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/nav.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme_light.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/badge.css') }}">
+
+  <style>
+    :root{
+      --text:#0b1424;
+      --border:#d9e4f7;
+      --card:#ffffff;
+    }
+    body{
+      margin:0;
+      font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;
+      background:linear-gradient(180deg,#a6d6fb 0%, #9acef8 100%) fixed;
+      color:var(--text);
+    }
+    .container{
+      max-width:1160px;
+      margin:32px auto 40px;
+      padding:0 16px;
+    }
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:18px;
+      box-shadow:0 10px 28px rgba(15,35,52,.16);
+    }
+    h1{ margin:0 0 8px; font-size:22px; }
+    .muted{ color:#13406f; font-size:14px; }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+    .btn{
+      background:#0b62e0;
+      border:1px solid #0a59c9;
+      color:#fff;
+      padding:8px 12px;
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:800;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+    }
+    .btn.light{
+      background:#f2f6ff;
+      border:1px solid #cddaf5;
+      color:#0b1424;
+      font-weight:700;
+    }
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      border:1px solid #c6d3ec;
+      background:#fff;
+      border-radius:999px;
+      padding:5px 10px;
+      font-size:13px;
+      font-weight:700;
+      margin:6px 8px 0 0;
+    }
+    .alert{
+      display:none;
+      margin-top:10px;
+      background:#fff7cc;
+      border:1px solid #fde68a;
+      color:#92400e;
+      padding:10px;
+      border-radius:12px;
+      font-size:14px;
+    }
+  </style>
+</head>
+
+<body data-user-id="{{ user_id|default('') }}">
+  <header class="ps-nav">
+    <div class="inner">
+      <a class="brand" href="/">PolyScribe</a>
+      <nav class="links ps-nav-links">
+        <a href="/" data-path="/">Transcribir</a>
+        <a href="/history" data-path="/history">Historial</a>
+        <a href="/pricing" data-path="/pricing">Precios</a>
+        <a href="/ayuda" data-path="/ayuda">Ayuda</a>
+      </nav>
+      <div class="right">
+        <span id="usage-badge-nav" class="badge-usage">
+          <span id="usage-text-nav">—/— min · libre —</span>
+        </span>
+        <a href="/auth/login" class="a11y-btn" id="nav-login-link">Entrar</a>
+        <a href="/auth/register" class="a11y-btn" id="nav-signup-link"
+           style="background:#22c55e;border-color:#16a34a;color:#0b111d">
+          Registro
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="card">
+      <h1>👤 Mi cuenta</h1>
+      <div class="muted">Aquí verás tu usuario, minutos disponibles y accesos rápidos.</div>
+
+      <div id="alert" class="alert"></div>
+
+      <div style="margin-top:10px">
+        <span class="pill">🧾 Usuario: <span id="uid">—</span></span>
+        <span class="pill">⏱️ Usado: <span id="used">—</span></span>
+        <span class="pill">🟢 Disponible: <span id="remain">—</span></span>
+        <span class="pill">📦 Límite archivo: <span id="limit">—</span></span>
+      </div>
+
+      <div class="row">
+        <a class="btn light" href="/history">📂 Ver historial</a>
+        <a class="btn light" href="/pricing">💳 Ver planes</a>
+        <a class="btn" href="/">🚀 Transcribir</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/nav_auth.js') }}"></script>
+  <script>
+    (function(){
+      const $ = s => document.querySelector(s);
+      const uidEl = $("#uid");
+      const usedEl = $("#used");
+      const remEl = $("#remain");
+      const limEl = $("#limit");
+      const alert = $("#alert");
+
+      function fmtMin(n){ return `${Number(n).toFixed(1)} min`; }
+      function fmtMB(bytes){
+        const b = Number(bytes || 0);
+        const mb = b / (1024*1024);
+        return `${Math.round(mb)} MB`;
+      }
+
+      function resolveUserId(){
+        let id = (document.body.dataset.userId || "").trim();
+        try {
+          if (!id) id = (localStorage.getItem("user_id") || "").trim();
+        } catch {}
+        return id;
+      }
+
+      async function api(url){
+        const id = resolveUserId();
+        const h = {};
+        if (id) h["X-User-Id"] = id;
+        const res = await fetch(url, { headers: h });
+        const txt = await res.text();
+        let body;
+        try { body = JSON.parse(txt); } catch { body = {}; }
+        return { ok: res.ok, body };
+      }
+
+      async function boot(){
+        const id = resolveUserId();
+        uidEl.textContent = id || "—";
+
+        if (!id){
+          alert.style.display = "block";
+          alert.textContent = "🔒 Inicia sesión para ver tu cuenta.";
+          usedEl.textContent = "—";
+          remEl.textContent = "—";
+          limEl.textContent = "—";
+          return;
+        }
+
+        const r = await api(`/api/usage/balance?user_id=${encodeURIComponent(id)}`);
+        if (!r.ok){
+          alert.style.display = "block";
+          alert.textContent = "No se pudo cargar tu uso. Pulsa refrescar en la barra o intenta más tarde.";
+          return;
+        }
+
+        const data = r.body || {};
+        const usedSec  = Number(data.used_seconds || 0);
+        const allowSec = Number(data.allowance_seconds || 0);
+        const usedMin  = usedSec / 60;
+        const allowMin = allowSec / 60;
+        const remain   = Math.max(0, allowMin - usedMin);
+        const fileLimitBytes = Number(data.file_limit_bytes || 0);
+
+        usedEl.textContent = fmtMin(usedMin);
+        remEl.textContent  = fmtMin(remain);
+        limEl.textContent  = fileLimitBytes ? fmtMB(fileLimitBytes) : "—";
+      }
+
+      boot();
+    })();
+  </script>
+</body>
+</html>
