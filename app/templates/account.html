@@ -7,7 +7,7 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="{{ url_for('static', filename='css/nav.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/theme_light.css') }}">
@@ -18,126 +18,364 @@
       --text:#0b1424;
       --border:#d9e4f7;
       --card:#ffffff;
+      --shadow:0 10px 28px rgba(15,35,52,.14);
     }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+
     body{
       margin:0;
       font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;
       background:linear-gradient(180deg,#a6d6fb 0%, #9acef8 100%) fixed;
       color:var(--text);
     }
-    .container{
+
+    /* NAV (consistente con index/pricing) */
+    header.ps-nav{
+      background:#fff;
+      border-bottom:1px solid var(--border);
+    }
+    .ps-nav .inner{
       max-width:1160px;
-      margin:32px auto 40px;
-      padding:0 16px;
+      margin:0 auto;
+      padding:10px 16px;
+      display:flex;
+      gap:12px;
+      align-items:center;
+      justify-content:space-between;
     }
-    .card{
-      background:var(--card);
-      border:1px solid var(--border);
-      border-radius:16px;
-      padding:18px;
-      box-shadow:0 10px 28px rgba(15,35,52,.16);
-    }
-    h1{ margin:0 0 8px; font-size:22px; }
-    .muted{ color:#13406f; font-size:14px; }
-    .row{ display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
-    .btn{
-      background:#0b62e0;
-      border:1px solid #0a59c9;
-      color:#fff;
-      padding:8px 12px;
-      border-radius:10px;
-      cursor:pointer;
-      font-weight:800;
+    .ps-nav .brand{
+      font-weight:900;
+      color:#0b1424;
       text-decoration:none;
+      font-size:1.05rem;
+      letter-spacing:.2px;
+    }
+    .ps-nav .links a{
+      margin-right:14px;
+      text-decoration:none;
+      color:#13406f;
+      font-weight:800;
+      font-size:0.95rem;
+    }
+    .ps-nav .links a.active{ color:#0b62e0; }
+
+    .badge-usage{
       display:inline-flex;
       align-items:center;
       gap:8px;
+      background:#e8f3ff;
+      color:#0b1424;
+      border:1px solid #b9d9ff;
+      border-radius:999px;
+      padding:5px 10px;
+      font-size:13px;
+      font-weight:800;
+      white-space:nowrap;
     }
-    .btn.light{
+
+    .a11y-btn{
       background:#f2f6ff;
       border:1px solid #cddaf5;
       color:#0b1424;
-      font-weight:700;
+      padding:6px 10px;
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:800;
+      font-size:.92rem;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      white-space:nowrap;
     }
-    .pill{
+    .a11y-btn.primary{
+      background:#22c55e;
+      border-color:#16a34a;
+      color:#0b111d;
+      font-weight:900;
+    }
+
+    /* PAGE */
+    .container{
+      max-width:1160px;
+      margin:26px auto 40px;
+      padding:0 16px;
+    }
+
+    .hero{
+      display:flex;
+      align-items:flex-end;
+      justify-content:space-between;
+      gap:14px;
+      flex-wrap:wrap;
+      margin:14px 0 14px;
+    }
+
+    h1{
+      margin:0;
+      font-size:26px;
+      font-weight:900;
+      color:#0b1424;
+      letter-spacing:-.2px;
+    }
+    .sub{
+      margin:6px 0 0;
+      color:#113160;
+      font-weight:600;
+      font-size:14px;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1.15fr .85fr;
+      gap:16px;
+      align-items:stretch;
+    }
+    @media(max-width:900px){
+      .grid{ grid-template-columns:1fr; }
+    }
+
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:18px;
+      padding:16px;
+      box-shadow:var(--shadow);
+    }
+
+    .section-title{
+      font-weight:900;
+      font-size:14px;
+      color:#0b1424;
+      margin:0 0 10px;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+
+    .chips{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      margin-top:10px;
+    }
+    .chip{
       display:inline-flex;
       align-items:center;
       gap:8px;
       border:1px solid #c6d3ec;
-      background:#fff;
+      background:#f6fbff;
       border-radius:999px;
-      padding:5px 10px;
+      padding:6px 10px;
+      color:#0b1424;
+      font-weight:900;
       font-size:13px;
-      font-weight:700;
-      margin:6px 8px 0 0;
+      white-space:nowrap;
     }
+    .chip small{
+      font-weight:800;
+      color:#13406f;
+      opacity:.9;
+    }
+
+    .actions{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      margin-top:14px;
+    }
+
+    .btn{
+      background:#0b62e0;
+      border:1px solid #0a59c9;
+      color:#fff;
+      padding:10px 12px;
+      border-radius:12px;
+      cursor:pointer;
+      font-weight:900;
+      font-size:.95rem;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      transition:transform .08s ease, box-shadow .08s ease, filter .08s ease;
+    }
+    .btn:hover{
+      filter:brightness(1.03);
+      box-shadow:0 8px 18px rgba(37,99,235,0.25);
+      transform:translateY(-1px);
+    }
+    .btn.secondary{
+      background:#f2f6ff;
+      border:1px solid #cddaf5;
+      color:#0b1424;
+      box-shadow:none;
+    }
+    .btn.primary{
+      background:#22c55e;
+      border-color:#16a34a;
+      color:#0b111d;
+      box-shadow:0 0 0 3px rgba(34,197,94,.18) inset;
+    }
+
+    .note{
+      margin-top:12px;
+      font-size:13px;
+      color:#13406f;
+      line-height:1.6;
+    }
+
     .alert{
-      display:none;
-      margin-top:10px;
       background:#fff7cc;
       border:1px solid #fde68a;
       color:#92400e;
-      padding:10px;
-      border-radius:12px;
-      font-size:14px;
+      padding:12px;
+      border-radius:14px;
+      margin-bottom:14px;
+      display:none;
+      font-weight:800;
+      box-shadow:0 6px 16px rgba(15,23,42,0.08);
+    }
+    .alert.danger{
+      background:#fde2e2;
+      border-color:#f3abab;
+      color:#8a1c1c;
+    }
+
+    .mini{
+      font-size:12px;
+      color:#4b5563;
+      margin-top:10px;
+    }
+
+    .right-box{
+      border-radius:16px;
+      padding:14px;
+      border:1px solid #dbeafe;
+      background:linear-gradient(180deg,#ffffff 0%, #f7fbff 100%);
+    }
+    .right-box ul{
+      margin:10px 0 0;
+      padding-left:18px;
+      color:#113160;
+      font-size:13px;
+      line-height:1.65;
+      font-weight:600;
     }
   </style>
 </head>
 
 <body data-user-id="{{ user_id|default('') }}">
+
   <header class="ps-nav">
     <div class="inner">
       <a class="brand" href="/">PolyScribe</a>
+
       <nav class="links ps-nav-links">
         <a href="/" data-path="/">Transcribir</a>
         <a href="/history" data-path="/history">Historial</a>
         <a href="/pricing" data-path="/pricing">Precios</a>
         <a href="/ayuda" data-path="/ayuda">Ayuda</a>
       </nav>
-      <div class="right">
+
+      <div class="right" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
         <span id="usage-badge-nav" class="badge-usage">
           <span id="usage-text-nav">—/— min · libre —</span>
         </span>
+
+        <!-- NO logueado -->
         <a href="/auth/login" class="a11y-btn" id="nav-login-link">Entrar</a>
-        <a href="/auth/register" class="a11y-btn" id="nav-signup-link"
-           style="background:#22c55e;border-color:#16a34a;color:#0b111d">
-          Registro
-        </a>
+        <a href="/auth/register" class="a11y-btn primary" id="nav-signup-link">Registro</a>
+
+        <!-- Logueado (nav_auth.js los mostrará) -->
+        <a href="/account" class="a11y-btn" id="nav-account-link" style="display:none;">Mi cuenta</a>
+        <a href="/auth/logout" class="a11y-btn" id="nav-logout-link" style="display:none;">Salir</a>
       </div>
     </div>
   </header>
 
   <div class="container">
-    <div class="card">
-      <h1>👤 Mi cuenta</h1>
-      <div class="muted">Aquí verás tu usuario, minutos disponibles y accesos rápidos.</div>
 
-      <div id="alert" class="alert"></div>
-
-      <div style="margin-top:10px">
-        <span class="pill">🧾 Usuario: <span id="uid">—</span></span>
-        <span class="pill">⏱️ Usado: <span id="used">—</span></span>
-        <span class="pill">🟢 Disponible: <span id="remain">—</span></span>
-        <span class="pill">📦 Límite archivo: <span id="limit">—</span></span>
+    <div class="hero">
+      <div>
+        <h1>👤 Mi cuenta</h1>
+        <div class="sub">Aquí ves tu uso, accesos rápidos y tu estado actual.</div>
       </div>
 
-      <div class="row">
-        <a class="btn light" href="/history">📂 Ver historial</a>
-        <a class="btn light" href="/pricing">💳 Ver planes</a>
-        <a class="btn" href="/">🚀 Transcribir</a>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <a class="btn secondary" href="/pricing">💳 Ver planes</a>
+        <a class="btn primary" href="/">🎙️ Transcribir</a>
       </div>
+    </div>
+
+    <!-- Si no hay sesión -->
+    <div class="alert danger" id="no-session-alert">
+      🔒 Inicia sesión para ver tu cuenta y tus minutos.
+      <div class="mini">
+        <a href="/auth/login">Entrar</a> · <a href="/auth/register">Registro</a>
+      </div>
+    </div>
+
+    <div class="grid">
+
+      <div class="card">
+        <div class="section-title">📊 Estado de tu cuenta</div>
+
+        <div class="chips">
+          <div class="chip">👤 <small>Usuario:</small> <span id="acc-user">—</span></div>
+          <div class="chip">⏱️ <small>Usado:</small> <span id="acc-used">—</span></div>
+          <div class="chip">🟢 <small>Disponible:</small> <span id="acc-avail">—</span></div>
+          <div class="chip">📦 <small>Límite archivo:</small> <span id="acc-file">—</span></div>
+        </div>
+
+        <div class="actions">
+          <a class="btn primary" href="/">🎙️ Transcribir</a>
+          <a class="btn" href="/history">📂 Ver historial</a>
+          <a class="btn secondary" href="/pricing">💳 Ver planes</a>
+          <a class="btn secondary" href="/ayuda">🧠 Ayuda</a>
+        </div>
+
+        <div class="note">
+          <b>Tip:</b> si te quedas sin minutos, compra un plan y se activa automáticamente.
+          Tus transcripciones anteriores se conservan.
+        </div>
+
+        <div class="mini">
+          Este panel usa tu sesión (cookies seguras) como fuente de verdad, igual que pricing.
+        </div>
+      </div>
+
+      <div class="card right-box">
+        <div class="section-title">✅ Recomendaciones rápidas</div>
+        <ul>
+          <li><b>Audio largo:</b> divide en partes o usa MP3/AAC para más duración por 100 MB.</li>
+          <li><b>Idioma:</b> “Auto” detecta idioma y mejora consistencia.</li>
+          <li><b>Exportar:</b> PDF/DOCX listos para entregar (justificados).</li>
+          <li><b>Historial:</b> abre y exporta resultados cuando quieras.</li>
+        </ul>
+
+        <div class="actions" style="margin-top:14px;">
+          <a class="btn" href="/pricing">🚀 Mejorar plan</a>
+          <a class="btn secondary" href="/">Volver</a>
+        </div>
+      </div>
+
     </div>
   </div>
 
   <script src="{{ url_for('static', filename='js/nav_auth.js') }}"></script>
+
   <script>
     (function(){
       const $ = s => document.querySelector(s);
-      const uidEl = $("#uid");
-      const usedEl = $("#used");
-      const remEl = $("#remain");
-      const limEl = $("#limit");
-      const alert = $("#alert");
+
+      const noSession = $("#no-session-alert");
+      const userEl  = $("#acc-user");
+      const usedEl  = $("#acc-used");
+      const availEl = $("#acc-avail");
+      const fileEl  = $("#acc-file");
 
       function fmtMin(n){ return `${Number(n).toFixed(1)} min`; }
       function fmtMB(bytes){
@@ -146,59 +384,39 @@
         return `${Math.round(mb)} MB`;
       }
 
-      function resolveUserId(){
-        let id = (document.body.dataset.userId || "").trim();
-        try {
-          if (!id) id = (localStorage.getItem("user_id") || "").trim();
-        } catch {}
-        return id;
+      async function load(){
+        try{
+          const meRes = await fetch("/api/auth/me", { credentials:"include" });
+          const me = await meRes.json().catch(()=> ({}));
+          const logged = !!(me && me.authenticated);
+
+          if (!logged){
+            if (noSession) noSession.style.display = "block";
+            return;
+          }
+
+          if (noSession) noSession.style.display = "none";
+
+          const r = await fetch("/api/usage/balance", { credentials:"include" });
+          const data = await r.json().catch(()=> ({}));
+          if (!r.ok) return;
+
+          const usedMin  = Number(data.used_seconds || 0) / 60;
+          const allowMin = Number(data.allowance_seconds || 0) / 60;
+          const remain   = Math.max(0, allowMin - usedMin);
+
+          if (userEl)  userEl.textContent  = me.user_id ? String(me.user_id) : "—";
+          if (usedEl)  usedEl.textContent  = fmtMin(usedMin);
+          if (availEl) availEl.textContent = fmtMin(remain);
+          if (fileEl)  fileEl.textContent  = data.file_limit_bytes ? fmtMB(data.file_limit_bytes) : "—";
+        }catch(e){}
       }
 
-      async function api(url){
-        const id = resolveUserId();
-        const h = {};
-        if (id) h["X-User-Id"] = id;
-        const res = await fetch(url, { headers: h });
-        const txt = await res.text();
-        let body;
-        try { body = JSON.parse(txt); } catch { body = {}; }
-        return { ok: res.ok, body };
+      if (document.readyState === "loading"){
+        document.addEventListener("DOMContentLoaded", load);
+      } else {
+        load();
       }
-
-      async function boot(){
-        const id = resolveUserId();
-        uidEl.textContent = id || "—";
-
-        if (!id){
-          alert.style.display = "block";
-          alert.textContent = "🔒 Inicia sesión para ver tu cuenta.";
-          usedEl.textContent = "—";
-          remEl.textContent = "—";
-          limEl.textContent = "—";
-          return;
-        }
-
-        const r = await api(`/api/usage/balance?user_id=${encodeURIComponent(id)}`);
-        if (!r.ok){
-          alert.style.display = "block";
-          alert.textContent = "No se pudo cargar tu uso. Pulsa refrescar en la barra o intenta más tarde.";
-          return;
-        }
-
-        const data = r.body || {};
-        const usedSec  = Number(data.used_seconds || 0);
-        const allowSec = Number(data.allowance_seconds || 0);
-        const usedMin  = usedSec / 60;
-        const allowMin = allowSec / 60;
-        const remain   = Math.max(0, allowMin - usedMin);
-        const fileLimitBytes = Number(data.file_limit_bytes || 0);
-
-        usedEl.textContent = fmtMin(usedMin);
-        remEl.textContent  = fmtMin(remain);
-        limEl.textContent  = fileLimitBytes ? fmtMB(fileLimitBytes) : "—";
-      }
-
-      boot();
     })();
   </script>
 </body>
