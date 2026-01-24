@@ -125,23 +125,6 @@ def create_app() -> Flask:
         return None
 
     # ============================================================
-    # ✅ SEO: servir robots.txt en la RAÍZ + noindex a dev-login
-    # ============================================================
-
-    @app.get("/robots.txt")
-    def robots_txt():
-        # Sirve /robots.txt desde app/static/robots.txt
-        return send_from_directory(app.static_folder, "robots.txt")
-
-    @app.after_request
-    def _add_noindex_headers(resp):
-        # Bloquea indexación por header aunque se descubra el link
-        path = (request.path or "")
-        if path.startswith("/dev-login"):
-            resp.headers["X-Robots-Tag"] = "noindex, nofollow"
-        return resp
-
-    # ============================================================
     # ✅ AUTH BRIDGE (sesión -> g.user_id -> templates)
     # ============================================================
 
@@ -164,6 +147,28 @@ def create_app() -> Flask:
             "user_id": getattr(g, "user_id", None) or "",
             "paypal_enabled": bool(app.config.get("PAYPAL_ENABLED", False)),
         }
+
+    # ============================================================
+    # ✅ SEO: servir robots.txt y sitemap.xml en la raíz
+    # ============================================================
+
+    @app.get("/robots.txt")
+    def robots_txt():
+        return send_from_directory(app.static_folder, "robots.txt")
+
+    @app.get("/sitemap.xml")
+    def sitemap_xml():
+        return send_from_directory(app.static_folder, "sitemap.xml")
+
+    # Extra: evita indexación del dev-login aunque alguien lo encuentre
+    @app.after_request
+    def _noindex_devlogin(resp):
+        try:
+            if (request.path or "").startswith("/dev-login"):
+                resp.headers["X-Robots-Tag"] = "noindex, nofollow"
+        except Exception:
+            pass
+        return resp
 
     # ============================================================
 
@@ -197,7 +202,7 @@ def create_app() -> Flask:
     from app.routes.pricing_page import bp as pricing_page_bp
     app.register_blueprint(pricing_page_bp)
 
-    # ✅ NUEVO: /account (para el botón “Mi cuenta”)
+    # ✅ /account
     from app.routes.account_page import bp as account_page_bp
     app.register_blueprint(account_page_bp)
 
