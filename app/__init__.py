@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from flask import Flask, jsonify, session, g, request, redirect
+from flask import Flask, jsonify, session, g, request, redirect, send_from_directory
 
 from app.extensions import db, migrate
 
@@ -123,6 +123,23 @@ def create_app() -> Flask:
             return redirect(new_url, code=301)
 
         return None
+
+    # ============================================================
+    # ✅ SEO: servir robots.txt en la RAÍZ + noindex a dev-login
+    # ============================================================
+
+    @app.get("/robots.txt")
+    def robots_txt():
+        # Sirve /robots.txt desde app/static/robots.txt
+        return send_from_directory(app.static_folder, "robots.txt")
+
+    @app.after_request
+    def _add_noindex_headers(resp):
+        # Bloquea indexación por header aunque se descubra el link
+        path = (request.path or "")
+        if path.startswith("/dev-login"):
+            resp.headers["X-Robots-Tag"] = "noindex, nofollow"
+        return resp
 
     # ============================================================
     # ✅ AUTH BRIDGE (sesión -> g.user_id -> templates)
