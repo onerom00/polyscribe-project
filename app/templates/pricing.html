@@ -84,7 +84,7 @@
     }
 
     .badge-usage{
-      display:none; /* se prende por JS cuando hay datos */
+      display:none;
       align-items:center;
       gap:8px;
       background:#e8f3ff;
@@ -239,7 +239,6 @@
       position: relative;
     }
 
-    /* overlay de bloqueo SOLO visual */
     .plan .lock-overlay{
       display:none;
       position:absolute;
@@ -343,7 +342,6 @@
       color: #555;
     }
 
-    /* CTA login */
     .login-cta{
       display:flex;
       gap:10px;
@@ -401,7 +399,7 @@
   <div class="page">
     <h1>Planes y Precios</h1>
     <p class="subtitle">
-      Empieza gratis y escala sólo si necesitas más minutos o funciones avanzadas.
+      Empieza gratis, comprueba la calidad de PolyScribe y escala sólo si necesitas más minutos o funciones avanzadas.
     </p>
 
     {% if paypal_enabled %}
@@ -414,7 +412,6 @@
     </div>
     {% endif %}
 
-    <!-- ✅ Panel de uso -->
     <div class="usage-panel" id="usage-panel">
       <div class="top">
         <div class="title">📊 Tu uso actual</div>
@@ -428,7 +425,6 @@
       </div>
     </div>
 
-    <!-- ✅ Banner: requiere login para comprar -->
     <div class="banner banner-danger" id="guest-lock" style="display:none">
       <strong>🔒 Para comprar un plan debes iniciar sesión.</strong><br>
       Esto evita que se pierdan créditos si pagas sin estar logueado.
@@ -441,28 +437,26 @@
     <div id="pay-alert" class="banner banner-warn"></div>
 
     <div class="plans-grid">
-      <!-- Free -->
       <div class="plan" id="plan-free">
         <div class="lock-overlay" aria-hidden="true"></div>
         <div>
           <div class="plan-header">
             <div class="plan-name">Free</div>
-            <div class="plan-price">$0 <span>para siempre</span></div>
+            <div class="plan-price">$0 <span>prueba inicial</span></div>
           </div>
           <div class="plan-body">
             <ul>
-              <li>10 minutos de transcripción al mes</li>
+              <li>5 minutos gratis para probar PolyScribe</li>
               <li>Hasta 100&nbsp;MB por archivo</li>
               <li>Resumen automático incluido</li>
               <li>Soporte para múltiples idiomas</li>
             </ul>
-            <div class="hint">Ideal para probar PolyScribe o usarlo de forma ocasional.</div>
+            <div class="hint">Ideal para comprobar la calidad de PolyScribe antes de elegir un plan.</div>
           </div>
         </div>
         <div class="plan-footer"></div>
       </div>
 
-      <!-- Starter -->
       <div class="plan" id="plan-60">
         <div class="lock-overlay">
           Inicia sesión para activar PayPal y comprar este plan.
@@ -488,7 +482,6 @@
         </div>
       </div>
 
-      <!-- Pro -->
       <div class="plan" id="plan-300">
         <div class="lock-overlay">
           Inicia sesión para activar PayPal y comprar este plan.
@@ -513,7 +506,6 @@
         </div>
       </div>
 
-      <!-- Business -->
       <div class="plan" id="plan-1200">
         <div class="lock-overlay">
           Inicia sesión para activar PayPal y comprar este plan.
@@ -573,29 +565,20 @@
     </div>
 
     <p class="footer-note">
-      Los planes son de tipo <strong>prepago</strong>: compras minutos y los usas cuando quieras.
-      El plan Free se mantiene siempre activo como respaldo.
+      Los planes de pago son de tipo <strong>prepago</strong>: compras minutos y los usas cuando quieras.
+      El plan Free sirve como prueba inicial para validar la calidad antes de comprar más minutos.
     </p>
   </div>
 
   <script>
     (function(){
-      // ============================
-      // Tracking helper
-      // ============================
       function track(eventName, params){
         try{ if (typeof gtag === "function") gtag("event", eventName, params || {}); }catch{}
       }
 
-      // ============================
-      // Identidad (SEPARADA):
-      // - AUTH_USER_ID: SOLO si viene del servidor (sesión real)
-      // - DEVICE_ID: para invitado (no se usa para compras)
-      // Evita el bug de "estoy logueado pero sale guest".
-      // ============================
       function getAuthUserId(){
         const id = (document.body.dataset.userId || "").trim();
-        return id; // si está logueado, el backend debe inyectar esto
+        return id;
       }
 
       function getOrCreateDeviceId(){
@@ -603,7 +586,6 @@
         try{
           let v = (localStorage.getItem(KEY) || "").trim();
           if (v) return v;
-          // uuid simple
           v = "dev_" + Math.random().toString(16).slice(2) + Date.now().toString(16);
           localStorage.setItem(KEY, v);
           return v;
@@ -618,9 +600,6 @@
 
       track("view_pricing", { user_type: IS_LOGGED ? "logged" : "guest" });
 
-      // ============================
-      // DOM
-      // ============================
       const guestLock = document.getElementById("guest-lock");
       const payAlert  = document.getElementById("pay-alert");
 
@@ -649,6 +628,7 @@
       ].filter(Boolean);
 
       function fmtMin(n){ return `${Number(n).toFixed(1)} min`; }
+
       function fmtMB(bytes){
         const b = Number(bytes || 0);
         const mb = b / (1024*1024);
@@ -656,7 +636,6 @@
       }
 
       function setAuthButtons(){
-        // Si estás logueado, ocultamos Entrar/Registro y mostramos Salir
         if (IS_LOGGED){
           if (navLogin)  navLogin.style.display = "none";
           if (navSignup) navSignup.style.display = "none";
@@ -677,7 +656,6 @@
 
         planCards.forEach(c => c.classList.add("locked"));
 
-        // Panel: lo mostramos igual pero indicando invitado (para que haya “credibilidad” de que existe algo)
         if (usagePanel) usagePanel.style.display = "block";
         if (usageUser) usageUser.textContent = "Invitado";
       }
@@ -688,13 +666,14 @@
           payAlert.style.display = "none";
           payAlert.textContent = "";
         }
+
         planCards.forEach(c => c.classList.remove("locked"));
+
         if (usagePanel) usagePanel.style.display = "block";
         if (usageUser) usageUser.textContent = AUTH_USER_ID;
       }
 
       async function refreshUsage(){
-        // UI state según auth
         setAuthButtons();
 
         if (!IS_LOGGED){
@@ -703,7 +682,6 @@
           unlockLoggedUI();
         }
 
-        // Loading UX
         const original = btnRefresh ? (btnRefresh.textContent || "Refrescar") : null;
         if (btnRefresh){
           btnRefresh.disabled = true;
@@ -711,10 +689,6 @@
         }
 
         try{
-          // ✅ Lógica de balance:
-          // - Si logueado: header X-User-Id + query user_id (para compatibilidad)
-          // - Si NO logueado: intentamos sin user_id (si tu backend soporta “guest” automático)
-          //   (si no lo soporta, al menos no rompe la UI)
           const url = IS_LOGGED
             ? `/api/usage/balance?user_id=${encodeURIComponent(AUTH_USER_ID)}`
             : `/api/usage/balance`;
@@ -722,16 +696,12 @@
           const headers = {};
           if (IS_LOGGED) headers["X-User-Id"] = AUTH_USER_ID;
 
-          // Nota: DEVICE_ID NO se usa para comprar; si quieres, luego lo usamos para “modo invitado”
-          // headers["X-Device-Id"] = DEVICE_ID;
-
           const res = await fetch(url, { method:"GET", headers });
           const txt = await res.text();
           let data = {};
           try{ data = JSON.parse(txt); }catch{ data = {}; }
 
           if (!res.ok){
-            // Mantener UI estable
             if (usageUsed)  usageUsed.textContent  = "—";
             if (usageAvail) usageAvail.textContent = "—";
             if (usageFile)  usageFile.textContent  = "—";
@@ -750,7 +720,6 @@
           if (usageAvail) usageAvail.textContent = fmtMin(remain);
           if (usageFile)  usageFile.textContent  = fileLimitBytes ? fmtMB(fileLimitBytes) : "—";
 
-          // Badge nav
           if (badgeNav && badgeNavText){
             badgeNav.style.display = "inline-flex";
             badgeNavText.textContent = `${usedMin.toFixed(1)}/${allowMin.toFixed(0)} min · libre ${remain.toFixed(1)} min`;
@@ -768,14 +737,15 @@
         }
       }
 
-      // Inicial
       refreshUsage();
-      if (btnRefresh) btnRefresh.addEventListener("click", (e) => {
-        e.preventDefault();
-        refreshUsage();
-      });
 
-      // track begin_checkout (solo si está logueado; si no, el overlay impide “falsa compra”)
+      if (btnRefresh) {
+        btnRefresh.addEventListener("click", (e) => {
+          e.preventDefault();
+          refreshUsage();
+        });
+      }
+
       payNodes.forEach(n => {
         n.addEventListener("click", () => {
           const plan = n.getAttribute("data-plan") || "unknown";
@@ -784,15 +754,10 @@
         });
       });
 
-      // Exponer flag para cargar PayPal solo cuando de verdad corresponde
       window.PS_IS_LOGGED = IS_LOGGED;
     })();
   </script>
 
-  <!-- ✅ Cargar payments.js SOLO si:
-       - PayPal está habilitado en backend
-       - el usuario está logueado (user_id real viene del servidor)
-  -->
   {% if paypal_enabled %}
   <script>
     (function(){
@@ -805,7 +770,6 @@
   </script>
   {% endif %}
 
-  <!-- ✅ Mantén esto: ayuda a que el header quede consistente en TODO el sitio si ya lo usas -->
   <script src="{{ url_for('static', filename='js/nav_auth.js') }}"></script>
 </body>
 </html>
