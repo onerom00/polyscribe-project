@@ -13,13 +13,14 @@ from flask import Blueprint, request, jsonify, current_app, session
 
 from app.extensions import db
 from app.models import AudioJob
-from app.models_user import User  # ✅ ÚNICA fuente de User (NO models_auth)
+from app.models_user import User  # ÚNICA fuente de User
 
 
 try:
     from openai import OpenAI
 except Exception:
     OpenAI = None  # type: ignore
+
 
 _client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", "")) if OpenAI else None
 ASR_MODEL = os.getenv("OPENAI_TRANSCRIBE_MODEL", "whisper-1")
@@ -30,7 +31,7 @@ MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "100") or 100)
 OPENAI_FILE_HARD_LIMIT_MB = int(os.getenv("OPENAI_FILE_LIMIT_MB", "25"))
 MAX_CHUNK_SECONDS = int(os.getenv("MAX_CHUNK_SECONDS", "600"))
 
-bp = Blueprint("jobs", __name__)  # ✅ sin url_prefix: tus rutas ya están completas
+bp = Blueprint("jobs", __name__)  # sin url_prefix: tus rutas ya están completas
 
 
 _LANG_ALIASES: Dict[str, str] = {
@@ -85,6 +86,162 @@ def _require_auth_user_id() -> str | None:
         return None
 
     return str(int(u.id))
+
+
+def _get_free_tier_minutes() -> int:
+    """
+    Fuente robusta para el plan gratis:
+    1) Variable de entorno FREE_TIER_MINUTES
+    2) Config Flask FREE_TIER_MINUTES
+    3) Default seguro: 5 minutos
+    """
+    raw = os.getenv("FREE_TIER_MINUTES", current_app.config.get("FREE_TIER_MINUTES", 5))
+    try:
+        return int(raw or 5)
+    except Exception:
+        return 5
+
+
+def _send_email(to_email: str, subject: str, html_body: str) -> None:
+    """
+    Envío SMTP simple usando las variables ya configuradas en Render:
+    SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM.
+    """
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    port = int(os.getenv("SMTP_PORT", "587"))
+    user = os.getenv("SMTP_USER", "")
+    pw = os.getenv("SMTP_PASS", "")
+    from_addr = os.getenv("SMTP_FROM", f"PolyScribe <{user}>")
+
+    if not user or not pw:
+        current_app.logger.warning(
+            "SMTP not configured. Skipping email to=%s subject=%s",
+            to_email,
+            subject,
+        )
+        return
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = from_addr
+    msg["To"] = to_email
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+    with smtplib.SMTP(host, port) as smtp:
+        smtp.ehlo()
+        smtp.starttls()
+        smtp.login(user, pw)
+        smtp.sendmail(from_addr, [to_email], msg.as_string())
+
+
+def _pricing_url() -> str:
+    base = (current_app.config.get("APP_BASE_URL") or os.getenv("APP_BASE_URL") or "").strip()
+    base = base.rstrip("/") or "https://www.getpolyscribe.com"
+    return f"{base}/pricing"
+
+
+def _send_usage_email_once(user_id: str, kind: str, remaining_seconds: int = 0) -> None:
+    """
+    Emails comerciales mínimos:
+    - low_minutes: cuando queda 1 minuto o menos después de una transcripción.
+    - no_credits: cuando intenta procesar y no tiene minutos suficientes.
+
+    Para evitar spam, solo enviamos una vez por sesión y por tipo.
+    """
+    session_key = f"usage_email_sent_{kind}_{user_id}"
+    if session.get(session_key):
+        return
+
+    try:
+        user = db.session.get(User, int(user_id))
+    except Exception:
+        user = None
+
+    email = (getattr(user, "email", "") or "").strip()
+    if not email or "@" not in email:
+        return
+
+    pricing = _pricing_url()
+    remaining_min = max(0, remaining_seconds) / 60
+
+    if kind == "low_minutes":
+        subject = "Te quedan pocos minutos en PolyScribe"
+        html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:560px">
+          <h2>Te quedan pocos minutos en PolyScribe</h2>
+
+          <p>Tu cuenta está cerca de agotar los minutos disponibles.</p>
+
+          <p>
+            Minutos restantes aproximados:
+            <strong>{remaining_min:.1f} min</strong>
+          </p>
+
+          <p>
+            Puedes actualizar tu plan para seguir transcribiendo audios, videos,
+            entrevistas, clases o podcasts sin interrupciones.
+          </p>
+
+          <p>
+            <a href="{pricing}" style="background:#0b62e0;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:800">
+              Ver planes
+            </a>
+          </p>
+
+          <p style="color:#6b7280;font-size:12px">
+            PolyScribe · Transcripción, resumen y exportación en minutos.
+          </p>
+        </div>
+        """
+    elif kind == "no_credits":
+        subject = "Tus minutos de PolyScribe se agotaron"
+        html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:560px">
+          <h2>Tus minutos se agotaron</h2>
+
+          <p>Intentaste procesar un archivo, pero tu cuenta no tiene minutos suficientes disponibles.</p>
+
+          <p>
+            Para seguir transcribiendo, generar resúmenes y exportar tus resultados,
+            puedes actualizar tu plan.
+          </p>
+
+          <p>
+            <a href="{pricing}" style="background:#22c55e;color:#0b111d;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:900">
+              Mejorar plan
+            </a>
+          </p>
+
+          <p style="color:#6b7280;font-size:12px">
+            Tus transcripciones anteriores se conservan en tu historial.
+          </p>
+        </div>
+        """
+    else:
+        return
+
+    try:
+        _send_email(email, subject, html)
+        session[session_key] = True
+        session.modified = True
+        current_app.logger.info(
+            "usage email sent kind=%s user_id=%s email=%s remaining_seconds=%s",
+            kind,
+            user_id,
+            email,
+            remaining_seconds,
+        )
+    except Exception as e:
+        current_app.logger.error(
+            "usage email failed kind=%s user_id=%s error=%s",
+            kind,
+            user_id,
+            e,
+        )
 
 
 def _ffmpeg() -> str:
@@ -160,8 +317,10 @@ def _split_audio(src: str, out_dir: str, chunk_seconds: int) -> List[str]:
     dur = _duration_seconds(src)
     if dur <= 0:
         return [src]
+
     parts: List[str] = []
     start, idx = 0.0, 1
+
     while start < dur - 0.1:
         out = os.path.join(out_dir, f"part_{idx:03d}.ogg")
         cmd = [
@@ -188,32 +347,40 @@ def _split_audio(src: str, out_dir: str, chunk_seconds: int) -> List[str]:
             parts.append(out)
         idx += 1
         start += float(chunk_seconds)
+
     return parts or [src]
 
 
 def _prepare_for_openai(path: str, hard_limit_mb: int) -> List[str]:
     if _file_size_mb(path) <= hard_limit_mb:
         return [path]
+
     if not _have_ffmpeg():
         return []
+
     tmpdir = tempfile.mkdtemp(prefix="prep_")
     compressed = os.path.join(tmpdir, "compressed.ogg")
+
     if not _compress_to_opus(path, compressed, bitrate="48k"):
         return []
+
     if _file_size_mb(compressed) <= hard_limit_mb:
         return [compressed]
+
     return _split_audio(compressed, tmpdir, MAX_CHUNK_SECONDS)
 
 
 def _dedupe_lines(txt: str) -> str:
     lines = [l.strip() for l in (txt or "").splitlines() if l and l.strip()]
     seen, out = set(), []
+
     for l in lines:
         key = re.sub(r"\W+", " ", l.lower()).strip()
         if key in seen:
             continue
         seen.add(key)
         out.append(l)
+
     return "\n".join(out)
 
 
@@ -221,8 +388,10 @@ def _fallback_extractive_summary(text: str, max_sents: int = 5) -> str:
     sents = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text or "") if s.strip()]
     if not sents:
         return ""
+
     words = re.findall(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ']+", text or "")
     freq: Dict[str, int] = {}
+
     for w in words:
         wl = w.lower()
         if len(wl) <= 2:
@@ -237,17 +406,20 @@ def _fallback_extractive_summary(text: str, max_sents: int = 5) -> str:
 
     ranked = sorted(((score(s), i, s) for i, s in enumerate(sents)), reverse=True)
     top = sorted(ranked[:max_sents], key=lambda t: t[1])
+
     return "\n".join("• " + s.strip() for _, _, s in top)
 
 
 def _summarize_llm(clean_text: str, language_code: str = "es") -> str:
     if not _client:
         return ""
+
     system = (
         f"You summarize in {language_code}. "
         "Return 3–6 bullet points. Be abstract. Do not copy phrases."
     )
     user = f"Text:\n\n{clean_text}\n\nSummarize now."
+
     resp = _client.chat.completions.create(
         model=CHAT_MODEL,
         temperature=0.3,
@@ -256,10 +428,12 @@ def _summarize_llm(clean_text: str, language_code: str = "es") -> str:
             {"role": "user", "content": user},
         ],
     )
+
     out = (resp.choices[0].message.content or "").strip()
     if "•" not in out:
         lines = [l.strip("-• ").strip() for l in out.splitlines() if l.strip()]
         out = "\n".join("• " + l for l in lines)
+
     return out
 
 
@@ -267,6 +441,7 @@ def _summarize_robust(raw_text: str, language_code: str = "es") -> str:
     cleaned = _dedupe_lines(raw_text or "")
     if not cleaned:
         return ""
+
     try:
         out = _summarize_llm(cleaned, _normalize_lang(language_code, "es"))
         return out or _fallback_extractive_summary(cleaned, 5)
@@ -299,7 +474,7 @@ def _transcribe_audio(path: str, language_code: Optional[str]) -> Dict[str, Any]
 
 
 def _get_allowance_seconds(user_id: str) -> int:
-    free_min = int(current_app.config.get("FREE_TIER_MINUTES", 10))
+    free_min = _get_free_tier_minutes()
 
     paid_min = 0
     try:
@@ -335,15 +510,12 @@ def create_job():
     if not uid:
         return jsonify({"error": "AUTH_REQUIRED"}), 401
 
-    # ✅ Nota: la verificación ya está aplicada en _require_auth_user_id()
-    # si AUTH_REQUIRE_VERIFIED_EMAIL=True
-
     try:
         file = request.files.get("file")
         if not file or not file.filename:
             return jsonify({"error": "Falta archivo"}), 400
 
-        # size (sin romper stream)
+        # size sin romper stream
         file.stream.seek(0, os.SEEK_END)
         size = file.stream.tell()
         file.stream.seek(0)
@@ -360,7 +532,7 @@ def create_job():
 
         dur = _duration_seconds(tmp_path)
 
-        # En PROD: si no se puede medir, bloqueamos (para cobrar serio)
+        # En PROD: si no se puede medir, bloqueamos para cobrar serio
         if not dur or dur <= 0:
             return jsonify({"error": "CANNOT_MEASURE_DURATION"}), 400
 
@@ -371,6 +543,7 @@ def create_job():
 
         required_seconds = int(math.ceil(dur))
         if required_seconds > remain_seconds:
+            _send_usage_email_once(uid, "no_credits", remain_seconds)
             return jsonify(
                 {
                     "error": "NO_CREDITS",
@@ -413,6 +586,12 @@ def create_job():
         )
         db.session.add(job)
         db.session.commit()
+
+        remaining_after_seconds = max(0, allowance_seconds - (used_seconds + required_seconds))
+        if 0 < remaining_after_seconds <= 60:
+            _send_usage_email_once(uid, "low_minutes", remaining_after_seconds)
+        elif remaining_after_seconds <= 0:
+            _send_usage_email_once(uid, "no_credits", remaining_after_seconds)
 
         return jsonify(
             {
@@ -487,4 +666,5 @@ def history_api():
                 "updated_at": str(r.updated_at),
             }
         )
+
     return jsonify({"items": items}), 200
