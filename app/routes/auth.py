@@ -120,16 +120,39 @@ def register_post():
     html = f"""
     <div style="font-family:Arial,sans-serif;max-width:560px">
       <h2>Verifica tu correo para activar PolyScribe</h2>
-      <p>Haz clic aquí:</p>
-      <p><a href="{verify_link}" style="background:#0b62e0;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:800">Verificar correo</a></p>
-      <p>Si no abre, copia y pega:</p>
-      <p><a href="{verify_link}">{verify_link}</a></p>
-      <p style="color:#6b7280;font-size:12px">Expira en 24 horas.</p>
+
+      <p>Gracias por crear tu cuenta en PolyScribe.</p>
+
+      <p>Haz clic aquí para verificar tu correo:</p>
+
+      <p>
+        <a href="{verify_link}" style="background:#0b62e0;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:800">
+          Verificar correo
+        </a>
+      </p>
+
+      <p>Si el botón no abre, copia y pega este enlace en tu navegador:</p>
+
+      <p>
+        <a href="{verify_link}">{verify_link}</a>
+      </p>
+
+      <div style="margin-top:14px;padding:10px 12px;border-radius:10px;background:#fff7cc;border:1px solid #fde68a;color:#7b3d00;font-size:13px;line-height:1.45">
+        <strong>Importante:</strong> si no ves este correo en tu bandeja de entrada,
+        revisa también tu carpeta de <strong>spam</strong>,
+        <strong>correo no deseado</strong> o <strong>promociones</strong>.
+      </div>
+
+      <p style="color:#6b7280;font-size:12px">Este enlace expira en 24 horas.</p>
     </div>
     """
     _send_email(email, "Verifica tu correo - PolyScribe", html)
 
-    flash("Cuenta creada. Revisa tu correo para verificar y luego inicia sesión.", "success")
+    flash(
+        "Cuenta creada. Revisa tu correo para verificar tu cuenta. "
+        "Si no ves el mensaje, revisa spam, correo no deseado o promociones.",
+        "success",
+    )
     return redirect(url_for("auth.login_page"))
 
 
@@ -177,7 +200,11 @@ def login_post():
         return redirect(url_for("auth.login_page"))
 
     if not getattr(user, "is_verified", False):
-        flash("Debes verificar tu correo antes de entrar.", "error")
+        flash(
+            "Debes verificar tu correo antes de entrar. "
+            "Si no ves el correo de verificación, revisa spam, correo no deseado o promociones.",
+            "error",
+        )
         return redirect(url_for("auth.login_page"))
 
     if not user.password_hash or not check_password_hash(user.password_hash, password):
@@ -203,7 +230,10 @@ def forgot_page():
 @bp.post("/forgot")
 def forgot_post():
     email = (request.form.get("email") or "").strip().lower()
-    generic_ok = "Si el email existe, enviaremos un enlace para restablecer la contraseña."
+    generic_ok = (
+        "Si el email existe, enviaremos un enlace para restablecer la contraseña. "
+        "Si no ves el mensaje, revisa spam, correo no deseado o promociones."
+    )
 
     if not email or "@" not in email:
         flash(generic_ok, "success")
@@ -232,11 +262,34 @@ def forgot_post():
     html = f"""
     <div style="font-family:Arial,sans-serif;max-width:560px">
       <h2>Restablecer contraseña</h2>
-      <p>Haz clic para crear una nueva contraseña:</p>
-      <p><a href="{reset_link}" style="background:#22c55e;color:#0b111d;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:900">Crear nueva contraseña</a></p>
-      <p>Si no abre, copia y pega:</p>
-      <p><a href="{reset_link}">{reset_link}</a></p>
-      <p style="color:#6b7280;font-size:12px">Expira en 30 minutos.</p>
+
+      <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta de PolyScribe.</p>
+
+      <p>Haz clic aquí para crear una nueva contraseña:</p>
+
+      <p>
+        <a href="{reset_link}" style="background:#22c55e;color:#0b111d;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:900">
+          Crear nueva contraseña
+        </a>
+      </p>
+
+      <p>Si el botón no abre, copia y pega este enlace en tu navegador:</p>
+
+      <p>
+        <a href="{reset_link}">{reset_link}</a>
+      </p>
+
+      <div style="margin-top:14px;padding:10px 12px;border-radius:10px;background:#fff7cc;border:1px solid #fde68a;color:#7b3d00;font-size:13px;line-height:1.45">
+        <strong>Importante:</strong> si no ves este correo en tu bandeja de entrada,
+        revisa también tu carpeta de <strong>spam</strong>,
+        <strong>correo no deseado</strong> o <strong>promociones</strong>.
+      </div>
+
+      <p style="color:#6b7280;font-size:12px">Este enlace expira en 30 minutos.</p>
+
+      <p style="color:#6b7280;font-size:12px">
+        Si tú no solicitaste este cambio, puedes ignorar este correo.
+      </p>
     </div>
     """
     _send_email(email, "Restablecer contraseña - PolyScribe", html)

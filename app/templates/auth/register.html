@@ -16,9 +16,26 @@
     padding:18px 18px 20px;
   ">
     <h2 style="margin:0 0 10px;">Crear cuenta</h2>
+
     <p style="margin:0 0 14px; color:#334155;">
       Crea tu cuenta y verifica tu correo para comenzar.
     </p>
+
+    <div style="
+      margin:0 0 14px;
+      padding:10px 12px;
+      border-radius:12px;
+      background:#fff7cc;
+      border:1px solid #fde68a;
+      color:#7b3d00;
+      font-size:13px;
+      line-height:1.45;
+      font-weight:700;
+    ">
+      📩 Importante: después de crear tu cuenta, revisa tu correo para verificarla.
+      Si no ves el mensaje de PolyScribe en tu bandeja de entrada, revisa también
+      <strong>spam</strong>, <strong>correo no deseado</strong> o <strong>promociones</strong>.
+    </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -28,10 +45,11 @@
               padding:10px;
               border-radius:12px;
               margin-bottom:8px;
-              border:1px solid #f3abab;
-              background:#fde2e2;
-              color:#8a1c1c;
+              border:1px solid {% if cat == 'success' %}#94e2c1{% else %}#f3abab{% endif %};
+              background:{% if cat == 'success' %}#d1f7e7{% else %}#fde2e2{% endif %};
+              color:{% if cat == 'success' %}#0f5132{% else %}#8a1c1c{% endif %};
               font-weight:800;
+              line-height:1.45;
             ">
               {{ msg }}
             </div>
@@ -52,9 +70,20 @@
           padding:10px;
           border:1px solid #c6d3ec;
           border-radius:10px;
-          margin:8px 0 12px;
+          margin:8px 0 6px;
+          box-sizing:border-box;
         "
       >
+
+      <div style="
+        font-size:12px;
+        color:#475569;
+        margin:0 0 12px;
+        line-height:1.4;
+      ">
+        Usa un correo válido. El enlace de verificación puede llegar a spam,
+        correo no deseado o promociones.
+      </div>
 
       <label style="font-weight:700;">Nombre (opcional)</label>
       <input
@@ -67,6 +96,7 @@
           border:1px solid #c6d3ec;
           border-radius:10px;
           margin:8px 0 12px;
+          box-sizing:border-box;
         "
       >
 
@@ -82,6 +112,7 @@
           border:1px solid #c6d3ec;
           border-radius:10px;
           margin:8px 0 12px;
+          box-sizing:border-box;
         "
       >
 
@@ -97,6 +128,7 @@
           border:1px solid #c6d3ec;
           border-radius:10px;
           margin:8px 0 12px;
+          box-sizing:border-box;
         "
       >
 
@@ -115,6 +147,17 @@
       >
         Crear cuenta
       </button>
+
+      <p style="
+        margin:10px 0 0;
+        font-size:12px;
+        color:#475569;
+        text-align:center;
+        line-height:1.4;
+      ">
+        Después de registrarte, abre el correo de verificación.
+        Si no aparece, revisa spam o correo no deseado.
+      </p>
     </form>
 
     <div style="margin-top:12px; text-align:center;">
