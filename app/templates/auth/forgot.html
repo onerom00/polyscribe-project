@@ -5,16 +5,52 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Olvidé mi contraseña · PolyScribe</title>
 </head>
+
 <body style="font-family:Inter,system-ui,Arial; background:#eef6ff; margin:0;">
-  <div style="max-width:460px; margin:80px auto; background:#fff; border:1px solid #d9e4f7; border-radius:16px; padding:18px 18px 20px;">
+  <div style="
+    max-width:460px;
+    margin:80px auto;
+    background:#fff;
+    border:1px solid #d9e4f7;
+    border-radius:16px;
+    padding:18px 18px 20px;
+  ">
     <h2 style="margin:0 0 10px;">Restablecer contraseña</h2>
-    <p style="margin:0 0 14px; color:#334155;">Escribe tu correo y te enviaremos un enlace.</p>
+
+    <p style="margin:0 0 14px; color:#334155;">
+      Escribe tu correo y te enviaremos un enlace para crear una nueva contraseña.
+    </p>
+
+    <div style="
+      margin:0 0 14px;
+      padding:10px 12px;
+      border-radius:12px;
+      background:#fff7cc;
+      border:1px solid #fde68a;
+      color:#7b3d00;
+      font-size:13px;
+      line-height:1.45;
+      font-weight:700;
+    ">
+      📩 Importante: si no ves el correo de PolyScribe en tu bandeja de entrada,
+      revisa también <strong>spam</strong>, <strong>correo no deseado</strong>
+      o <strong>promociones</strong>.
+    </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         <div style="margin:10px 0;">
-          {% for cat,msg in messages %}
-            <div style="padding:10px;border-radius:12px;margin-bottom:8px;border:1px solid #c6d3ec;background:#f1f7ff;color:#0b1424;font-weight:700;">
+          {% for cat, msg in messages %}
+            <div style="
+              padding:10px;
+              border-radius:12px;
+              margin-bottom:8px;
+              border:1px solid {% if cat == 'success' %}#94e2c1{% else %}#f3abab{% endif %};
+              background:{% if cat == 'success' %}#d1f7e7{% else %}#fde2e2{% endif %};
+              color:{% if cat == 'success' %}#0f5132{% else %}#8a1c1c{% endif %};
+              font-weight:800;
+              line-height:1.45;
+            ">
               {{ msg }}
             </div>
           {% endfor %}
@@ -24,16 +60,64 @@
 
     <form method="post" action="/auth/forgot">
       <label style="font-weight:700;">Correo</label>
-      <input name="email" type="email" required
-             style="width:100%; padding:10px; border:1px solid #c6d3ec; border-radius:10px; margin:8px 0 12px;">
-      <button type="submit"
-              style="width:100%; padding:10px; border-radius:10px; border:1px solid #16a34a; background:#22c55e; color:#0b111d; font-weight:900;">
+      <input
+        name="email"
+        type="email"
+        required
+        autocomplete="email"
+        style="
+          width:100%;
+          padding:10px;
+          border:1px solid #c6d3ec;
+          border-radius:10px;
+          margin:8px 0 6px;
+          box-sizing:border-box;
+        "
+      >
+
+      <div style="
+        font-size:12px;
+        color:#475569;
+        margin:0 0 12px;
+        line-height:1.4;
+      ">
+        El enlace de recuperación puede tardar unos minutos. Si no aparece,
+        revisa spam, correo no deseado o promociones.
+      </div>
+
+      <button
+        type="submit"
+        style="
+          width:100%;
+          padding:10px;
+          border-radius:10px;
+          border:1px solid #16a34a;
+          background:#22c55e;
+          color:#0b111d;
+          font-weight:900;
+          cursor:pointer;
+        "
+      >
         Enviar enlace
       </button>
+
+      <p style="
+        margin:10px 0 0;
+        font-size:12px;
+        color:#475569;
+        text-align:center;
+        line-height:1.4;
+      ">
+        Después de enviar la solicitud, revisa tu correo. Si no ves el mensaje,
+        revisa también spam o correo no deseado.
+      </p>
     </form>
 
     <div style="margin-top:12px; text-align:center;">
-      <a href="/auth/login" style="font-weight:800; color:#0b62e0; text-decoration:none;">
+      <a
+        href="/auth/login"
+        style="font-weight:800; color:#0b62e0; text-decoration:none;"
+      >
         Volver a iniciar sesión
       </a>
     </div>
