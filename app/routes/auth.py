@@ -108,14 +108,14 @@ def _send_email(to_email: str, subject: str, html_body: str) -> None:
             envelope_from,
         )
 
-    except Exception as exc:
+        except Exception as exc:
         current_app.logger.exception(
             "Email send failed subject=%s to=%s error=%s",
             subject,
             to_email,
             exc,
         )
-        raise
+        return
 
 
 def _login_user(user: User) -> None:
