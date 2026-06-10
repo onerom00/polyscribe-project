@@ -81,7 +81,7 @@ def usage_balance():
     if not user_id:
         return jsonify(_guest_balance_payload()), 200
 
-    free_min = int(current_app.config.get("FREE_TIER_MINUTES", 10))
+    free_min = int(current_app.config.get("FREE_TIER_MINUTES", 5))
 
     # Variantes derivadas del user_id de sesión (compatibilidad)
     uid_variants = _user_id_variants(user_id)
