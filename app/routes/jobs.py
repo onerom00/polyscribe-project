@@ -67,7 +67,7 @@ def _require_auth_user_id() -> str | None:
     """
     Auth PROD: el user_id real viene de la sesión.
     Si AUTH_REQUIRE_VERIFIED_EMAIL=1, también exige is_verified=True.
-    Devuelve string del id (ej: "12") o None si no autorizado.
+    Devuelve string del id, por ejemplo "12", o None si no autorizado.
     """
     uid = session.get("user_id") or session.get("uid")
     if not uid:
@@ -110,6 +110,7 @@ def _send_email(to_email: str, subject: str, html_body: str) -> None:
     import smtplib
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
+    from email.utils import parseaddr
 
     host = os.getenv("SMTP_HOST", "smtp.gmail.com")
     port = int(os.getenv("SMTP_PORT", "587"))
@@ -125,6 +126,8 @@ def _send_email(to_email: str, subject: str, html_body: str) -> None:
         )
         return
 
+    envelope_from = parseaddr(from_addr)[1] or user
+
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = from_addr
@@ -135,7 +138,7 @@ def _send_email(to_email: str, subject: str, html_body: str) -> None:
         smtp.ehlo()
         smtp.starttls()
         smtp.login(user, pw)
-        smtp.sendmail(from_addr, [to_email], msg.as_string())
+        smtp.sendmail(envelope_from, [to_email], msg.as_string())
 
 
 def _pricing_url() -> str:
@@ -147,7 +150,7 @@ def _pricing_url() -> str:
 def _send_usage_email_once(user_id: str, kind: str, remaining_seconds: int = 0) -> None:
     """
     Emails comerciales mínimos:
-    - low_minutes: cuando queda 1 minuto o menos después de una transcripción.
+    - low_minutes: cuando queda 1 minuto o menos.
     - no_credits: cuando intenta procesar y no tiene minutos suficientes.
 
     Para evitar spam, solo enviamos una vez por sesión y por tipo.
@@ -169,25 +172,25 @@ def _send_usage_email_once(user_id: str, kind: str, remaining_seconds: int = 0) 
     remaining_min = max(0, remaining_seconds) / 60
 
     if kind == "low_minutes":
-        subject = "Te quedan pocos minutos en PolyScribe"
+        subject = "Tu saldo de minutos en PolyScribe está bajo"
         html = f"""
-        <div style="font-family:Arial,sans-serif;max-width:560px">
-          <h2>Te quedan pocos minutos en PolyScribe</h2>
+        <div style="font-family:Arial,sans-serif;max-width:560px;line-height:1.5;color:#111827">
+          <h2 style="margin-bottom:12px">Tu saldo de minutos está bajo</h2>
 
-          <p>Tu cuenta está cerca de agotar los minutos disponibles.</p>
+          <p>Tu cuenta de PolyScribe está cerca de agotar los minutos disponibles.</p>
 
           <p>
-            Minutos restantes aproximados:
+            Saldo aproximado disponible:
             <strong>{remaining_min:.1f} min</strong>
           </p>
 
           <p>
-            Puedes actualizar tu plan para seguir transcribiendo audios, videos,
-            entrevistas, clases o podcasts sin interrupciones.
+            Puedes revisar los planes disponibles para seguir transcribiendo,
+            resumiendo y exportando tus archivos sin interrupciones.
           </p>
 
-          <p>
-            <a href="{pricing}" style="background:#0b62e0;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:800">
+          <p style="margin:22px 0">
+            <a href="{pricing}" style="background:#0b62e0;color:#ffffff;padding:11px 16px;border-radius:8px;text-decoration:none;font-weight:800;display:inline-block">
               Ver planes
             </a>
           </p>
@@ -198,21 +201,23 @@ def _send_usage_email_once(user_id: str, kind: str, remaining_seconds: int = 0) 
         </div>
         """
     elif kind == "no_credits":
-        subject = "Tus minutos de PolyScribe se agotaron"
+        subject = "Actualiza tu saldo de minutos en PolyScribe"
         html = f"""
-        <div style="font-family:Arial,sans-serif;max-width:560px">
-          <h2>Tus minutos se agotaron</h2>
-
-          <p>Intentaste procesar un archivo, pero tu cuenta no tiene minutos suficientes disponibles.</p>
+        <div style="font-family:Arial,sans-serif;max-width:560px;line-height:1.5;color:#111827">
+          <h2 style="margin-bottom:12px">Tu saldo de minutos necesita actualizarse</h2>
 
           <p>
-            Para seguir transcribiendo, generar resúmenes y exportar tus resultados,
-            puedes actualizar tu plan.
+            Intentaste procesar un archivo, pero tu cuenta no tiene minutos suficientes disponibles.
           </p>
 
           <p>
-            <a href="{pricing}" style="background:#22c55e;color:#0b111d;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:900">
-              Mejorar plan
+            Para seguir usando PolyScribe, puedes revisar los planes disponibles
+            y añadir más minutos a tu cuenta.
+          </p>
+
+          <p style="margin:22px 0">
+            <a href="{pricing}" style="background:#22c55e;color:#0b111d;padding:11px 16px;border-radius:8px;text-decoration:none;font-weight:900;display:inline-block">
+              Ver planes
             </a>
           </p>
 
@@ -542,6 +547,13 @@ def create_job():
         remain_seconds = max(0, allowance_seconds - used_seconds)
 
         required_seconds = int(math.ceil(dur))
+
+        # Aviso preventivo:
+        # Si el usuario ya tiene 1 minuto o menos disponible,
+        # enviamos el email de saldo bajo antes de procesar o bloquear.
+        if 0 < remain_seconds <= 60:
+            _send_usage_email_once(uid, "low_minutes", remain_seconds)
+
         if required_seconds > remain_seconds:
             _send_usage_email_once(uid, "no_credits", remain_seconds)
             return jsonify(
@@ -588,6 +600,10 @@ def create_job():
         db.session.commit()
 
         remaining_after_seconds = max(0, allowance_seconds - (used_seconds + required_seconds))
+
+        # Aviso posterior:
+        # Si después de una transcripción exitosa queda 1 minuto o menos,
+        # enviamos el aviso de saldo bajo. Si quedó en cero, enviamos saldo insuficiente.
         if 0 < remaining_after_seconds <= 60:
             _send_usage_email_once(uid, "low_minutes", remaining_after_seconds)
         elif remaining_after_seconds <= 0:
