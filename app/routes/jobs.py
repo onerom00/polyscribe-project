@@ -153,10 +153,15 @@ def _send_usage_email_once(user_id: str, kind: str, remaining_seconds: int = 0) 
     - low_minutes: cuando queda 1 minuto o menos.
     - no_credits: cuando intenta procesar y no tiene minutos suficientes.
 
-    Para evitar spam, solo enviamos una vez por sesión y por tipo.
+    Durante las pruebas comerciales, low_minutes puede enviarse más de una vez
+    para confirmar que el disparador funciona correctamente.
+    no_credits sí queda protegido por sesión para evitar repetición excesiva.
     """
     session_key = f"usage_email_sent_{kind}_{user_id}"
-    if session.get(session_key):
+
+    # Permitimos repetir low_minutes durante pruebas.
+    # Protegemos no_credits para evitar correos repetidos en la misma sesión.
+    if kind != "low_minutes" and session.get(session_key):
         return
 
     try:
@@ -231,8 +236,13 @@ def _send_usage_email_once(user_id: str, kind: str, remaining_seconds: int = 0) 
 
     try:
         _send_email(email, subject, html)
-        session[session_key] = True
-        session.modified = True
+
+        # Solo marcamos como enviado en sesión los emails distintos de low_minutes.
+        # Así podemos probar low_minutes varias veces mientras ajustamos el embudo.
+        if kind != "low_minutes":
+            session[session_key] = True
+            session.modified = True
+
         current_app.logger.info(
             "usage email sent kind=%s user_id=%s email=%s remaining_seconds=%s",
             kind,
