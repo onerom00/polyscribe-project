@@ -5,6 +5,7 @@ import os
 import secrets
 import datetime as dt
 from urllib.parse import urljoin
+from email.utils import parseaddr
 
 from flask import (
     Blueprint, request, render_template, redirect, url_for,
@@ -24,32 +25,97 @@ def _base_url() -> str:
     return base.rstrip("/") + "/"
 
 
+def _clean_email_address(value: str) -> str:
+    """
+    Convierte valores tipo:
+      PolyScribe <support@getpolyscribe.com>
+    en:
+      support@getpolyscribe.com
+
+    Esto es útil para el envelope sender SMTP.
+    """
+    parsed = parseaddr(value or "")[1]
+    return (parsed or value or "").strip()
+
+
 def _send_email(to_email: str, subject: str, html_body: str) -> None:
     import smtplib
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
 
-    host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    host = os.getenv("SMTP_HOST", "smtp.gmail.com").strip()
     port = int(os.getenv("SMTP_PORT", "587"))
-    user = os.getenv("SMTP_USER", "")
-    pw = os.getenv("SMTP_PASS", "")
-    from_addr = os.getenv("SMTP_FROM", f"PolyScribe <{user}>")
+    user = os.getenv("SMTP_USER", "").strip()
+    pw = os.getenv("SMTP_PASS", "").strip()
+
+    # Visible para el usuario en el correo.
+    from_addr = os.getenv("SMTP_FROM", f"PolyScribe <{user}>").strip()
+
+    # Correo donde queremos recibir respuestas humanas.
+    reply_to = (
+        os.getenv("SMTP_REPLY_TO")
+        or os.getenv("REPLY_TO_EMAIL")
+        or "helppolyscribe@gmail.com"
+    ).strip()
+
+    # Envelope sender limpio para SMTP.
+    # Evita usar "PolyScribe <support@...>" como envelope.
+    envelope_from = (
+        os.getenv("SMTP_ENVELOPE_FROM")
+        or _clean_email_address(from_addr)
+        or user
+    ).strip()
+
+    to_email = (to_email or "").strip().lower()
+
+    if not to_email or "@" not in to_email:
+        current_app.logger.warning(
+            "Email skipped: invalid recipient subject=%s to=%s",
+            subject,
+            to_email,
+        )
+        return
 
     if not user or not pw:
-        current_app.logger.warning("SMTP not configured. Skipping email to=%s subject=%s", to_email, subject)
+        current_app.logger.warning(
+            "SMTP not configured. Skipping email to=%s subject=%s",
+            to_email,
+            subject,
+        )
         return
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = from_addr
     msg["To"] = to_email
+    msg["Reply-To"] = reply_to
     msg.attach(MIMEText(html_body, "html", "utf-8"))
 
-    with smtplib.SMTP(host, port) as smtp:
-        smtp.ehlo()
-        smtp.starttls()
-        smtp.login(user, pw)
-        smtp.sendmail(from_addr, [to_email], msg.as_string())
+    try:
+        with smtplib.SMTP(host, port, timeout=30) as smtp:
+            smtp.ehlo()
+            smtp.starttls()
+            smtp.ehlo()
+            smtp.login(user, pw)
+            smtp.sendmail(envelope_from, [to_email], msg.as_string())
+
+        current_app.logger.info(
+            "Email sent subject=%s to=%s from=%s reply_to=%s envelope_from=%s",
+            subject,
+            to_email,
+            from_addr,
+            reply_to,
+            envelope_from,
+        )
+
+    except Exception as exc:
+        current_app.logger.exception(
+            "Email send failed subject=%s to=%s error=%s",
+            subject,
+            to_email,
+            exc,
+        )
+        raise
 
 
 def _login_user(user: User) -> None:
@@ -211,7 +277,14 @@ def login_post():
         flash("Credenciales inválidas.", "error")
         return redirect(url_for("auth.login_page"))
 
+    now = dt.datetime.utcnow()
+    user.last_login_at = now
+    user.updated_at = now
+    db.session.commit()
+
     _login_user(user)
+    current_app.logger.info("User login success user_id=%s email=%s", user.id, user.email)
+
     return redirect("/")
 
 
