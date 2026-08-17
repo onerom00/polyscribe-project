@@ -35,13 +35,17 @@
     const hide = (el) => { if (el) el.style.display = "none"; };
 
     if (authenticated) {
-      hide(loginLink); hide(signupLink);
-      hide(loginAlt);  hide(signupAlt);
+      hide(loginLink);
+      hide(signupLink);
+      hide(loginAlt);
+      hide(signupAlt);
       show(logoutLink);
       show(accountLink);
     } else {
-      show(loginLink); show(signupLink);
-      show(loginAlt);  show(signupAlt);
+      show(loginLink);
+      show(signupLink);
+      show(loginAlt);
+      show(signupAlt);
       hide(logoutLink);
       hide(accountLink);
     }
@@ -75,8 +79,23 @@
         localStorage.setItem("user_id", String(userId));
       } else {
         localStorage.removeItem("user_id");
+        localStorage.removeItem("ps_last_job_id");
       }
     } catch {}
+  }
+
+  function wireLogout() {
+    const logoutLink = $("#nav-logout-link");
+    if (!logoutLink) return;
+
+    logoutLink.addEventListener("click", () => {
+      // Limpiamos el estado local inmediatamente.
+      persistUserId("");
+      try {
+        document.body.dataset.userId = "";
+        document.body.dataset.auth = "0";
+      } catch {}
+    });
   }
 
   async function refreshUsageBadgeIfLogged() {
@@ -102,33 +121,39 @@
   }
 
   async function boot() {
+    wireLogout();
+
     const me = await fetchMe();
     const isLogged = !!(me && me.authenticated);
+    const userId = isLogged && me.user_id ? String(me.user_id) : "";
 
-    // 1) UI del NAV (login/register vs account/logout)
+    // 1) UI del NAV
     setNavAuthUI(isLogged);
 
-    // 2) Dataset global para templates que lo lean
+    // 2) Estado global de autenticación
     try {
       document.body.dataset.auth = isLogged ? "1" : "0";
-
-      if (isLogged && me.user_id) {
-        document.body.dataset.userId = String(me.user_id);
-        // ✅ MUY IMPORTANTE: esto hace que index.html pueda resolver USER_ID
-        persistUserId(me.user_id);
-      } else {
-        document.body.dataset.userId = "";
-        persistUserId("");
-      }
+      document.body.dataset.userId = userId;
+      persistUserId(userId);
     } catch {}
 
-    // 3) Si NO hay sesión => ocultar badges/panel
+    // 3) Avisar a la página de que la autenticación ya fue resuelta.
+    try {
+      window.dispatchEvent(new CustomEvent("ps:auth-ready", {
+        detail: {
+          authenticated: isLogged,
+          user_id: userId
+        }
+      }));
+    } catch {}
+
+    // 4) Si NO hay sesión => ocultar badges/panel
     if (!isLogged) {
       hideUsageUI();
       return;
     }
 
-    // 4) Badge de uso solo si hay sesión
+    // 5) Badge de uso solo si hay sesión
     await refreshUsageBadgeIfLogged();
   }
 

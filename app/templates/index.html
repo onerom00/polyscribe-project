@@ -382,6 +382,42 @@
       font-size:13px;
     }
 
+    /* Acceso gratuito: primero crear cuenta */
+    .guest-gate{
+      display:none;
+      margin:10px 0 12px;
+      border-radius:16px;
+      padding:14px;
+      border:1px solid #93c5fd;
+      background:#eff6ff;
+      color:#12345b;
+      box-shadow:0 8px 20px rgba(15,35,52,.08);
+    }
+
+    .guest-gate .guest-title{
+      font-weight:800;
+      color:#0b1424;
+      margin-bottom:6px;
+    }
+
+    .guest-gate .guest-copy{
+      font-size:14px;
+      line-height:1.5;
+      margin-bottom:10px;
+    }
+
+    .guest-gate .guest-actions{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+
+    .guest-gate .guest-note{
+      margin-top:8px;
+      font-size:12px;
+      color:#4b5563;
+    }
+
     /* ✅ Panel de uso (Opción B) */
     .usage-panel{
       display:none;
@@ -515,6 +551,10 @@
            style="background:#22c55e;border-color:#16a34a;color:#0b111d">
           Registro
         </a>
+        <a href="/auth/logout" class="a11y-btn" id="nav-logout-link"
+           style="display:none;background:#fff;border-color:#fca5a5;color:#991b1b">
+          Salir
+        </a>
       </div>
     </div>
   </header>
@@ -583,9 +623,8 @@
         </ul>
 
         <div class="demo-cta">
-          <button class="btn btn-primary" type="button" id="btn-probar-ahora"
-                  onclick="document.getElementById('audio-file').click()">
-            🚀 Probar ahora
+          <button class="btn btn-primary" type="button" id="btn-probar-ahora">
+            🎁 Probar 5 min gratis
           </button>
           <a class="btn" href="/history" style="text-decoration:none;display:inline-flex;align-items:center;">
             📂 Ver historial
@@ -594,6 +633,26 @@
 
         <div class="demo-note">Tip: si no inicia autoplay en móvil, es normal: iOS suele requerir interacción del usuario.</div>
       </div>
+    </div>
+
+    <!-- Invitación clara para visitantes -->
+    <div class="guest-gate" id="guest-gate">
+      <div class="guest-title">🔐 Crea tu cuenta gratis para comenzar</div>
+      <div class="guest-copy">
+        Recibirás <strong>5 minutos gratis</strong> para transcribir audio o video,
+        generar un resumen con IA y exportar tus resultados.
+      </div>
+      <div class="guest-actions">
+        <a class="btn btn-primary" href="/auth/register" id="guest-register-cta"
+           style="text-decoration:none;display:inline-flex;align-items:center;">
+          🎁 Crear cuenta y obtener 5 min gratis
+        </a>
+        <a class="btn" href="/auth/login" id="guest-login-cta"
+           style="text-decoration:none;display:inline-flex;align-items:center;">
+          Ya tengo cuenta
+        </a>
+      </div>
+      <div class="guest-note">Sin tarjeta de crédito.</div>
     </div>
 
     <!-- Banner saldo bajo / cero -->
@@ -718,6 +777,8 @@
     const alertBox   = $("#alert-box");
     const btnRefresh = $("#btn-refresh");
     const btnHistory = $("#btn-history");
+    const btnProbarAhora = $("#btn-probar-ahora");
+    const guestGate = $("#guest-gate");
     const usageBadge = $("#usage-badge");
     const usageBadgeNav = $("#usage-badge-nav");
     const usageText  = $("#usage-text");
@@ -756,6 +817,98 @@
     }
 
     let USER_ID = resolveUserId();
+    let AUTH_READY = false;
+    let IS_AUTHENTICATED = false;
+
+    function setGuestGateVisible(visible){
+      if (guestGate) guestGate.style.display = visible ? "block" : "none";
+    }
+
+    function applyAuthActionUI(){
+      if (btnProbarAhora){
+        btnProbarAhora.textContent = IS_AUTHENTICATED
+          ? "🚀 Probar ahora"
+          : "🎁 Probar 5 min gratis";
+      }
+
+      if (!IS_AUTHENTICATED){
+        if (btnTrans) btnTrans.textContent = "🎁 Crear cuenta gratis";
+      } else if (REMAIN_MIN !== null){
+        updateCreditsUI(REMAIN_MIN);
+      }
+    }
+
+    function showGuestGate(){
+      setGuestGateVisible(true);
+      track("guest_try_clicked", { location: "transcribe" });
+
+      if (guestGate){
+        guestGate.scrollIntoView({ behavior:"smooth", block:"center" });
+      }
+    }
+
+    async function confirmSessionAuth(){
+      try{
+        const res = await fetch("/api/auth/me", {
+          method:"GET",
+          credentials:"include",
+          headers:{ "Accept":"application/json" }
+        });
+
+        const data = await res.json().catch(() => ({}));
+        IS_AUTHENTICATED = !!(res.ok && data && data.authenticated);
+        AUTH_READY = true;
+
+        if (IS_AUTHENTICATED && data.user_id){
+          USER_ID = String(data.user_id);
+          try{ localStorage.setItem("user_id", USER_ID); }catch{}
+        }else{
+          USER_ID = "";
+          try{ localStorage.removeItem("user_id"); }catch{}
+        }
+
+        applyAuthActionUI();
+        return IS_AUTHENTICATED;
+      }catch{
+        IS_AUTHENTICATED = false;
+        AUTH_READY = true;
+        USER_ID = "";
+        applyAuthActionUI();
+        return false;
+      }
+    }
+
+    async function requireAuthenticatedAction(){
+      if (!AUTH_READY){
+        await confirmSessionAuth();
+      }
+
+      if (!IS_AUTHENTICATED){
+        showGuestGate();
+        return false;
+      }
+
+      setGuestGateVisible(false);
+      return true;
+    }
+
+    window.addEventListener("ps:auth-ready", (event) => {
+      const detail = (event && event.detail) || {};
+      IS_AUTHENTICATED = !!detail.authenticated;
+      AUTH_READY = true;
+
+      if (IS_AUTHENTICATED && detail.user_id){
+        USER_ID = String(detail.user_id);
+      }else{
+        USER_ID = "";
+      }
+
+      setGuestGateVisible(false);
+      applyAuthActionUI();
+    });
+
+    // Fallback por si el evento ya ocurrió antes de registrar el listener.
+    confirmSessionAuth();
 
     // job_id del querystring
     const qs = new URLSearchParams(window.location.search);
@@ -808,10 +961,10 @@
     function updateCreditsUI(remainMin){
       if (!creditsBanner || !creditsMsg) return;
 
-      if (!USER_ID){
+      if (!USER_ID || !IS_AUTHENTICATED){
         creditsBanner.style.display = "none";
         creditsBanner.classList.remove("zero","welcome");
-        if (btnTrans) btnTrans.textContent = "Transcribir";
+        if (btnTrans) btnTrans.textContent = "🎁 Crear cuenta gratis";
         return;
       }
 
@@ -880,10 +1033,11 @@
 
     // BADGE + PANEL
     async function refreshBadge(){
-      const newId = resolveUserId();
-      if (newId !== USER_ID) USER_ID = newId;
+      if (!AUTH_READY){
+        await confirmSessionAuth();
+      }
 
-      if (!USER_ID){
+      if (!IS_AUTHENTICATED || !USER_ID){
         setUsageVisible(false);
         REMAIN_MIN = null;
         updateCreditsUI(REMAIN_MIN);
@@ -939,7 +1093,10 @@
     }
 
     // DROPZONE
-    drop.onclick = () => fileInput.click();
+    drop.onclick = async () => {
+      if (!(await requireAuthenticatedAction())) return;
+      fileInput.click();
+    };
     drop.ondragover = e => {
       e.preventDefault();
       drop.style.borderColor = "#60a5fa";
@@ -947,9 +1104,12 @@
     drop.ondragleave = () => {
       drop.style.borderColor = "#97bff7";
     };
-    drop.ondrop = e => {
+    drop.ondrop = async e => {
       e.preventDefault();
       drop.style.borderColor = "#97bff7";
+
+      if (!(await requireAuthenticatedAction())) return;
+
       if (e.dataTransfer.files[0]){
         fileInput.files = e.dataTransfer.files;
         dFile.textContent = e.dataTransfer.files[0].name;
@@ -966,6 +1126,14 @@
       dLang.textContent = code;
       applyDirection(code);
     };
+
+    // CTA DEMO
+    if (btnProbarAhora){
+      btnProbarAhora.onclick = async () => {
+        if (!(await requireAuthenticatedAction())) return;
+        fileInput.click();
+      };
+    }
 
     // HISTORIAL
     if (btnHistory){
@@ -1022,8 +1190,7 @@
     async function crearJob(){
       clearAlert();
 
-      const newId = resolveUserId();
-      if (newId !== USER_ID) USER_ID = newId;
+      if (!(await requireAuthenticatedAction())) return;
 
       if (USER_ID && REMAIN_MIN !== null && REMAIN_MIN <= 0.01){
         updateCreditsUI(REMAIN_MIN);
@@ -1060,6 +1227,15 @@
 
         const r = await api("/jobs", { method:"POST", body: fd });
         if (!r.ok){
+          if (r.body && r.body.error === "AUTH_REQUIRED"){
+            IS_AUTHENTICATED = false;
+            AUTH_READY = true;
+            USER_ID = "";
+            applyAuthActionUI();
+            showGuestGate();
+            return;
+          }
+
           if (r.body && r.body.error === "NO_CREDITS"){
             REMAIN_MIN = 0;
             updateCreditsUI(REMAIN_MIN);
