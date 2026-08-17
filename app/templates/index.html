@@ -1095,8 +1095,17 @@
     }
 
     // DROPZONE
-    drop.onclick = async () => {
-      if (!(await requireAuthenticatedAction("dropzone"))) return;
+    // El input vive dentro del dropzone. Si su click burbujea al padre,
+    // el padre puede volver a llamar fileInput.click() y bloquear la página.
+    fileInput.addEventListener("click", (e) => {
+      e.stopPropagation();
+    });
+
+    drop.onclick = () => {
+      if (!IS_AUTHENTICATED){
+        goToFreeRegistration("dropzone");
+        return;
+      }
       fileInput.click();
     };
     drop.ondragover = e => {
@@ -1131,8 +1140,11 @@
 
     // CTA DEMO
     if (btnProbarAhora){
-      btnProbarAhora.onclick = async () => {
-        if (!(await requireAuthenticatedAction("demo"))) return;
+      btnProbarAhora.onclick = () => {
+        if (!IS_AUTHENTICATED){
+          goToFreeRegistration("demo");
+          return;
+        }
         fileInput.click();
       };
     }
