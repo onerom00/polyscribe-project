@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import re
+import json
 import math
 import tempfile
 import datetime as dt
@@ -35,32 +36,81 @@ bp = Blueprint("jobs", __name__)  # sin url_prefix: tus rutas ya están completa
 
 
 _LANG_ALIASES: Dict[str, str] = {
-    "es": "es", "spa": "es", "spanish": "es", "es-es": "es",
+    "es": "es", "spa": "es", "spanish": "es", "español": "es", "es-es": "es",
     "en": "en", "eng": "en", "english": "en", "en-us": "en", "en-gb": "en",
-    "pt": "pt", "por": "pt", "portuguese": "pt", "pt-br": "pt", "pt-pt": "pt",
-    "fr": "fr", "fra": "fr", "french": "fr",
-    "it": "it", "ita": "it", "italian": "it",
-    "de": "de", "deu": "de", "german": "de",
-    "ca": "ca", "cat": "ca", "catalan": "ca",
-    "zh": "zh", "zho": "zh", "chinese": "zh", "zh-cn": "zh",
+    "pt": "pt", "por": "pt", "portuguese": "pt", "português": "pt", "pt-br": "pt", "pt-pt": "pt",
+    "fr": "fr", "fra": "fr", "fre": "fr", "french": "fr", "français": "fr",
+    "it": "it", "ita": "it", "italian": "it", "italiano": "it",
+    "de": "de", "deu": "de", "ger": "de", "german": "de", "deutsch": "de",
+    "ca": "ca", "cat": "ca", "catalan": "ca", "català": "ca",
+    "gl": "gl", "glg": "gl", "galician": "gl", "galego": "gl",
+    "eu": "eu", "eus": "eu", "basque": "eu", "euskara": "eu",
+    "nl": "nl", "nld": "nl", "dut": "nl", "dutch": "nl",
+    "pl": "pl", "pol": "pl", "polish": "pl",
+    "uk": "uk", "ukr": "uk", "ukrainian": "uk",
+    "ru": "ru", "rus": "ru", "russian": "ru",
+    "tr": "tr", "tur": "tr", "turkish": "tr",
+    "cs": "cs", "ces": "cs", "cze": "cs", "czech": "cs",
+    "sk": "sk", "slk": "sk", "slo": "sk", "slovak": "sk",
+    "sl": "sl", "slv": "sl", "slovenian": "sl",
+    "ro": "ro", "ron": "ro", "rum": "ro", "romanian": "ro",
+    "hu": "hu", "hun": "hu", "hungarian": "hu",
+    "bg": "bg", "bul": "bg", "bulgarian": "bg",
+    "hr": "hr", "hrv": "hr", "croatian": "hr",
+    "sr": "sr", "srp": "sr", "serbian": "sr",
+    "sv": "sv", "swe": "sv", "swedish": "sv",
+    "no": "no", "nor": "no", "norwegian": "no",
+    "da": "da", "dan": "da", "danish": "da",
+    "fi": "fi", "fin": "fi", "finnish": "fi",
+    "et": "et", "est": "et", "estonian": "et",
+    "lv": "lv", "lav": "lv", "latvian": "lv",
+    "lt": "lt", "lit": "lt", "lithuanian": "lt",
+    "el": "el", "ell": "el", "gre": "el", "greek": "el",
+    "he": "he", "heb": "he", "hebrew": "he",
+    "ar": "ar", "ara": "ar", "arabic": "ar",
+    "fa": "fa", "fas": "fa", "per": "fa", "persian": "fa", "farsi": "fa",
+    "ur": "ur", "urd": "ur", "urdu": "ur",
+    "hi": "hi", "hin": "hi", "hindi": "hi",
+    "bn": "bn", "ben": "bn", "bengali": "bn",
+    "ta": "ta", "tam": "ta", "tamil": "ta",
+    "te": "te", "tel": "te", "telugu": "te",
+    "th": "th", "tha": "th", "thai": "th",
+    "vi": "vi", "vie": "vi", "vietnamese": "vi",
+    "id": "id", "ind": "id", "indonesian": "id",
+    "ms": "ms", "msa": "ms", "may": "ms", "malay": "ms",
+    "sw": "sw", "swa": "sw", "swahili": "sw",
+    "zh": "zh", "zho": "zh", "chi": "zh", "chinese": "zh", "mandarin": "zh", "zh-cn": "zh",
     "ja": "ja", "jpn": "ja", "japanese": "ja",
     "ko": "ko", "kor": "ko", "korean": "ko",
-    "ar": "ar", "ara": "ar", "arabic": "ar",
-    "ru": "ru", "rus": "ru", "russian": "ru",
 }
 
 
 def _normalize_lang(code_or_name: Optional[str], default: str = "es") -> str:
+    """
+    Normaliza códigos/nombres conocidos sin convertir automáticamente
+    los idiomas desconocidos a español.
+    """
     if not code_or_name:
         return default
+
     s = str(code_or_name).strip().lower().replace("_", "-")
+    if not s:
+        return default
+
     if s in _LANG_ALIASES:
         return _LANG_ALIASES[s]
+
     if "-" in s:
-        p = s.split("-", 1)[0]
-        if p in _LANG_ALIASES:
-            return _LANG_ALIASES[p]
-    return _LANG_ALIASES.get(s[:2], default)
+        primary = s.split("-", 1)[0]
+        if primary in _LANG_ALIASES:
+            return _LANG_ALIASES[primary]
+        if re.fullmatch(r"[a-z]{2,3}", primary):
+            return primary
+
+    if re.fullmatch(r"[a-z]{2,3}", s):
+        return s
+
+    return default
 
 
 def _require_auth_user_id() -> str | None:
@@ -426,12 +476,14 @@ def _fallback_extractive_summary(text: str, max_sents: int = 5) -> str:
 
 
 def _summarize_llm(clean_text: str, language_code: str = "es") -> str:
+    """Resumen en un idioma seleccionado manualmente."""
     if not _client:
         return ""
 
     system = (
         f"You summarize in {language_code}. "
-        "Return 3–6 bullet points. Be abstract. Do not copy phrases."
+        "Return 3–6 bullet points. Be abstract. Do not copy phrases. "
+        "Do not translate to another language."
     )
     user = f"Text:\n\n{clean_text}\n\nSummarize now."
 
@@ -460,16 +512,85 @@ def _summarize_robust(raw_text: str, language_code: str = "es") -> str:
     try:
         out = _summarize_llm(cleaned, _normalize_lang(language_code, "es"))
         return out or _fallback_extractive_summary(cleaned, 5)
-    except Exception:
+    except Exception as e:
+        current_app.logger.warning("Summary failed: %s", e)
         return _fallback_extractive_summary(cleaned, 5)
+
+
+def _summarize_auto_llm(clean_text: str, whisper_hint: str = "") -> tuple[str, str]:
+    """
+    En modo Auto, una sola llamada:
+    1) confirma el idioma dominante a partir del texto,
+    2) genera el resumen en ese mismo idioma,
+    3) no traduce.
+    """
+    if not _client:
+        return _normalize_lang(whisper_hint, "und"), ""
+
+    hint = (whisper_hint or "").strip() or "unknown"
+
+    system = (
+        "You are a language detector and summarizer. "
+        "Determine the dominant language from the transcription text itself. "
+        "The ASR language hint is only a hint and may be wrong. "
+        "Write the summary in exactly the same dominant language as the transcription; never translate it. "
+        "Return ONLY valid JSON with this structure: "
+        '{"language":"ISO-639-1 two-letter code when possible","summary":["point 1","point 2","point 3"]}. '
+        "Return 3 to 6 concise, abstract summary points."
+    )
+    user = f"ASR language hint: {hint}\n\nTranscription:\n{clean_text}"
+
+    resp = _client.chat.completions.create(
+        model=CHAT_MODEL,
+        temperature=0.2,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+    )
+
+    raw = (resp.choices[0].message.content or "").strip()
+    match = re.search(r"\{.*\}", raw, flags=re.S)
+    payload = json.loads(match.group(0) if match else raw)
+
+    lang_raw = payload.get("language") or whisper_hint or "und"
+    lang = _normalize_lang(lang_raw, _normalize_lang(whisper_hint, "und"))
+
+    summary_value = payload.get("summary") or []
+    if isinstance(summary_value, list):
+        points = [str(x).strip() for x in summary_value if str(x).strip()]
+    else:
+        points = [l.strip("-• ").strip() for l in str(summary_value).splitlines() if l.strip()]
+
+    summary = "\n".join("• " + p for p in points[:6])
+    return lang, summary
+
+
+def _summarize_auto_robust(raw_text: str, whisper_hint: str = "") -> tuple[str, str]:
+    cleaned = _dedupe_lines(raw_text or "")
+    if not cleaned:
+        return _normalize_lang(whisper_hint, "und"), ""
+
+    try:
+        detected_lang, summary = _summarize_auto_llm(cleaned, whisper_hint)
+        if summary:
+            return detected_lang or _normalize_lang(whisper_hint, "und"), summary
+    except Exception as e:
+        current_app.logger.warning("Auto language/summary failed: %s", e)
+
+    # El fallback extractivo conserva el idioma original porque no traduce.
+    return _normalize_lang(whisper_hint, "und"), _fallback_extractive_summary(cleaned, 5)
 
 
 def _transcribe_audio(path: str, language_code: Optional[str]) -> Dict[str, Any]:
     if not _client:
-        return {"transcript": "", "language_detected": _normalize_lang(language_code, "es")}
+        return {
+            "transcript": "",
+            "language_detected": _normalize_lang(language_code, "und"),
+        }
 
     model = ASR_MODEL or "whisper-1"
-    lang = None if (not language_code or language_code == "auto") else _normalize_lang(language_code, "es")
+    lang = None if (not language_code or language_code == "auto") else _normalize_lang(language_code, "en")
 
     with open(path, "rb") as f:
         try:
@@ -480,12 +601,15 @@ def _transcribe_audio(path: str, language_code: Optional[str]) -> Dict[str, Any]
                 response_format="verbose_json",
             )
             text = (res.text or "").strip()
-            det_raw = getattr(res, "language", None) or lang or "es"
-            det = _normalize_lang(det_raw, "es")
+            det_raw = getattr(res, "language", None) or lang or "und"
+            det = _normalize_lang(det_raw, str(det_raw).strip().lower() or "und")
             return {"transcript": text, "language_detected": det}
         except Exception as e:
             current_app.logger.warning("ASR failed: %s", e)
-            return {"transcript": "", "language_detected": _normalize_lang(lang or "es", "es")}
+            return {
+                "transcript": "",
+                "language_detected": _normalize_lang(lang, "und"),
+            }
 
 
 def _get_allowance_seconds(user_id: str) -> int:
@@ -518,7 +642,6 @@ def _get_used_seconds(user_id: str) -> int:
         current_app.logger.error("used_seconds: error leyendo jobs: %s", e)
         return 0
 
-
 @bp.route("/jobs", methods=["POST"])
 def create_job():
     uid = _require_auth_user_id()
@@ -547,20 +670,15 @@ def create_job():
 
         dur = _duration_seconds(tmp_path)
 
-        # En PROD: si no se puede medir, bloqueamos para cobrar serio
         if not dur or dur <= 0:
             return jsonify({"error": "CANNOT_MEASURE_DURATION"}), 400
 
-        # Bloqueo real por créditos
         allowance_seconds = _get_allowance_seconds(uid)
         used_seconds = _get_used_seconds(uid)
         remain_seconds = max(0, allowance_seconds - used_seconds)
 
         required_seconds = int(math.ceil(dur))
 
-        # Aviso preventivo:
-        # Si el usuario ya tiene 1 minuto o menos disponible,
-        # enviamos el email de saldo bajo antes de procesar o bloquear.
         if 0 < remain_seconds <= 60:
             _send_usage_email_once(uid, "low_minutes", remain_seconds)
 
@@ -584,12 +702,19 @@ def create_job():
         for i, part in enumerate(parts, 1):
             asr = _transcribe_audio(part, language)
             if i == 1:
-                detected_first = _normalize_lang(asr.get("language_detected") or language or "es", "es")
+                detected_first = _normalize_lang(
+                    asr.get("language_detected") or language or "und",
+                    str(asr.get("language_detected") or "und").strip().lower() or "und",
+                )
             transcripts.append(asr.get("transcript", "") or "")
 
         transcript = "\n".join(t for t in transcripts if t).strip()
-        detected_lang = detected_first if language == "auto" else _normalize_lang(language, "en")
-        summary = _summarize_robust(transcript, detected_lang)
+
+        if language == "auto":
+            detected_lang, summary = _summarize_auto_robust(transcript, detected_first)
+        else:
+            detected_lang = _normalize_lang(language, "en")
+            summary = _summarize_robust(transcript, detected_lang)
 
         now = dt.datetime.utcnow()
         job = AudioJob(
@@ -611,9 +736,6 @@ def create_job():
 
         remaining_after_seconds = max(0, allowance_seconds - (used_seconds + required_seconds))
 
-        # Aviso posterior:
-        # Si después de una transcripción exitosa queda 1 minuto o menos,
-        # enviamos el aviso de saldo bajo. Si quedó en cero, enviamos saldo insuficiente.
         if 0 < remaining_after_seconds <= 60:
             _send_usage_email_once(uid, "low_minutes", remaining_after_seconds)
         elif remaining_after_seconds <= 0:

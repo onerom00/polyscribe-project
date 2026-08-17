@@ -58,6 +58,12 @@ def _login_user(user: User) -> None:
     session.pop("user", None)
     session["user_id"] = str(user.id)
 
+    # Registrar cada acceso exitoso desde ahora.
+    now = dt.datetime.utcnow()
+    user.last_login_at = now
+    user.updated_at = now
+    db.session.commit()
+
 
 def _logout_user() -> None:
     session.pop("user_id", None)

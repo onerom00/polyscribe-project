@@ -345,6 +345,16 @@
       border-color:#fbbf24;
       background:#ffefb3;
     }
+
+    .credits-banner.welcome{
+      border-color:#86efac;
+      background:#dcfce7;
+      color:#166534;
+    }
+
+    .credits-banner.welcome .sub{
+      color:#166534;
+    }
     .credits-banner .rowb{
       display:flex;
       align-items:center;
@@ -723,6 +733,8 @@
     // Banner saldo
     const creditsBanner = $("#credits-banner");
     const creditsMsg = $("#credits-msg");
+    const creditsSub = $("#credits-sub");
+    const btnUpgrade = $("#btn-upgrade");
 
     const MAX_MB = 100;
 
@@ -787,43 +799,68 @@
       alertBox.classList.remove("success","info");
     }
 
-    // SALDO: LOW / ZERO
-    const LOW_THRESHOLD_MIN = 5;
+    // SALDO: FREE / LOW / ZERO
+    const LOW_THRESHOLD_MIN = 1;
     let REMAIN_MIN = null;
+    let USED_MIN = null;
+    let ALLOW_MIN = null;
 
     function updateCreditsUI(remainMin){
       if (!creditsBanner || !creditsMsg) return;
 
       if (!USER_ID){
         creditsBanner.style.display = "none";
-        creditsBanner.classList.remove("zero");
+        creditsBanner.classList.remove("zero","welcome");
+        if (btnTrans) btnTrans.textContent = "Transcribir";
         return;
       }
 
       if (remainMin === null || Number.isNaN(remainMin)){
         creditsBanner.style.display = "none";
-        creditsBanner.classList.remove("zero");
+        creditsBanner.classList.remove("zero","welcome");
         return;
       }
 
-      const r = Math.max(0, remainMin);
+      const r = Math.max(0, Number(remainMin));
+      const used = Number.isFinite(USED_MIN) ? Math.max(0, USED_MIN) : 0;
+      const allowance = Number.isFinite(ALLOW_MIN) ? Math.max(0, ALLOW_MIN) : 0;
+      const isFreeAllowance = allowance > 0 && allowance <= 5.01;
+
+      creditsBanner.classList.remove("zero","welcome");
+      if (btnUpgrade) btnUpgrade.style.display = "inline-flex";
+
+      if (btnTrans){
+        btnTrans.textContent = (isFreeAllowance && r > 0.01)
+          ? "🚀 Transcribir gratis"
+          : "Transcribir";
+      }
+
+      if (used <= 0.01 && isFreeAllowance && r > 0.01){
+        creditsBanner.style.display = "block";
+        creditsBanner.classList.add("welcome");
+        creditsMsg.textContent = `🎁 Tienes ${r.toFixed(1)} minutos gratis disponibles. Sube tu primer audio o video y prueba PolyScribe.`;
+        if (creditsSub) creditsSub.textContent = "Sin tarjeta de crédito · Transcripción + resumen + exportación.";
+        if (btnUpgrade) btnUpgrade.style.display = "none";
+        return;
+      }
 
       if (r <= 0.01){
         creditsBanner.style.display = "block";
         creditsBanner.classList.add("zero");
-        creditsMsg.textContent = "❌ No tienes minutos disponibles. Desbloquea más minutos para seguir transcribiendo.";
+        creditsMsg.textContent = "❌ Has agotado tus minutos disponibles. Añade más minutos para seguir transcribiendo.";
+        if (creditsSub) creditsSub.textContent = "🔒 Tus transcripciones anteriores se conservan.";
         return;
       }
 
       if (r <= LOW_THRESHOLD_MIN){
         creditsBanner.style.display = "block";
-        creditsBanner.classList.remove("zero");
-        creditsMsg.textContent = `⚠️ Te quedan solo ${r.toFixed(1)} minutos disponibles.`;
+        creditsMsg.textContent = `⚠️ Te queda ${r.toFixed(1)} min disponible.`;
+        if (creditsSub) creditsSub.textContent = "Puedes terminar una transcripción corta o añadir más minutos.";
         return;
       }
 
       creditsBanner.style.display = "none";
-      creditsBanner.classList.remove("zero");
+      if (creditsSub) creditsSub.textContent = "🔒 Tus transcripciones anteriores se conservan.";
     }
 
     // Helpers UI
@@ -870,6 +907,8 @@
       const remain   = Math.max(0, allowMin - usedMin);
       const fileLimitBytes = Number(data.file_limit_bytes || 0);
 
+      USED_MIN = usedMin;
+      ALLOW_MIN = allowMin;
       REMAIN_MIN = remain;
 
       const text = `${usedMin.toFixed(1)}/${allowMin.toFixed(0)} min · libre ${remain.toFixed(1)} min`;
