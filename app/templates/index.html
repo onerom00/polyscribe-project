@@ -838,13 +838,15 @@
       }
     }
 
-    function showGuestGate(){
+    function showGuestGate(location = "transcribe"){
       setGuestGateVisible(true);
-      track("guest_try_clicked", { location: "transcribe" });
+      track("guest_try_clicked", { location });
+    }
 
-      if (guestGate){
-        guestGate.scrollIntoView({ behavior:"smooth", block:"center" });
-      }
+    function goToFreeRegistration(location = "transcribe"){
+      showGuestGate(location);
+      track("register_from_try", { location });
+      window.location.href = "/auth/register";
     }
 
     async function confirmSessionAuth(){
@@ -878,13 +880,13 @@
       }
     }
 
-    async function requireAuthenticatedAction(){
+    async function requireAuthenticatedAction(location = "transcribe"){
       if (!AUTH_READY){
         await confirmSessionAuth();
       }
 
       if (!IS_AUTHENTICATED){
-        showGuestGate();
+        goToFreeRegistration(location);
         return false;
       }
 
@@ -1094,7 +1096,7 @@
 
     // DROPZONE
     drop.onclick = async () => {
-      if (!(await requireAuthenticatedAction())) return;
+      if (!(await requireAuthenticatedAction("dropzone"))) return;
       fileInput.click();
     };
     drop.ondragover = e => {
@@ -1108,7 +1110,7 @@
       e.preventDefault();
       drop.style.borderColor = "#97bff7";
 
-      if (!(await requireAuthenticatedAction())) return;
+      if (!(await requireAuthenticatedAction("dropzone"))) return;
 
       if (e.dataTransfer.files[0]){
         fileInput.files = e.dataTransfer.files;
@@ -1130,7 +1132,7 @@
     // CTA DEMO
     if (btnProbarAhora){
       btnProbarAhora.onclick = async () => {
-        if (!(await requireAuthenticatedAction())) return;
+        if (!(await requireAuthenticatedAction("demo"))) return;
         fileInput.click();
       };
     }
@@ -1190,7 +1192,7 @@
     async function crearJob(){
       clearAlert();
 
-      if (!(await requireAuthenticatedAction())) return;
+      if (!(await requireAuthenticatedAction("transcribe"))) return;
 
       if (USER_ID && REMAIN_MIN !== null && REMAIN_MIN <= 0.01){
         updateCreditsUI(REMAIN_MIN);
@@ -1232,7 +1234,7 @@
             AUTH_READY = true;
             USER_ID = "";
             applyAuthActionUI();
-            showGuestGate();
+            goToFreeRegistration("auth_required");
             return;
           }
 
