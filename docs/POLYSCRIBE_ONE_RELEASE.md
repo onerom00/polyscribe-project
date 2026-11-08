@@ -8,6 +8,10 @@ actual. No añade proveedores pagados ni procesamiento en segundo plano.
 1. Revisar el PR y comprobar sus pruebas. Verificar en Render la rama conectada,
    auto-deploy, comandos efectivos y existencia de staging; `render.yaml` no
    demuestra la configuración efectiva de un servicio existente.
+   El archivo sí declara `postDeployCommand: flask db upgrade`: si Render usa
+   esa configuración, cada despliegue intentará aplicar las migraciones
+   pendientes aunque `POLYSCRIBE_ONE_ENABLED=0`. No fusionar ni desplegar
+   asumiendo que la función desactivada también desactiva las migraciones.
 2. Usar una base PostgreSQL exclusiva de staging y las credenciales de prueba
    mediante variables protegidas del servicio. Mantener
    `POLYSCRIBE_ONE_ENABLED=0`. No compartir credenciales en chat ni en Git.
@@ -22,7 +26,9 @@ actual. No añade proveedores pagados ni procesamiento en segundo plano.
    `b7d2a8e41001`. Si el destino difiere, investigar antes de aplicar cambios.
    No usar el árbol antiguo `alembic/`.
 
-4. Con el código nuevo disponible y conexiones de prueba cerradas, aplicar:
+4. Con el código nuevo disponible y conexiones de prueba cerradas, comprobar
+   si el paso post-deploy ya aplicó la revisión con `db current`. Si aún está
+   pendiente y el despliegue usa un paso manual, aplicar:
 
    ```sh
    python -m flask --app 'app:create_app' db upgrade --directory migrations b7d2a8e41001
