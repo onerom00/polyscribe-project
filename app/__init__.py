@@ -57,7 +57,7 @@ def create_app() -> Flask:
     )
 
     # ✅ permite que la cookie aplique tanto a www.getpolyscribe.com como getpolyscribe.com
-    app.config["SESSION_COOKIE_DOMAIN"] = os.getenv("SESSION_COOKIE_DOMAIN", ".getpolyscribe.com")
+    app.config["SESSION_COOKIE_DOMAIN"] = os.getenv("SESSION_COOKIE_DOMAIN", ".getpolyscribe.com").strip() or None
 
     # Auth flags
     app.config["AUTH_REQUIRE_VERIFIED_EMAIL"] = os.getenv("AUTH_REQUIRE_VERIFIED_EMAIL", "1") == "1"

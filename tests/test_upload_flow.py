@@ -20,12 +20,13 @@ class UploadFlowTest(unittest.TestCase):
         self.environment = patch.dict(os.environ, {
             "DATABASE_URL": os.getenv("POLYSCRIBE_TEST_DATABASE_URL", "sqlite:///:memory:"),
             "OPENAI_API_KEY": "local-test-placeholder", "FREE_TIER_MINUTES": "5",
+            "SESSION_COOKIE_DOMAIN": "",
         })
         self.environment.start()
         self.addCleanup(self.environment.stop)
         self.app = create_app()
         self.app.config.update(TESTING=True, POLYSCRIBE_ONE_ENABLED=True,
-                               SESSION_COOKIE_DOMAIN=None, SESSION_COOKIE_SECURE=False)
+                               SESSION_COOKIE_SECURE=False)
         self.context = self.app.app_context()
         self.context.push()
         db.create_all()
@@ -79,6 +80,17 @@ class UploadFlowTest(unittest.TestCase):
         history = self.client.get("/api/history").json
         self.assertEqual(history["items"][0]["id"], response.json["id"])
         self.assertEqual(self.client.get("/api/usage/balance").json["used_seconds"], 1)
+
+    def test_real_login_uses_host_only_cookie_on_staging(self):
+        from werkzeug.security import generate_password_hash
+        password = "local-staging-test-password"
+        self.user.password_hash = generate_password_hash(password)
+        db.session.commit()
+        client = self.app.test_client()
+        response = client.post("/auth/login", data={"email": self.user.email, "password": password})
+        self.assertEqual(response.status_code, 302)
+        self.assertNotIn("Domain=", response.headers.get("Set-Cookie", ""))
+        self.assertTrue(client.get("/api/usage/balance").json["authenticated"])
 
     def test_failed_upload_does_not_reduce_displayed_balance(self):
         self.provider.audio.transcriptions.create.side_effect = RuntimeError("simulated failure")

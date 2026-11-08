@@ -1,0 +1,57 @@
+services:
+  - type: web
+    name: polyscribe-one-staging
+    runtime: docker
+    repo: https://github.com/onerom00/polyscribe-project
+    branch: polyscribe-one-core
+    region: oregon
+    plan: free
+    autoDeployTrigger: 'off'
+    dockerfilePath: ./Dockerfile.staging
+    dockerContext: .
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: polyscribe-one-staging-db
+          property: connectionString
+      - key: POLYSCRIBE_STAGING
+        value: '1'
+      - key: POLYSCRIBE_ONE_ENABLED
+        value: '1'
+      - key: SECRET_KEY
+        generateValue: true
+      - key: STAGING_TEST_PASSWORD
+        generateValue: true
+      - key: STAGING_TEST_EMAIL
+        value: polyscribe-staging@example.invalid
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: APP_BASE_URL
+        fromService:
+          type: web
+          name: polyscribe-one-staging
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: SESSION_COOKIE_DOMAIN
+        value: ''
+      - key: SESSION_COOKIE_SECURE
+        value: '1'
+      - key: AUTH_REQUIRE_VERIFIED_EMAIL
+        value: '1'
+      - key: DISABLE_DEVLOGIN
+        value: '1'
+      - key: FREE_TIER_MINUTES
+        value: '5'
+      - key: MAX_UPLOAD_MB
+        value: '10'
+      - key: PAYPAL_ENV
+        value: sandbox
+
+databases:
+  - name: polyscribe-one-staging-db
+    databaseName: polyscribe_staging
+    user: polyscribe_staging
+    postgresMajorVersion: '18'
+    region: oregon
+    plan: free
+    ipAllowList: []
