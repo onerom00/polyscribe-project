@@ -1,5 +1,6 @@
 """Bootstrap ONLY a new disposable staging database, never production."""
 import os
+import httpx
 
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
@@ -44,6 +45,19 @@ def prepare_staging():
         user.password_hash = generate_password_hash(password)
         db.session.commit()
     print("Dedicated staging schema and test account ready")
+    # Unauthenticated probe: no API key, audio or billable model invocation.
+    try:
+        response = httpx.get("https://api.openai.com/v1/models", timeout=10)
+        print(f"Staging OpenAI connectivity probe HTTP {response.status_code}")
+    except Exception as exc:
+        causes = []
+        cause = exc
+        for _ in range(6):
+            if cause is None:
+                break
+            causes.append(type(cause).__name__)
+            cause = cause.__cause__ or cause.__context__
+        print("Staging OpenAI connectivity probe failed: " + ">".join(causes))
 
 
 if __name__ == "__main__":

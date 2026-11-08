@@ -608,8 +608,16 @@ def _transcribe_audio(path: str, language_code: Optional[str]) -> Dict[str, Any]
                 "latency_ms": result.latency_ms,
             }
         except Exception as exc:
-            current_app.logger.warning("Structured ASR failed: %s", type(exc).__name__)
-            return {"transcript": "", "language_detected": lang or "und", "error": "ASR_FAILED"}
+            causes = []
+            cause = exc
+            for _ in range(6):
+                if cause is None:
+                    break
+                causes.append(type(cause).__name__)
+                cause = cause.__cause__ or cause.__context__
+            current_app.logger.warning("Structured ASR failed; exception_chain=%s", ">".join(causes))
+            code = "ASR_CONNECTION_ERROR" if type(exc).__name__ in {"APIConnectionError", "APITimeoutError"} else "ASR_FAILED"
+            return {"transcript": "", "language_detected": lang or "und", "error": code}
 
     with open(path, "rb") as f:
         try:
@@ -802,8 +810,10 @@ def create_job():
                 "language_detected": detected_lang,
                 "transcript": transcript,
                 "summary": summary,
+                "error": job.error_message,
+                "message": None if transcript else "No pudimos transcribir el audio. No se descontaron minutos. Inténtalo de nuevo más tarde.",
             }
-        ), 200
+        ), 200 if transcript else 502
 
     except Exception as e:
         current_app.logger.exception("create_job SERVER_ERROR: %s", e)

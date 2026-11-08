@@ -95,8 +95,9 @@ class UploadFlowTest(unittest.TestCase):
     def test_failed_upload_does_not_reduce_displayed_balance(self):
         self.provider.audio.transcriptions.create.side_effect = RuntimeError("simulated failure")
         response = self.upload()
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 502)
         self.assertEqual(response.json["status"], "error")
+        self.assertIn("No se descontaron minutos", response.json["message"])
         self.assertFalse(db.session.query(TranscriptionRun).one().is_selected)
         self.assertEqual(self.client.get("/api/usage/balance").json["used_seconds"], 0)
 

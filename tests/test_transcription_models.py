@@ -120,7 +120,7 @@ class TranscriptionModelsTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json, {"ok": True})
 
-    def upload(self, results, enabled=True):
+    def upload(self, results, enabled=True, expected_status=200):
         from contextlib import ExitStack
         self.app.config["POLYSCRIBE_ONE_ENABLED"] = enabled
         self.addCleanup(self.app.config.update, POLYSCRIBE_ONE_ENABLED=False)
@@ -136,7 +136,7 @@ class TranscriptionModelsTest(unittest.TestCase):
             response = self.app.test_client().post("/jobs", data={
                 "file": (io.BytesIO(b"test-audio"), "test.wav"), "language": "auto",
             })
-        self.assertEqual(response.status_code, 200, response.json)
+        self.assertEqual(response.status_code, expected_status, response.json)
         return response.json
 
     def test_upload_persists_timed_result(self):
@@ -165,7 +165,7 @@ class TranscriptionModelsTest(unittest.TestCase):
 
     def test_partial_provider_failure_is_not_billed(self):
         from app.routes.jobs import _get_used_seconds
-        result = self.upload([{"transcript": "Partial"}, {"transcript": "", "error": "ASR_FAILED"}])
+        result = self.upload([{"transcript": "Partial"}, {"transcript": "", "error": "ASR_FAILED"}], expected_status=502)
         run = db.session.query(TranscriptionRun).filter_by(job_id=result["id"]).one()
         self.assertEqual(result["status"], "error")
         self.assertEqual(result["transcript"], "")
