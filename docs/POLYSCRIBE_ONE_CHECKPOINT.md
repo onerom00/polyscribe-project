@@ -31,7 +31,7 @@ siendo objetivos; los modelos de este cambio son su infraestructura inicial.
   segmentos en una misma transacción. Los fragmentos divididos usan tiempos
   globales; un error explícito de proveedor impide marcar el conjunto como completado.
   Un fragmento válido sin voz no invalida la voz de otros fragmentos.
-- Veinticinco pruebas ejecutadas tanto en SQLite como en PostgreSQL 16 local.
+- Veinticinco pruebas ejecutadas en SQLite, PostgreSQL 16 y PostgreSQL 18 locales.
 
 Los campos de confianza son opcionales: no todos los proveedores los ofrecen
 y sus valores no deben asumirse comparables sin calibración. No se inventan
@@ -43,7 +43,7 @@ no hay selección automática entre proveedores ni Evidence Engine visible.
 - Dependencias de `requirements.txt` instaladas en un entorno Linux aislado;
   `pip check` sin conflictos.
 - Importación de los tres modelos y creación de la aplicación correctas.
-- Veinticinco pruebas aprobadas en SQLite y las mismas veinticinco en PostgreSQL 16,
+- Veinticinco pruebas aprobadas en SQLite y las mismas veinticinco en PostgreSQL 16 y 18,
   incluidas persistencia desde `/jobs`, tiempos de fragmentos, errores parciales,
   compatibilidad con la función desactivada y respuesta de `/healthz`.
 - Pruebas de flujo con WAV y ffprobe reales, sesión, usuario verificado,
@@ -90,7 +90,7 @@ exclusivamente con bases de pruebas.
    sin transcripciones ni pagos. Es una cifra reportada, no verificada aquí;
    debe conciliarse con las cifras históricas del checkpoint anterior.
 
-La entrega incluye un workflow de CI para SQLite/PostgreSQL y una prueba
+La entrega incluye un workflow de CI para SQLite y PostgreSQL 16/18 y una prueba
 automatizada de aplicación y reversión de la migración. El procedimiento de
 staging y activación está en `docs/POLYSCRIBE_ONE_RELEASE.md`.
 No se ha desplegado esta rama, accedido a producción ni contratado servicios
