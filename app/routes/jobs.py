@@ -14,7 +14,7 @@ from flask import Blueprint, request, jsonify, current_app, session
 
 from app.extensions import db
 from app.models import AudioJob, TranscriptionRun, TranscriptSegment
-from app.services.transcription_provider import OpenAITranscriptionProvider
+from app.services.transcription_provider import OpenAITranscriptionProvider, normalize_api_key
 from app.models_user import User  # ÚNICA fuente de User
 
 
@@ -24,7 +24,8 @@ except Exception:
     OpenAI = None  # type: ignore
 
 
-_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", "")) if OpenAI else None
+_api_key = normalize_api_key(os.getenv("OPENAI_API_KEY", ""))
+_client = OpenAI(api_key=_api_key) if OpenAI and _api_key else None
 ASR_MODEL = os.getenv("OPENAI_TRANSCRIBE_MODEL", "whisper-1")
 CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
 
@@ -589,6 +590,7 @@ def _summarize_auto_robust(raw_text: str, whisper_hint: str = "") -> tuple[str, 
 
 def _transcribe_audio(path: str, language_code: Optional[str]) -> Dict[str, Any]:
     if not _client:
+        current_app.logger.warning("ASR configuration unavailable: client_not_configured")
         return {
             "transcript": "",
             "language_detected": _normalize_lang(language_code, "und"),

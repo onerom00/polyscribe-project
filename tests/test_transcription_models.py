@@ -10,10 +10,17 @@ from sqlalchemy.exc import IntegrityError
 from app import create_app
 from app.extensions import db
 from app.models import AudioJob, TranscriptSegment, TranscriptionRun
-from app.services.transcription_provider import ProviderSegment, OpenAITranscriptionProvider
+from app.services.transcription_provider import ProviderSegment, OpenAITranscriptionProvider, normalize_api_key
 
 
 class TranscriptionModelsTest(unittest.TestCase):
+    def test_credential_format_prevents_invalid_http_headers(self):
+        self.assertIsNone(normalize_api_key(""))
+        self.assertIsNone(normalize_api_key(" \n"))
+        self.assertIsNone(normalize_api_key("Bearer local-fixture"))
+        self.assertIsNone(normalize_api_key("local\nfixture"))
+        self.assertEqual(normalize_api_key(" local-fixture\n"), "local-fixture")
+
     @classmethod
     def setUpClass(cls):
         with patch.dict(os.environ, {

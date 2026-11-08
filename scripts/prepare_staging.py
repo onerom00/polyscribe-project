@@ -11,6 +11,7 @@ from werkzeug.security import generate_password_hash
 from app import create_app
 from app.extensions import db
 from app.models_user import User
+from app.services.transcription_provider import normalize_api_key
 
 
 def prepare_staging():
@@ -45,6 +46,8 @@ def prepare_staging():
         user.password_hash = generate_password_hash(password)
         db.session.commit()
     print("Dedicated staging schema and test account ready")
+    key_ready = normalize_api_key(os.getenv("OPENAI_API_KEY", "")) is not None
+    print(f"Staging OpenAI credential format configured: {key_ready}")
     # Unauthenticated probe: no API key, audio or billable model invocation.
     try:
         response = httpx.get("https://api.openai.com/v1/models", timeout=10)

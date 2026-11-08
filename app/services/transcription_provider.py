@@ -5,6 +5,14 @@ import time
 from typing import Any
 
 
+def normalize_api_key(value: str) -> str | None:
+    """Reject malformed HTTP credentials without disclosing their contents."""
+    value = value.strip()
+    if not value or any(ord(char) < 33 or ord(char) > 126 for char in value):
+        return None
+    return value
+
+
 @dataclass
 class ProviderSegment:
     start: float
