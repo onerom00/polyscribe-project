@@ -13,7 +13,8 @@ from typing import Optional, Dict, Any, List
 from flask import Blueprint, request, jsonify, current_app, session
 
 from app.extensions import db
-from app.models import AudioJob
+from app.models import AudioJob, TranscriptionRun, TranscriptSegment
+from app.services.transcription_provider import OpenAITranscriptionProvider, normalize_api_key
 from app.models_user import User  # ÚNICA fuente de User
 
 
@@ -23,7 +24,8 @@ except Exception:
     OpenAI = None  # type: ignore
 
 
-_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", "")) if OpenAI else None
+_api_key = normalize_api_key(os.getenv("OPENAI_API_KEY", ""))
+_client = OpenAI(api_key=_api_key) if OpenAI and _api_key else None
 ASR_MODEL = os.getenv("OPENAI_TRANSCRIBE_MODEL", "whisper-1")
 CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
 
@@ -380,13 +382,13 @@ def _compress_to_opus(src: str, dst: str, bitrate: str = "64k") -> bool:
 
 def _split_audio(src: str, out_dir: str, chunk_seconds: int) -> List[str]:
     dur = _duration_seconds(src)
-    if dur <= 0:
-        return [src]
+    if not math.isfinite(dur) or dur <= 0 or chunk_seconds <= 0:
+        return []
 
     parts: List[str] = []
     start, idx = 0.0, 1
 
-    while start < dur - 0.1:
+    while start < dur:
         out = os.path.join(out_dir, f"part_{idx:03d}.ogg")
         cmd = [
             _ffmpeg(),
@@ -407,13 +409,17 @@ def _split_audio(src: str, out_dir: str, chunk_seconds: int) -> List[str]:
             "64k",
             out,
         ]
-        subprocess.run(cmd, capture_output=True, check=False)
-        if os.path.exists(out) and _file_size_mb(out) > 0:
-            parts.append(out)
+        try:
+            result = subprocess.run(cmd, capture_output=True, check=False)
+        except OSError:
+            return []
+        if result.returncode != 0 or not os.path.exists(out) or _file_size_mb(out) <= 0:
+            return []
+        parts.append(out)
         idx += 1
         start += float(chunk_seconds)
 
-    return parts or [src]
+    return parts
 
 
 def _prepare_for_openai(path: str, hard_limit_mb: int) -> List[str]:
@@ -584,13 +590,36 @@ def _summarize_auto_robust(raw_text: str, whisper_hint: str = "") -> tuple[str, 
 
 def _transcribe_audio(path: str, language_code: Optional[str]) -> Dict[str, Any]:
     if not _client:
+        current_app.logger.warning("ASR configuration unavailable: client_not_configured")
         return {
             "transcript": "",
             "language_detected": _normalize_lang(language_code, "und"),
+            "error": "ASR_UNAVAILABLE",
         }
 
     model = ASR_MODEL or "whisper-1"
     lang = None if (not language_code or language_code == "auto") else _normalize_lang(language_code, "en")
+
+    if current_app.config.get("POLYSCRIBE_ONE_ENABLED"):
+        try:
+            result = OpenAITranscriptionProvider(_client, model).transcribe(path, lang)
+            return {
+                "transcript": result.text,
+                "language_detected": _normalize_lang(result.language or lang, "und"),
+                "segments": result.segments,
+                "latency_ms": result.latency_ms,
+            }
+        except Exception as exc:
+            causes = []
+            cause = exc
+            for _ in range(6):
+                if cause is None:
+                    break
+                causes.append(type(cause).__name__)
+                cause = cause.__cause__ or cause.__context__
+            current_app.logger.warning("Structured ASR failed; exception_chain=%s", ">".join(causes))
+            code = "ASR_CONNECTION_ERROR" if type(exc).__name__ in {"APIConnectionError", "APITimeoutError"} else "ASR_FAILED"
+            return {"transcript": "", "language_detected": lang or "und", "error": code}
 
     with open(path, "rb") as f:
         try:
@@ -698,9 +727,13 @@ def create_job():
 
         transcripts: List[str] = []
         detected_first = ""
+        structured = bool(current_app.config.get("POLYSCRIBE_ONE_ENABLED"))
+        provider_results = []
+        run_started = dt.datetime.utcnow()
 
         for i, part in enumerate(parts, 1):
             asr = _transcribe_audio(part, language)
+            provider_results.append(asr)
             if i == 1:
                 detected_first = _normalize_lang(
                     asr.get("language_detected") or language or "und",
@@ -709,6 +742,10 @@ def create_job():
             transcripts.append(asr.get("transcript", "") or "")
 
         transcript = "\n".join(t for t in transcripts if t).strip()
+        # A failed chunk must not turn a partial transcript into a billed success.
+        provider_error = next((result.get("error") for result in provider_results if result.get("error")), None)
+        if structured and provider_error:
+            transcript = ""
 
         if language == "auto":
             detected_lang, summary = _summarize_auto_robust(transcript, detected_first)
@@ -724,7 +761,7 @@ def create_job():
             language=language,
             language_detected=detected_lang,
             status="done" if transcript else "error",
-            error_message=None if transcript else "ASR_EMPTY",
+            error_message=None if transcript else (provider_error or "ASR_EMPTY"),
             transcript=transcript,
             summary=summary,
             duration_seconds=required_seconds,
@@ -732,9 +769,33 @@ def create_job():
             updated_at=now,
         )
         db.session.add(job)
+        if structured:
+            db.session.flush()
+            run = TranscriptionRun(
+                job_id=job.id, provider="openai", model=ASR_MODEL or "whisper-1",
+                status=job.status, error_message=job.error_message,
+                language_detected=detected_first or None,
+                latency_ms=sum(result.get("latency_ms", 0) for result in provider_results),
+                is_selected=bool(transcript), transcript_text=transcript,
+                raw_metadata={"chunk_count": len(parts)},
+                started_at=run_started, completed_at=now,
+            )
+            db.session.add(run)
+            if transcript:
+                sequence = 0
+                for chunk_index, result in enumerate(provider_results):
+                    offset = chunk_index * MAX_CHUNK_SECONDS if len(parts) > 1 else 0
+                    for segment in result.get("segments", []):
+                        run.segments.append(TranscriptSegment(
+                            sequence=sequence, start_seconds=offset + segment.start,
+                            end_seconds=offset + segment.end, text=segment.text,
+                            raw_metadata=segment.metadata,
+                        ))
+                        sequence += 1
         db.session.commit()
 
-        remaining_after_seconds = max(0, allowance_seconds - (used_seconds + required_seconds))
+        charged_seconds = required_seconds if transcript else 0
+        remaining_after_seconds = max(0, allowance_seconds - (used_seconds + charged_seconds))
 
         if 0 < remaining_after_seconds <= 60:
             _send_usage_email_once(uid, "low_minutes", remaining_after_seconds)
@@ -751,8 +812,10 @@ def create_job():
                 "language_detected": detected_lang,
                 "transcript": transcript,
                 "summary": summary,
+                "error": job.error_message,
+                "message": None if transcript else "No pudimos transcribir el audio. No se descontaron minutos. Inténtalo de nuevo más tarde.",
             }
-        ), 200
+        ), 200 if transcript else 502
 
     except Exception as e:
         current_app.logger.exception("create_job SERVER_ERROR: %s", e)
