@@ -13,7 +13,8 @@ from typing import Optional, Dict, Any, List
 from flask import Blueprint, request, jsonify, current_app, session
 
 from app.extensions import db
-from app.models import AudioJob
+from app.models import AudioJob, TranscriptionRun, TranscriptSegment
+from app.services.transcription_provider import OpenAITranscriptionProvider
 from app.models_user import User  # ÚNICA fuente de User
 
 
@@ -592,6 +593,19 @@ def _transcribe_audio(path: str, language_code: Optional[str]) -> Dict[str, Any]
     model = ASR_MODEL or "whisper-1"
     lang = None if (not language_code or language_code == "auto") else _normalize_lang(language_code, "en")
 
+    if current_app.config.get("POLYSCRIBE_ONE_ENABLED"):
+        try:
+            result = OpenAITranscriptionProvider(_client, model).transcribe(path, lang)
+            return {
+                "transcript": result.text,
+                "language_detected": _normalize_lang(result.language or lang, "und"),
+                "segments": result.segments,
+                "latency_ms": result.latency_ms,
+            }
+        except Exception as exc:
+            current_app.logger.warning("Structured ASR failed: %s", type(exc).__name__)
+            return {"transcript": "", "language_detected": lang or "und", "error": "ASR_FAILED"}
+
     with open(path, "rb") as f:
         try:
             res = _client.audio.transcriptions.create(
@@ -698,9 +712,13 @@ def create_job():
 
         transcripts: List[str] = []
         detected_first = ""
+        structured = bool(current_app.config.get("POLYSCRIBE_ONE_ENABLED"))
+        provider_results = []
+        run_started = dt.datetime.utcnow()
 
         for i, part in enumerate(parts, 1):
             asr = _transcribe_audio(part, language)
+            provider_results.append(asr)
             if i == 1:
                 detected_first = _normalize_lang(
                     asr.get("language_detected") or language or "und",
@@ -709,6 +727,9 @@ def create_job():
             transcripts.append(asr.get("transcript", "") or "")
 
         transcript = "\n".join(t for t in transcripts if t).strip()
+        # A failed chunk must not turn a partial transcript into a billed success.
+        if structured and any(not (result.get("transcript") or "").strip() for result in provider_results):
+            transcript = ""
 
         if language == "auto":
             detected_lang, summary = _summarize_auto_robust(transcript, detected_first)
@@ -732,9 +753,33 @@ def create_job():
             updated_at=now,
         )
         db.session.add(job)
+        if structured:
+            db.session.flush()
+            run = TranscriptionRun(
+                job_id=job.id, provider="openai", model=ASR_MODEL or "whisper-1",
+                status=job.status, error_message=job.error_message,
+                language_detected=detected_first or None,
+                latency_ms=sum(result.get("latency_ms", 0) for result in provider_results),
+                is_selected=bool(transcript), transcript_text=transcript,
+                raw_metadata={"chunk_count": len(parts)},
+                started_at=run_started, completed_at=now,
+            )
+            db.session.add(run)
+            if transcript:
+                sequence = 0
+                for chunk_index, result in enumerate(provider_results):
+                    offset = chunk_index * MAX_CHUNK_SECONDS if len(parts) > 1 else 0
+                    for segment in result.get("segments", []):
+                        run.segments.append(TranscriptSegment(
+                            sequence=sequence, start_seconds=offset + segment.start,
+                            end_seconds=offset + segment.end, text=segment.text,
+                            raw_metadata=segment.metadata,
+                        ))
+                        sequence += 1
         db.session.commit()
 
-        remaining_after_seconds = max(0, allowance_seconds - (used_seconds + required_seconds))
+        charged_seconds = required_seconds if transcript else 0
+        remaining_after_seconds = max(0, allowance_seconds - (used_seconds + charged_seconds))
 
         if 0 < remaining_after_seconds <= 60:
             _send_usage_email_once(uid, "low_minutes", remaining_after_seconds)

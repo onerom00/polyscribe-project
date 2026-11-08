@@ -81,6 +81,8 @@ def create_app() -> Flask:
     app.config["PAYPAL_ENABLED"] = bool(app.config["PAYPAL_CLIENT_ID"] and app.config["PAYPAL_CLIENT_SECRET"])
 
     app.config["FREE_TIER_MINUTES"] = int(os.getenv("FREE_TIER_MINUTES", "10"))
+    # Enable only after the PolyScribe One schema migration has been applied.
+    app.config["POLYSCRIBE_ONE_ENABLED"] = os.getenv("POLYSCRIBE_ONE_ENABLED", "0") == "1"
 
     # Extensions
     db.init_app(app)
