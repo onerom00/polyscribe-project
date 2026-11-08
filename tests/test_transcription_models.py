@@ -172,6 +172,18 @@ class TranscriptionModelsTest(unittest.TestCase):
         self.assertEqual(_get_used_seconds("local-user"), 0)
         self.assertFalse(run.is_selected)
         self.assertEqual(run.segments, [])
+        self.assertEqual(run.error_message, "ASR_FAILED")
+
+    def test_silent_chunk_does_not_discard_valid_speech(self):
+        from app.routes.jobs import MAX_CHUNK_SECONDS
+        result = self.upload([
+            {"transcript": "", "segments": []},
+            {"transcript": "Speech", "segments": [ProviderSegment(0, 1, "Speech")]},
+        ])
+        self.assertEqual(result["status"], "done")
+        self.assertEqual(result["transcript"], "Speech")
+        run = db.session.query(TranscriptionRun).filter_by(job_id=result["id"]).one()
+        self.assertEqual(run.segments[0].start_seconds, MAX_CHUNK_SECONDS)
 
     def test_disabled_feature_preserves_legacy_upload(self):
         result = self.upload([{"transcript": "Legacy result", "language_detected": "es"}], enabled=False)

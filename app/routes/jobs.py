@@ -381,13 +381,13 @@ def _compress_to_opus(src: str, dst: str, bitrate: str = "64k") -> bool:
 
 def _split_audio(src: str, out_dir: str, chunk_seconds: int) -> List[str]:
     dur = _duration_seconds(src)
-    if dur <= 0:
-        return [src]
+    if not math.isfinite(dur) or dur <= 0 or chunk_seconds <= 0:
+        return []
 
     parts: List[str] = []
     start, idx = 0.0, 1
 
-    while start < dur - 0.1:
+    while start < dur:
         out = os.path.join(out_dir, f"part_{idx:03d}.ogg")
         cmd = [
             _ffmpeg(),
@@ -408,13 +408,17 @@ def _split_audio(src: str, out_dir: str, chunk_seconds: int) -> List[str]:
             "64k",
             out,
         ]
-        subprocess.run(cmd, capture_output=True, check=False)
-        if os.path.exists(out) and _file_size_mb(out) > 0:
-            parts.append(out)
+        try:
+            result = subprocess.run(cmd, capture_output=True, check=False)
+        except OSError:
+            return []
+        if result.returncode != 0 or not os.path.exists(out) or _file_size_mb(out) <= 0:
+            return []
+        parts.append(out)
         idx += 1
         start += float(chunk_seconds)
 
-    return parts or [src]
+    return parts
 
 
 def _prepare_for_openai(path: str, hard_limit_mb: int) -> List[str]:
@@ -588,6 +592,7 @@ def _transcribe_audio(path: str, language_code: Optional[str]) -> Dict[str, Any]
         return {
             "transcript": "",
             "language_detected": _normalize_lang(language_code, "und"),
+            "error": "ASR_UNAVAILABLE",
         }
 
     model = ASR_MODEL or "whisper-1"
@@ -728,7 +733,8 @@ def create_job():
 
         transcript = "\n".join(t for t in transcripts if t).strip()
         # A failed chunk must not turn a partial transcript into a billed success.
-        if structured and any(not (result.get("transcript") or "").strip() for result in provider_results):
+        provider_error = next((result.get("error") for result in provider_results if result.get("error")), None)
+        if structured and provider_error:
             transcript = ""
 
         if language == "auto":
@@ -745,7 +751,7 @@ def create_job():
             language=language,
             language_detected=detected_lang,
             status="done" if transcript else "error",
-            error_message=None if transcript else "ASR_EMPTY",
+            error_message=None if transcript else (provider_error or "ASR_EMPTY"),
             transcript=transcript,
             summary=summary,
             duration_seconds=required_seconds,
