@@ -30,7 +30,7 @@ siendo objetivos; los modelos de este cambio son su infraestructura inicial.
   defecto hasta que se aplique la migración. Guarda AudioJob, ejecución y
   segmentos en una misma transacción. Los fragmentos divididos usan tiempos
   globales; un fragmento vacío impide marcar el conjunto como completado.
-- Quince pruebas ejecutadas tanto en SQLite como en PostgreSQL 16 local.
+- Veinte pruebas ejecutadas tanto en SQLite como en PostgreSQL 16 local.
 
 Los campos de confianza son opcionales: no todos los proveedores los ofrecen
 y sus valores no deben asumirse comparables sin calibración. No se inventan
@@ -42,9 +42,14 @@ no hay selección automática entre proveedores ni Evidence Engine visible.
 - Dependencias de `requirements.txt` instaladas en un entorno Linux aislado;
   `pip check` sin conflictos.
 - Importación de los tres modelos y creación de la aplicación correctas.
-- Quince pruebas aprobadas en SQLite y las mismas quince en PostgreSQL 16,
+- Veinte pruebas aprobadas en SQLite y las mismas veinte en PostgreSQL 16,
   incluidas persistencia desde `/jobs`, tiempos de fragmentos, errores parciales,
   compatibilidad con la función desactivada y respuesta de `/healthz`.
+- Pruebas de flujo con WAV y ffprobe reales, sesión, usuario verificado,
+  historial, cuota y aislamiento entre usuarios. Solo OpenAI está simulado en
+  estos flujos; no se prueban envío de correo ni pagos externos.
+- Corregido el balance visible: solo cuenta AudioJobs con estado `done`, igual
+  que la validación de minutos de `/jobs`. Antes contaba también errores.
 - Compilación Python y `git diff --check` correctos.
 - Migración aplicada, revertida y aplicada nuevamente en SQLite temporal,
   conservando un AudioJob previo. La base inicial se construyó desde los
