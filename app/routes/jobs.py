@@ -14,6 +14,7 @@ from flask import Blueprint, request, jsonify, current_app, session
 
 from app.extensions import db
 from app.models import AudioJob
+from app.services.asr_errors import classify_asr_error, normalize_api_key
 from app.models_user import User  # ÚNICA fuente de User
 
 
@@ -23,7 +24,8 @@ except Exception:
     OpenAI = None  # type: ignore
 
 
-_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", "")) if OpenAI else None
+_api_key = normalize_api_key(os.getenv("OPENAI_API_KEY", ""))
+_client = OpenAI(api_key=_api_key) if OpenAI and _api_key else None
 ASR_MODEL = os.getenv("OPENAI_TRANSCRIBE_MODEL", "whisper-1")
 CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
 
@@ -584,9 +586,11 @@ def _summarize_auto_robust(raw_text: str, whisper_hint: str = "") -> tuple[str, 
 
 def _transcribe_audio(path: str, language_code: Optional[str]) -> Dict[str, Any]:
     if not _client:
+        current_app.logger.error("transcription_provider_unavailable code=ASR_UNAVAILABLE")
         return {
             "transcript": "",
             "language_detected": _normalize_lang(language_code, "und"),
+            "error": "ASR_UNAVAILABLE",
         }
 
     model = ASR_MODEL or "whisper-1"
@@ -605,10 +609,12 @@ def _transcribe_audio(path: str, language_code: Optional[str]) -> Dict[str, Any]
             det = _normalize_lang(det_raw, str(det_raw).strip().lower() or "und")
             return {"transcript": text, "language_detected": det}
         except Exception as e:
-            current_app.logger.warning("ASR failed: %s", e)
+            code = classify_asr_error(e)
+            current_app.logger.error("transcription_provider_failed code=%s", code)
             return {
                 "transcript": "",
                 "language_detected": _normalize_lang(lang, "und"),
+                "error": code,
             }
 
 
@@ -698,9 +704,14 @@ def create_job():
 
         transcripts: List[str] = []
         detected_first = ""
+        provider_error = None
+        current_app.logger.info("transcription_started")
 
         for i, part in enumerate(parts, 1):
             asr = _transcribe_audio(part, language)
+            if asr.get("error"):
+                provider_error = asr["error"]
+                break
             if i == 1:
                 detected_first = _normalize_lang(
                     asr.get("language_detected") or language or "und",
@@ -709,6 +720,8 @@ def create_job():
             transcripts.append(asr.get("transcript", "") or "")
 
         transcript = "\n".join(t for t in transcripts if t).strip()
+        if provider_error:
+            transcript = ""
 
         if language == "auto":
             detected_lang, summary = _summarize_auto_robust(transcript, detected_first)
@@ -724,7 +737,7 @@ def create_job():
             language=language,
             language_detected=detected_lang,
             status="done" if transcript else "error",
-            error_message=None if transcript else "ASR_EMPTY",
+            error_message=None if transcript else (provider_error or "ASR_EMPTY"),
             transcript=transcript,
             summary=summary,
             duration_seconds=required_seconds,
@@ -733,6 +746,15 @@ def create_job():
         )
         db.session.add(job)
         db.session.commit()
+        if not transcript:
+            current_app.logger.error("transcription_failed job_id=%s code=%s", job.id, job.error_message)
+            return jsonify({
+                "id": job.id, "job_id": job.id, "status": "error",
+                "error": job.error_message,
+                "message": "No pudimos transcribir el audio. Tus minutos se conservan. Inténtalo de nuevo más tarde.",
+                "transcript": "", "summary": "",
+            }), 503
+        current_app.logger.info("transcription_completed job_id=%s", job.id)
 
         remaining_after_seconds = max(0, allowance_seconds - (used_seconds + required_seconds))
 

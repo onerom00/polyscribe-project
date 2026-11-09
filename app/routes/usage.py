@@ -101,7 +101,9 @@ def usage_balance():
     # ---- Used seconds (jobs) ----
     used_seconds = 0
     try:
-        qj = db.session.query(AudioJob).filter(AudioJob.user_id.in_(uid_variants))
+        qj = db.session.query(AudioJob).filter(
+            AudioJob.user_id.in_(uid_variants), AudioJob.status == "done",
+        )
         used_seconds = sum(int(j.duration_seconds or 0) for j in qj.all())
     except Exception as e:
         current_app.logger.error("usage_balance: error leyendo jobs: %s", e)
