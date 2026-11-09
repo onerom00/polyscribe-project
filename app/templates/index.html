@@ -1259,11 +1259,14 @@
             }
             return;
           }
-          const msg = (r.body && r.body.error) || "No se pudo procesar el archivo.";
+          const msg = (r.body && (r.body.message || r.body.error)) || "No se pudo procesar el archivo.";
           return showError(msg);
         }
 
         const job = r.body || {};
+        if (job.status === "error" || !(job.transcript || "").trim()){
+          return showError(job.message || "No se obtuvo una transcripción. Tus minutos se conservan.");
+        }
         taT.value = job.transcript || "";
         taS.value = job.summary || "";
         dDet.textContent = job.language_detected || "";
@@ -1275,7 +1278,7 @@
 
         try{ localStorage.setItem("ps_last_job_id", String(dJob.textContent || "")); }catch{}
 
-        showOk("✅ Transcripción y resumen listos.");
+        showOk(job.summary ? "✅ Transcripción y resumen listos." : "✅ Transcripción lista.");
         await refreshBadge();
       }catch(e){
         console.error(e);
